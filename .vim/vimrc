@@ -1,0 +1,113 @@
+set nocompatible                " Make Vim behave in a more useful way
+
+filetype plugin on              " Enable plugins
+filetype indent on              " Load indent files
+
+nnoremap <SPACE> <Nop>
+let mapleader=" "               " Set <Leader> key
+
+"===== TERMINAL ================================================================
+set ttyfast                     " Fast terminal connection (smooth redrawing)
+set lazyredraw                  " Redraw only when we need to.
+
+"===== MOUSE ===================================================================
+" In many terminal emulators the mouse works just fine.  By enabling it you
+" can position the cursor, Visually select and scroll with the mouse.
+if has('mouse')
+    set mouse=a
+endif
+
+"===== CLIPBOARD ===============================================================
+
+" Use the desktop clipboard as default register
+set clipboard=unnamed
+
+" Emulate Ctrl+C, Ctrl+X and Ctrl+V
+:vnoremap <C-c> "+y
+:vnoremap <C-x> "+d
+:inoremap <C-v> <ESC>"+pa
+
+" Yank to the end of the line (consistent with C and D)
+nnoremap Y y$
+
+"===== COLORS ==================================================================
+if exists('+termguicolors')
+  set termguicolors
+else
+  set t_Co=256
+endif
+colorscheme fahrenheit
+syntax on
+
+"===== MESSAGES AND INFO =======================================================
+set novisualbell                " Disable visual bell
+set number                      " Show the line number in front of each line
+set ruler                       " Show the line and column number of the cursor
+set title                       " Set title to filename and modification status
+
+"===== DISPLAYING TEXT =========================================================
+set list                        " Show invisible characters
+set lcs=tab:>.,trail:.          " ...but only tabs and trailing whitespace
+
+"===== EDITING TEXT ============================================================
+set backspace=indent,eol,start  " Make backspace key work the way it should
+set complete=.,w,b,u,t          " Disable deep scanning of included files (-i)
+set infercase                   " Adjust completions to match case
+set showmatch                   " Highlight matching brackets
+set matchtime=3
+hi MatchParen ctermfg=NONE ctermbg=NONE  cterm=bold
+
+" Don't use Ex mode
+map Q <Nop>
+
+"===== TABS AND INDENTING ======================================================
+set tabstop=4                   " Tab indentation levels every four columns
+set shiftwidth=4                " Indent/outdent by four columns
+set smarttab                    " Use shiftwidths at left margin
+set shiftround                  " Always indent/outdent to nearest tabstop
+set expandtab                   " Convert all tabs that are typed into spaces
+
+set autoindent                  " Retain indentation on next line
+set smartindent                 " Increase/decrease indentation automatically
+
+"===== READING AND WRITING FILES ===============================================
+set autoread                    " Reload buffer when external changes detected
+set cursorline                  " Find the current line quickly.
+set wrapscan                    " Searches wrap around end-of-file.
+set report=0                    " Always report changed lines.
+set synmaxcol=200               " Only highlight the first 200 columns.
+set fileformats=unix,mac,dos    " Handle Mac and DOS line-endings
+                                " (but prefer Unix)
+
+"===== COMMAND LINE EDITING ====================================================
+set history=200                 " keep 200 lines of command line history
+set showcmd                     " display incomplete commands
+set showmode                    " Show current mode in command-line.
+set wildmenu                    " Improved command-line completion
+set wildmode=full               " Complete the next full match
+
+"===== SEARCHING ===============================================================
+set incsearch                   " Search as characters are entered
+set hlsearch                    " Highlight all matches
+set ignorecase                  " Ignore case in all searches...
+set smartcase                   " ...unless uppercase letters used
+
+" Clear current search highlighting with <C-L>
+nnoremap <silent> <C-L> :noh<CR>
+
+"===== MULTIPLE WINDOWS ========================================================
+set laststatus=2        " Always display the status line
+set equalalways         " Make all windows the same size when adding/removing
+set splitbelow          " Put the new window below
+set splitright          " Put the new window right
+
+"===== BACKUPS =================================================================
+set backup
+set backupdir   =$HOME/.vim/files/backup/
+set backupext   =-vimbackup
+set backupskip  =
+set directory   =$HOME/.vim/files/swap//
+set updatecount =100
+set undofile
+set undodir     =$HOME/.vim/files/undo/
+set viminfo     ='100,n$HOME/.vim/files/info/viminfo
