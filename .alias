@@ -1,0 +1,29 @@
+# colorize output
+if [[ "$(command -v ls)" =~ "coreutils" ]]; then
+    alias ls='ls --color=auto -Fh'
+else
+    alias ls='ls -GFh'
+fi
+
+alias diff='diff --color=auto'
+
+alias ll='ls -l'
+alias la='ls -la'
+
+if [ command -v rg &> /dev/null ]; then
+    alias grep='rg --color=auto'
+    alias egrep='rg --color=auto'
+    alias fgrep='rg -F --color=auto'
+else
+    alias grep='grep --color=auto'
+    alias egrep='egrep --color=auto'
+    alias fgrep='fgrep --color=auto'
+fi
+
+if [ command -v fd &> /dev/null ]; then
+    alias find="fd"
+fi
+
+if [ command -v bat &> /dev/null ]; then
+    alias cat="bat"
+fi
