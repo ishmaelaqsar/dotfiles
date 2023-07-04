@@ -55,7 +55,6 @@ set complete=.,w,b,u,t          " Disable deep scanning of included files (-i)
 set infercase                   " Adjust completions to match case
 set showmatch                   " Highlight matching brackets
 set matchtime=3
-hi MatchParen ctermfg=NONE ctermbg=NONE  cterm=bold
 
 " Don't use Ex mode
 map Q <Nop>
