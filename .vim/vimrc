@@ -103,16 +103,16 @@ set splitbelow          " Put the new window below
 set splitright          " Put the new window right
 
 "===== BACKUPS =================================================================
-silent !mkdir $HOME/.vim/files/backup > /dev/null 2>&1
-silent !mkdir $HOME/.vim/files/swap > /dev/null 2>&1
-silent !mkdir $HOME/.vim/files/undo > /dev/null 2>&1
-silent !mkdir $HOME/.vim/files/info > /dev/null 2>&1
+silent !mkdir -p $HOME/.vim/files/backup > /dev/null 2>&1
+silent !mkdir -p $HOME/.vim/files/swap > /dev/null 2>&1
+silent !mkdir -p $HOME/.vim/files/undo > /dev/null 2>&1
+silent !mkdir -p $HOME/.vim/files/info > /dev/null 2>&1
 
 set backup
 set backupdir   =$HOME/.vim/files/backup/
 set backupext   =-vimbackup
 set backupskip  =
-set directory   =$HOME/.vim/files/swap//
+set directory   =$HOME/.vim/files/swap/
 set updatecount =100
 set undofile
 set undodir     =$HOME/.vim/files/undo/
