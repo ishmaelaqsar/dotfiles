@@ -36,7 +36,7 @@ if exists('+termguicolors')
 else
   set t_Co=256
 endif
-colorscheme fahrenheit
+colorscheme donbass
 syntax on
 
 "===== MESSAGES AND INFO =======================================================
