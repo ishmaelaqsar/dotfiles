@@ -103,10 +103,25 @@ set splitbelow          " Put the new window below
 set splitright          " Put the new window right
 
 "===== BACKUPS =================================================================
-silent !mkdir -p $HOME/.vim/files/backup > /dev/null 2>&1
-silent !mkdir -p $HOME/.vim/files/swap > /dev/null 2>&1
-silent !mkdir -p $HOME/.vim/files/undo > /dev/null 2>&1
-silent !mkdir -p $HOME/.vim/files/info > /dev/null 2>&1
+let s:vim_backup = expand('$HOME/.vim/files/backup')
+if filewritable(s:vim_backup) == 0 && exists("*mkdir")
+    call mkdir(s:vim_backup, "p", 0700)
+endif
+
+let s:vim_swap = expand('$HOME/.vim/files/swap')
+if filewritable(s:vim_swap) == 0 && exists("*mkdir")
+    call mkdir(s:vim_swap, "p", 0700)
+endif
+
+let s:vim_undo = expand('$HOME/.vim/files/undo')
+if filewritable(s:vim_undo) == 0 && exists("*mkdir")
+    call mkdir(s:vim_undo, "p", 0700)
+endif
+
+let s:vim_info = expand('$HOME/.vim/files/info')
+if filewritable(s:vim_info) == 0 && exists("*mkdir")
+    call mkdir(s:vim_info, "p", 0700)
+endif
 
 set backup
 set backupdir   =$HOME/.vim/files/backup/
