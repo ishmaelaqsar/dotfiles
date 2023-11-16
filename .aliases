@@ -1,14 +1,9 @@
-# colorize output
-if [[ "$(command -v ls)" =~ "coreutils" ]]; then
-    alias ls='ls --color=auto -Fh'
-else
-    alias ls='ls -GFh'
-fi
+alias ls='ls --color=auto'
+alias ll='ls -lav'   # show long listing of all except ".."
+alias l='ls -lv'   # show long listing but no hidden dotfiles except "."
 
-alias diff='diff --color=auto'
-
-alias ll='ls -l'
-alias la='ls -la'
+alias emacs='emacsclient -nw'
+alias e='emacsclient -nw'
 
 if [ command -v rg &> /dev/null ]; then
     alias grep='rg --color=auto'
