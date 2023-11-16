@@ -36,8 +36,7 @@ if exists('+termguicolors')
 else
   set t_Co=256
 endif
-colorscheme lucius
-syntax on
+syntax off
 
 "===== MESSAGES AND INFO =======================================================
 set novisualbell                " Disable visual bell
