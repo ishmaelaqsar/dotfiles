@@ -3,14 +3,22 @@ export EDITOR='emacs -nw'
 export GIT_OPEN="$EDITOR"
 export VISUAL="$EDITOR"
 
-if command -v kubectl &> /dev/null; then
-    source <(kubectl completion bash)
+# local git workspace
+if [ -d ~/workspace ]; then
+    export WORKSPACE="$HOME/workspace"
+fi
+
+# Source aliases
+if [ -f ~/.aliases ]; then
+    . ~/.aliases
 fi
 
 # start emacs daemon if not running
 if ! pgrep -f [e]macs; then
-    emacs --chdir=$GIT_TREE --daemon
+    emacs --chdir=$WORKSPACE --daemon
 fi
 
-alias emacs='emacsclient -nw'
-alias e='emacsclient -nw'
+# add kubectl completion
+if command -v kubectl &> /dev/null; then
+    source <(kubectl completion bash)
+fi
