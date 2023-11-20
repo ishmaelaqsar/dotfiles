@@ -17,6 +17,7 @@ fi
 # start emacs daemon if not running
 if ! pgrep -f [e]macs; then
     emacs --chdir=$WORKSPACE --daemon
+    alias emacs='emacsclient -nw'
 fi
 
 # add kubectl completion
