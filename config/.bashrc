@@ -9,15 +9,14 @@ if [ -d ~/workspace ]; then
     alias ws='cd $WORKSPACE'
 fi
 
-# Source aliases
-if [ -f ~/.aliases ]; then
-    . ~/.aliases
-fi
-
 # start emacs daemon if not running
 if ! pgrep -f [e]macs; then
     emacs --chdir=$WORKSPACE --daemon
-    alias emacs='emacsclient -nw'
+fi
+
+# Source aliases
+if [ -f ~/.aliases ]; then
+    . ~/.aliases
 fi
 
 # add kubectl completion
