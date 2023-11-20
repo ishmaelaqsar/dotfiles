@@ -2,7 +2,6 @@ alias ls='ls --color=auto'
 alias ll='ls -lav'   # show long listing of all except ".."
 alias l='ls -lv'   # show long listing but no hidden dotfiles except "."
 
-alias emacs='emacsclient -nw'
 alias e='emacsclient -nw'
 
 if [ command -v rg &> /dev/null ]; then

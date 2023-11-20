@@ -6,6 +6,7 @@ export VISUAL="$EDITOR"
 # local git workspace
 if [ -d ~/workspace ]; then
     export WORKSPACE="$HOME/workspace"
+    alias ws='cd $WORKSPACE'
 fi
 
 # Source aliases
