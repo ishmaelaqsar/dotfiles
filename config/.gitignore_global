@@ -35,6 +35,14 @@
 ehthumbs.db
 Thumbs.db
 
+# auto-generated tag files #
+############################
+tags
+TAGS
+GTAGS
+GRTAGS
+GPATH
+
 ################################
 # Emacs #
 #########
@@ -85,9 +93,6 @@ flycheck_*.el
 # directory configuration
 .dir-locals.el
 
-# auto-generated tag files
-TAGS
-
 ################################
 
 ################################
@@ -106,8 +111,5 @@ Session.vim
 # temporary
 .netrwhist
 *~
-
-# auto-generated tag files
-tags
 
 ################################
