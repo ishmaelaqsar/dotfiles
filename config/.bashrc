@@ -11,7 +11,7 @@ fi
 
 # start emacs daemon if not running
 if ! pgrep -f [e]macs; then
-    emacs --chdir=$WORKSPACE --daemon
+    emacs --chdir="$WORKSPACE" --daemon
 fi
 
 # Source aliases
