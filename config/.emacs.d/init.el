@@ -13,7 +13,6 @@
  ((font-available-p "Unifont")
   (set-frame-font "Unifont-11")))
 
-(global-font-lock-mode 0) ; turn off syntax highlighting
 (add-hook 'prog-mode-hook 'display-line-numbers-mode)
 
 (setq-default electric-indent-inhibit t) ; dont indent previous line on <RET>
