@@ -1,6 +1,6 @@
 ; theme
-(add-to-list 'default-frame-alist '(foreground-color . "black"))
-(add-to-list 'default-frame-alist '(background-color . "light yellow"))
+(add-to-list 'custom-theme-load-path "~/.emacs.d/themes/")
+(load-theme 'zenburn t)
 
 ; font
 (defun font-available-p (font-name)
