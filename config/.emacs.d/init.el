@@ -1,6 +1,6 @@
 ; theme
 (add-to-list 'custom-theme-load-path "~/.emacs.d/themes/")
-(load-theme 'zenburn t)
+(load-theme 'nord t)
 
 ; font
 (defun font-available-p (font-name)
@@ -13,6 +13,7 @@
  ((font-available-p "Unifont")
   (set-frame-font "Unifont-11")))
 
+(setq font-lock-maximum-decoration 1)
 (add-hook 'prog-mode-hook 'display-line-numbers-mode)
 
 (setq-default electric-indent-inhibit t) ; dont indent previous line on <RET>
