@@ -1,17 +1,27 @@
 ; theme
 (add-to-list 'custom-theme-load-path "~/.emacs.d/themes/")
-(load-theme 'nord t)
+(if (daemonp)
+    (add-hook 'after-make-frame-functions
+        (lambda (frame)
+            (select-frame frame)
+            (load-theme 'nord t)))
+    (load-theme 'nord t))
 
 ; font
 (defun font-available-p (font-name)
   (find-font (font-spec :name font-name)))
-(cond
- ((font-available-p "Iosevka Term")
-  (set-frame-font "Iosevka Term-10"))
- ((font-available-p "DejaVu Sans Mono")
-  (set-frame-font "DejaVu Sans Mono-11"))
- ((font-available-p "Unifont")
-  (set-frame-font "Unifont-11")))
+(defun try-set-font ()
+  (cond
+   ((font-available-p "Iosevka Term")
+    (add-to-list 'default-frame-alist '(font . "Iosevka Term-10")))
+   ((font-available-p "DejaVu Sans Mono")
+    (add-to-list 'default-frame-alist '(font . "DejaVu Sans Mono-11")))))
+(if (daemonp)
+    (add-hook 'after-make-frame-functions
+              (lambda (frame)
+                (select-frame frame)
+                (try-set-font)))
+  (try-set-font))
 
 (setq font-lock-maximum-decoration 1)
 (add-hook 'prog-mode-hook 'display-line-numbers-mode)
