@@ -10,7 +10,7 @@ if [ -d ~/workspace ]; then
 fi
 
 # start emacs daemon if not running
-if ! pgrep -f [e]macs; then
+if ! pgrep -f [e]macs &> /dev/null; then
     emacs --chdir="$WORKSPACE" --daemon
 fi
 

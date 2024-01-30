@@ -10,6 +10,7 @@
   (require 'use-package)
   (setq use-package-always-ensure t))
 
+(tool-bar-mode 0)
 (load-theme 'deeper-blue)
 (setq font-lock-maximum-decoration 1)
 
