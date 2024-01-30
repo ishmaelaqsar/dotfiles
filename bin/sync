@@ -15,8 +15,8 @@ find({ preprocess => \&preprocess, wanted => \&sync }, @directories);
 
 sub preprocess
 {
-    # do nothing
-    return @_;
+    # ignore emacs backups
+    return grep { !/~$/ } @_;
 }
 
 sub sync
