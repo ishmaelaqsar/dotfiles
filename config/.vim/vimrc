@@ -10,23 +10,13 @@ let mapleader=" "               " Set <Leader> key
 set ttyfast                     " Fast terminal connection (smooth redrawing)
 set lazyredraw                  " Redraw only when we need to.
 
-"===== MOUSE ===================================================================
-" In many terminal emulators the mouse works just fine.  By enabling it you
-" can position the cursor, Visually select and scroll with the mouse.
-if has('mouse')
-    set mouse=a
-endif
-
 "===== CLIPBOARD ===============================================================
-
 " Use the desktop clipboard as default register
 set clipboard=unnamed
-
 " Emulate Ctrl+C, Ctrl+X and Ctrl+V
 :vnoremap <C-c> "+y
 :vnoremap <C-x> "+d
 :inoremap <C-v> <ESC>"+pa
-
 " Yank to the end of the line (consistent with C and D)
 nnoremap Y y$
 
@@ -36,52 +26,41 @@ if exists('+termguicolors')
 else
   set t_Co=256
 endif
-syntax off
+syntax on
+set background=dark
+colorscheme quiet
 
 "===== MESSAGES AND INFO =======================================================
-set novisualbell                " Disable visual bell
-set number                      " Show the line number in front of each line
 set ruler                       " Show the line and column number of the cursor
-set title                       " Set title to filename and modification status
-set statusline=[%n]\ %<%.99f\ %h%w%m%r%{exists('*CapsLockStatusline')?CapsLockStatusline():''}%y%=%-16(\ %l,%c-%v\ %)%P
+set statusline=
+set statusline +=%1*\ %n\ %*            "buffer number
+set statusline +=%5*%{&ff}%*            "file format
+set statusline +=%3*%y%*                "file type
+set statusline +=%4*\ %<%F%*            "full path
+set statusline +=%2*%m%*                "modified flag
+set statusline +=%1*%=%5l%*             "current line
+set statusline +=%2*/%L%*               "total lines
+set statusline +=%1*%4v\ %*             "virtual column number
+set statusline +=%2*0x%04B\ %*          "character under cursor
 
 "===== DISPLAYING TEXT =========================================================
 set list                        " Show invisible characters
 set lcs=tab:>.,trail:.          " ...but only tabs and trailing whitespace
 
 "===== EDITING TEXT ============================================================
-set backspace=indent,eol,start  " Make backspace key work the way it should
-set complete=.,w,b,u,t          " Disable deep scanning of included files (-i)
-set infercase                   " Adjust completions to match case
 set showmatch                   " Highlight matching brackets
-set matchtime=3
 set tags=tags                   " Enable ctags
 
-" Don't use Ex mode
-map Q <Nop>
-
 "===== TABS AND INDENTING ======================================================
-set tabstop=4                   " Tab indentation levels every four columns
+set softtabstop=4               " Tab indentation levels every four columns
 set shiftwidth=4                " Indent/outdent by four columns
-set smarttab                    " Use shiftwidths at left margin
-set shiftround                  " Always indent/outdent to nearest tabstop
 set expandtab                   " Convert all tabs that are typed into spaces
-
 set autoindent                  " Retain indentation on next line
-set smartindent                 " Increase/decrease indentation automatically
 
 "===== READING AND WRITING FILES ===============================================
-set autoread                    " Reload buffer when external changes detected
 set cursorline                  " Find the current line quickly.
-set wrapscan                    " Searches wrap around end-of-file.
-set report=0                    " Always report changed lines.
-set synmaxcol=200               " Only highlight the first 200 columns.
-set fileformats=unix,mac,dos    " Handle Mac and DOS line-endings
-                                " (but prefer Unix)
 
 "===== COMMAND LINE EDITING ====================================================
-set history=200                 " keep 200 lines of command line history
-set showcmd                     " display incomplete commands
 set showmode                    " Show current mode in command-line.
 set wildmenu                    " Improved command-line completion
 set wildmode=full               " Complete the next full match

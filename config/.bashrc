@@ -1,5 +1,5 @@
 # Default editors
-export EDITOR='emacs -nw'
+export EDITOR='vim'
 export GIT_OPEN="$EDITOR"
 export VISUAL="$EDITOR"
 
@@ -7,11 +7,6 @@ export VISUAL="$EDITOR"
 if [ -d ~/workspace ]; then
     export WORKSPACE="$HOME/workspace"
     alias ws='cd $WORKSPACE'
-fi
-
-# start emacs daemon if not running
-if ! pgrep -f [e]macs; then
-    emacs --chdir="$WORKSPACE" --daemon
 fi
 
 # Source aliases
