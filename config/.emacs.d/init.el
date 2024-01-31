@@ -10,17 +10,40 @@
   (require 'use-package)
   (setq use-package-always-ensure t))
 
+;; Trigger GC when focus is lost
+(setq gc-cons-threshold 100000000)
+(add-function :after
+              after-focus-change-function
+              (lambda () (unless (frame-focus-state) (garbage-collect))))
+
+; remember recently opened files
+(recentf-mode 1)
+
+(setq history-length 25)
+;; remember minibuffer history
+(savehist-mode 1)
+
+;; remember and restore cursor location
+(save-place-mode 1)
+
+;; move customisation variables to a seperate file and load it
+(setq custom-file (locate-user-emacs-file "custom-vars.el"))
+(load custom-file 'noerror 'nomessage)
+
 (tool-bar-mode 0)
 (load-theme 'deeper-blue)
 (setq font-lock-maximum-decoration 1)
 
-(setq-default electric-indent-inhibit t) ; dont indent previous line on <RET>
-(setq-default indent-tabs-mode nil) ; use spaces instead of tabs
+;; dont indent previous line on <RET>
+(setq-default electric-indent-inhibit t)
+;; use spaces instead of tabs
+(setq-default indent-tabs-mode nil)
 (setq c-basic-offset 4)
 (setq c-basic-indent 4)
 (setq tab-stop-list (number-sequence 4 120 4))
 
-(defalias 'perl-mode 'cperl-mode) ; always use cperl mode
+;; always use cperl mode
+(defalias 'perl-mode 'cperl-mode)
 (setq cperl-indent-level 4)
 (setq cperl-indent-parens-as-block t)
 
