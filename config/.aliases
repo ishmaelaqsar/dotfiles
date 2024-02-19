@@ -1,5 +1,3 @@
 alias ll='ls -lav'   # show long listing of all except ".."
 alias l='ls -lv'   # show long listing but no hidden dotfiles except "."
 
-alias e='emacsclient -nw'
-alias emacs='emacsclient -nw'
