@@ -3,6 +3,12 @@ export EDITOR='emacs -nw'
 export GIT_OPEN="$EDITOR"
 export VISUAL="$EDITOR"
 
+# Source aliases
+if [ -f ~/.aliases ]
+then
+    . ~/.aliases
+fi
+
 # local git workspace
 if ! [ -d ~/workspace ]
 then
@@ -19,11 +25,8 @@ then
     alias emacs='emacsclient -nw'
 fi
 
-# Source aliases
-if [ -f ~/.aliases ]
-then
-    . ~/.aliases
-fi
+# setup cpan local::lib
+cpanm --local-lib=~/perl5 local::lib && eval $(perl -I ~/perl5/lib/perl5/ -Mlocal::lib)
 
 # add kubectl completion
 if [ command -v kubectl &> /dev/null ]
