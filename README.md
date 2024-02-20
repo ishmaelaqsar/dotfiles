@@ -1,11 +1,15 @@
 # dotfiles
 
-The `config` directory contains all configurations
+The `dotfiles` directory contains all configurations
 
-The `bin` directory contains the `sync` script that copies all files/directories from the `config` directory (maintaining the structure) to `$HOME`
+The `bin` directory contains scripts that will be symlinked to the provided directory when running the `install` script - defaults to `$HOME/.local/bin`
 
 ## Bootstrap
-  
+
 ```
-git clone https://github.com/ishmaelaqsar/dotfiles.git && ./dotfiles/bin/sync
+git clone https://github.com/ishmaelaqsar/dotfiles.git && ./dotfiles/install
 ```
+
+## scripts
+
+`sync-dotfiles` script creates a symlink for all files in the `config` directory (maintaining the structure) to `$HOME`

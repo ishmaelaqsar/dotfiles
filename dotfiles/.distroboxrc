@@ -1,0 +1,7 @@
+container_always_pull="1"
+container_generate_entry=1
+container_manager="podman"
+container_name_default="ubuntu_default"
+container_image_default="quay.io/toolbx/ubuntu-toolbox:latest"
+container_user_custom_home="/opt/distrobox/ubuntu_default"
+non_interactive="1"

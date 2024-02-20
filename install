@@ -1,0 +1,54 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use feature qw( say );
+use Env;
+use File::Basename;
+use File::Spec;
+use File::Find;
+
+my $target_path = shift(@ARGV);
+
+unless ($target_path)
+{
+    $target_path = $ENV{HOME} . '/.local/bin';
+    say "path was not provided, defaulting to $target_path";
+}
+
+unless (-d $target_path)
+{
+    say "$target_path does not exist... will attempt to create";
+}
+
+`mkdir -p $target_path`;
+
+my $binary_path = File::Spec->rel2abs(dirname(__FILE__) . '/bin');
+my @directories = ( $binary_path );
+
+find({ preprocess => \&preprocess, wanted => \&sync }, @directories);
+
+sub preprocess
+{
+    # ignore emacs backups
+    return grep { !/~$/ } @_;
+}
+
+sub sync
+{
+    return if $_ eq '.' or $_ eq '..';
+    my $dir = $File::Find::dir =~ s/$File::Find::topdir//r;
+
+    my $new_path = $target_path . $dir;
+    `mkdir -p $new_path` if $dir;
+    return if -d $File::Find::name;
+
+    my $new_file = $new_path . '/' . $_;
+    print "syncing file: ";
+    `ln -sf $File::Find::name $new_file`;
+    say "$File::Find::name -> $new_file";
+
+    1;
+}
+
+say "ensure $target_path " . 'is on your $PATH'

@@ -8,7 +8,14 @@ use File::Basename;
 use File::Spec;
 use File::Find;
 
-my $configs_path = File::Spec->rel2abs(dirname(__FILE__) . '/../config');
+my $file = __FILE__;
+
+if (-l $file)
+{
+    $file = readlink $file;
+}
+
+my $configs_path = File::Spec->rel2abs(dirname($file) . '/../dotfiles');
 my @directories = ( $configs_path );
 
 find({ preprocess => \&preprocess, wanted => \&sync }, @directories);
@@ -30,7 +37,7 @@ sub sync
 
     my $new_file = $new_path . '/' . $_;
     print "syncing file: ";
-    `cp $File::Find::name $new_file`;
+    `ln -sf $File::Find::name $new_file`;
     say "$File::Find::name -> $new_file";
 
     1;
