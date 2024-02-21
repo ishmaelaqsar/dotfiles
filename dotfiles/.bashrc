@@ -45,7 +45,10 @@ export VISUAL="$EDITOR"
 # setup cpan local::lib
 if command -v cpanm >/dev/null 2>&1
 then
-    cpanm --local-lib=~/perl5 local::lib && eval $(perl -I ~/perl5/lib/perl5/ -Mlocal::lib)
+    if cpanm --local-lib=~/perl5 local::lib >/dev/null 2>&1
+    then
+        eval $(perl -I ~/perl5/lib/perl5/ -Mlocal::lib)
+    fi
 fi
 
 # add kubectl completion
