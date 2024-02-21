@@ -12,4 +12,4 @@ git clone https://github.com/ishmaelaqsar/dotfiles.git && ./dotfiles/install
 
 ## scripts
 
-`sync-dotfiles` script creates a symlink for all files in the `config` directory (maintaining the structure) to `$HOME`
+`sync-dotfiles` script creates a symlink for all files in the `dotfiles` directory (maintaining the structure) to the provided directory - defaults to `$HOME`
