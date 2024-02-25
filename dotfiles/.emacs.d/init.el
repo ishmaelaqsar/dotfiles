@@ -33,6 +33,7 @@
 (tool-bar-mode 0)
 (load-theme 'deeper-blue)
 (setq font-lock-maximum-decoration 1)
+(add-hook 'prog-mode-hook 'display-line-numbers-mode)
 
 ;; dont indent previous line on <RET>
 (setq-default electric-indent-inhibit t)
