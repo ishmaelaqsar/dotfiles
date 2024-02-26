@@ -56,3 +56,12 @@ if command -v kubectl >/dev/null 2>&1
 then
     source <(kubectl completion bash)
 fi
+
+# User specific aliases and functions
+if [ -d ~/.bashrc.d ]
+then
+    for rc in ~/.bashrc.d/*; do
+        [ -r "$rc" ] && . "$rc"
+    done
+fi
+unset rc
