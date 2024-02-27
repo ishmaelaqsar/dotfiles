@@ -2,7 +2,9 @@
 (eval-when-compile
   (require 'package)
   (add-to-list 'package-archives
-             '("melpa-stable" . "https://stable.melpa.org/packages/") t)
+               '("nongnu" . "https://elpa.nongnu.org/nongnu/"))
+  (add-to-list 'package-archives
+               '("melpa-stable" . "https://stable.melpa.org/packages/") t)
   (package-initialize)
   (unless (package-installed-p 'use-package)
     (package-refresh-contents)
@@ -53,6 +55,7 @@
   (setenv "ENV" "$HOME/.profile")
   (setq tramp-remote-process-environment process-environment))
 
+(use-package eat)
 (use-package magit)
 (use-package which-key
   :config
