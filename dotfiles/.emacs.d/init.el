@@ -50,15 +50,6 @@
 (setq cperl-indent-level 4)
 (setq cperl-indent-parens-as-block t)
 
-;; initialise remote shells correctly
-(let ((process-environment tramp-remote-process-environment))
-  (setenv "ENV" "$HOME/.profile")
-  (setq tramp-remote-process-environment process-environment))
-
-(use-package eat)
-(use-package magit)
 (use-package which-key
   :config
   (which-key-mode))
-(use-package vterm
-  :ensure t)
