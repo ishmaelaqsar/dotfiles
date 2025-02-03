@@ -2,58 +2,69 @@
 
 use strict;
 use warnings;
-use feature qw( say );
+use feature qw(say);
 use Env;
 use File::Basename;
 use File::Spec;
 use File::Find;
+use File::Path qw(make_path);
+use File::Copy qw(copy);
+use File::stat;
+use Fcntl ':mode';
 
 my $target_path = shift(@ARGV);
 
-unless ($target_path)
-{
-    $target_path = $ENV{HOME};
-    say "path was not provided, defaulting to $target_path";
+unless ($target_path) {
+    die "Target path was not provided";
 }
 
-unless (-d $target_path)
-{
-    say "$target_path does not exist... will attempt to create";
+unless (-d $target_path) {
+    say "$target_path does not exist... attempting to create it";
+    make_path($target_path) or die "Failed to create directory $target_path: $!";
 }
-
-`mkdir -p $target_path`;
 
 my $file = __FILE__;
-
-if (-l $file)
-{
+if (-l $file) {
     $file = readlink $file;
 }
 
 my $configs_path = File::Spec->rel2abs(dirname($file) . '/../dotfiles');
-my @directories = ( $configs_path );
+my @directories = ($configs_path);
 
-find({ preprocess => \&preprocess, wanted => \&sync }, @directories);
+find({ preprocess => \&preprocess, wanted => \&sync, no_chdir => 1 }, @directories);
 
-sub preprocess
-{
-    # ignore emacs backups
+sub preprocess {
+    # Ignore Emacs backups
     return grep { !/~$/ } @_;
 }
 
-sub sync
-{
+sub sync {
     return if $_ eq '.' or $_ eq '..';
-    my $dir = $File::Find::dir =~ s/$File::Find::topdir//r;
 
-    my $new_path = $target_path . $dir;
-    `mkdir -p $new_path` if $dir;
-    return if -d $File::Find::name;
+    # Get the relative path of the file/directory inside "dotfiles"
+    my $relative_path = File::Spec->abs2rel($File::Find::name, $configs_path);
+    my $new_path = File::Spec->catfile($target_path, $relative_path);
 
-    my $new_file = $new_path . '/' . $_;
-    print "syncing file: ";
-    `ln -sf $File::Find::name $new_file`;
-    say "$File::Find::name -> $new_file";
+    if (-d $File::Find::name) {
+        # Ensure the directory exists and preserve original permissions
+        unless (-d $new_path) {
+            my $orig_stat = stat($File::Find::name);
+            make_path($new_path) or die "Failed to create directory $new_path: $!";
+            if ($orig_stat) {
+                chmod $orig_stat->mode & 07777, $new_path; # Preserve mode
+            }
+        }
+    } else {
+        # Remove existing files or symlinks before linking
+        if (-e $new_path || -l $new_path) {
+            unlink $new_path or warn "Failed to remove existing file $new_path: $!";
+        }
 
-    1;
+        # Create a symbolic link
+        if (symlink $File::Find::name, $new_path) {
+            say "Linked: $File::Find::name -> $new_path";
+        } else {
+            warn "Failed to link $File::Find::name to $new_path: $!";
+        }
+    }
 }

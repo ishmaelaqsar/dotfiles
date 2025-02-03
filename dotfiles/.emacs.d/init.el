@@ -97,9 +97,8 @@ If the new path's directories does not exist, create them."
 
 (use-package emacs
   :config
-  (load-theme 'modus-vivendi))          ; for light theme, use modus-operandi
+  (load-theme 'modus-vivendi)          ; for light theme, use modus-operandi
   :custom
-  (tab-always-indent 'complete)
   (read-extended-command-predicate #'command-completion-default-include-p))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
