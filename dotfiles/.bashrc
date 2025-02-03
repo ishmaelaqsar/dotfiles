@@ -1,3 +1,12 @@
+PROMPT_COMMAND='
+PS1_CMD1=$(git branch --show-current 2>/dev/null);
+PS1_JOBS=$(jobs -p | wc -l);
+PS1_JOBS=${PS1_JOBS// /}; # Trim spaces
+[[ $PS1_CMD1 ]] && PS1_BRANCH="[$PS1_CMD1]" || PS1_BRANCH="";
+[[ $PS1_JOBS -gt 0 ]] && PS1_JNUM="[$PS1_JOBS]" || PS1_JNUM="";
+PS1=" \w $PS1_JNUM$PS1_BRANCH \$ "
+'
+
 # run these commands only when running in a container
 if [[ -v CONTAINER_ID ]]
 then
@@ -57,6 +66,12 @@ then
     source <(kubectl completion bash)
 fi
 
+# podman completion
+if command -v podman >/dev/null 2>&1
+then
+    source <(podman completion bash)
+fi
+
 # User specific aliases and functions
 if [ -d ~/.bashrc.d ]
 then
@@ -65,3 +80,6 @@ then
     done
 fi
 unset rc
+
+[ -n "$EAT_SHELL_INTEGRATION_DIR" ] && \
+    source "$EAT_SHELL_INTEGRATION_DIR/bash"
