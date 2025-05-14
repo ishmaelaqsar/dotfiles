@@ -1,245 +1,239 @@
-;;; Minimal init.el
-
-;;; Contents:
+;;; init.el --- Personal configuration -*- lexical-binding: t -*-
+;;; Commentary:
 ;;;
-;;;  - Basic settings
-;;;  - Discovery aids
-;;;  - Minibuffer/completion settings
-;;;  - Interface enhancements/defaults
-;;;  - Tab-bar configuration
-;;;  - Theme
-;;;  - Optional extras
-;;;  - Built-in customization framework
 
-;;; Guardrail
+;; Add MELPA to package archives if not already added
+(require 'package)
+(add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
+(package-initialize)
 
-(when (< emacs-major-version 29)
-  (error "Emacs Bedrock only works with Emacs 29 and newer; you have version %s" emacs-major-version))
+;; Ensure use-package is installed
+(unless (package-installed-p 'use-package)
+  (package-refresh-contents)
+  (package-install 'use-package))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;
-;;;   Basic settings
-;;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Configure use-package
+(require 'use-package)
+(setq use-package-always-ensure t) ;; Always ensure packages are installed
+(setq use-package-verbose t)       ;; Show more information during loading
 
-;; Package initialization
-;;
-;; We'll stick to the built-in GNU and non-GNU ELPAs (Emacs Lisp Package
-;; Archive) for the base install, but there are some other ELPAs you could look
-;; at if you want more packages. MELPA in particular is very popular. See
-;; instructions at:
-;;
-;;    https://melpa.org/#/getting-started
-;;
-;; You can simply uncomment the following if you'd like to get started with
-;; MELPA packages quickly:
-
-(with-eval-after-load 'package
-  (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t))
-
-;; If you want to turn off the welcome screen, uncomment this
-;(setopt inhibit-splash-screen t)
-
-(setopt initial-major-mode 'fundamental-mode)  ; default mode for the *scratch* buffer
-(setopt display-time-default-load-average nil) ; this information is useless for most
-
-;; Automatically reread from disk if the underlying file changes
-(setopt auto-revert-avoid-polling t)
-;; Some systems don't do file notifications well; see
-;; https://todo.sr.ht/~ashton314/emacs-bedrock/11
-(setopt auto-revert-interval 5)
-(setopt auto-revert-check-vc-info t)
-(global-auto-revert-mode)
-
-;; Remember recently opened files
-(recentf-mode 1)
-
-;; Save history of minibuffer
-(savehist-mode)
-(setq history-length 25)
-
-;; Remember and restore cursor location
-(save-place-mode 1)
-
-;; Move through windows with Ctrl-<arrow keys>
-(windmove-default-keybindings 'control) ; You can use other modifiers here
-
-;; Fix archaic defaults
-(setopt sentence-end-double-space nil)
-(setq-default electric-indent-inhibit t) ; dont indent previous line on <RET>
-
-;; Use spaces instead of tabs
-(setq-default indent-tabs-mode nil)
-(setq c-basic-offset 4)
-(setq c-basic-indent 4)
-(setq tab-stop-list (number-sequence 4 120 4))
-
-;; Always use cperl mode
-(defalias 'perl-mode 'cperl-mode)
-(setq cperl-indent-level 4)
-(setq cperl-indent-parens-as-block t)
-
-;; Make right-click do something sensible
-(when (display-graphic-p)
-  (context-menu-mode))
-
-;; Don't litter file system with *~ backup files; put them all inside
-;; ~/.emacs.d/backup or wherever
-(defun bedrock--backup-file-name (fpath)
-  "Return a new file path of a given file path.
-If the new path's directories does not exist, create them."
-  (let* ((backupRootDir (concat user-emacs-directory "emacs-backup/"))
-         (filePath (replace-regexp-in-string "[A-Za-z]:" "" fpath )) ; remove Windows driver letter in path
-         (backupFilePath (replace-regexp-in-string "//" "/" (concat backupRootDir filePath "~") )))
-    (make-directory (file-name-directory backupFilePath) (file-name-directory backupFilePath))
-    backupFilePath))
-(setopt make-backup-file-name-function 'bedrock--backup-file-name)
-
-(use-package emacs
-  :config
-  (load-theme 'modus-vivendi)          ; for light theme, use modus-operandi
-  :custom
-  (read-extended-command-predicate #'command-completion-default-include-p))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;
-;;;   Discovery aids
-;;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Show the help buffer after startup
-(add-hook 'after-init-hook 'help-quick)
-
-;; which-key: shows a popup of available keybindings when typing a long key
-;; sequence (e.g. C-x ...)
-(use-package which-key
+;; Keep .emacs.d clean with no-littering
+(use-package no-littering
   :ensure t
   :config
-  (which-key-mode))
+  ;; Set paths for custom.el and auto-save files
+  (setq custom-file (expand-file-name "custom.el" no-littering-etc-directory))
+  ;; Keep auto-save files in var directory
+  (setq auto-save-file-name-transforms
+        `((".*" ,(expand-file-name "auto-save/" no-littering-var-directory) t)))
+  ;; Load custom file if it exists
+  (when (file-exists-p custom-file)
+    (load custom-file)))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;
-;;;   Minibuffer/completion settings
-;;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Fallback for custom-file if no-littering fails to load
+(unless (featurep 'no-littering)
+  (setq custom-file (expand-file-name "custom.el" user-emacs-directory))
+  (when (file-exists-p custom-file)
+    (load custom-file)))
 
-;; For help, see: https://www.masteringemacs.org/article/understanding-minibuffer-completion
+;; UI Configuration
+(use-package emacs
+  :ensure nil
+  :custom
+  (font-use-system-font t)
+  (window-resize-pixelwise t)
+  (frame-resize-pixelwise t)
+  (confirm-kill-emacs #'yes-or-no-p)
+  :config
+  ;; Load a custom theme
+  (load-theme 'deeper-blue t)
+  
+  ;; Basic modes
+  (save-place-mode t)
+  (savehist-mode t)
+  (recentf-mode t)
+  
+  ;; Set default major mode
+  (setq-default major-mode
+                (lambda () ; guess major mode from file name
+                  (unless buffer-file-name
+                    (let ((buffer-file-name (buffer-name)))
+                      (set-auto-mode)))))
+  
+  ;; Convenience functions
+  (defalias 'yes-or-no #'y-or-n-p))
 
-(setopt enable-recursive-minibuffers t)                ; Use the minibuffer whilst in the minibuffer
-(setopt completion-cycle-threshold 1)                  ; TAB cycles candidates
-(setopt completions-detailed t)                        ; Show annotations
-(setopt tab-always-indent 'complete)                   ; When I hit TAB, try to complete, otherwise, indent
-(setopt completion-styles '(basic initials substring)) ; Different styles to match input to candidates
+;; Version control history as a tree
+(use-package undo-tree
+  :ensure t
+  :bind
+  (("C-x u" . undo-tree-visualize)
+   ("C-/" . undo-tree-undo)
+   ("C-?" . undo-tree-redo))
+  :custom
+  (undo-tree-auto-save-history t)
+  :config
+  ;; Set undo history directory based on whether no-littering loaded
+  (setq undo-tree-history-directory-alist
+        (if (featurep 'no-littering)
+            `(("." . ,(expand-file-name "undo-tree-hist/" no-littering-var-directory)))
+          `(("." . ,(expand-file-name "undo-tree-hist/" user-emacs-directory)))))
+  (global-undo-tree-mode))
 
-(setopt completion-auto-help 'always)                  ; Open completion always; `lazy' another option
-(setopt completions-max-height 20)                     ; This is arbitrary
-(setopt completions-detailed t)
-(setopt completions-format 'one-column)
-(setopt completions-group t)
-(setopt completion-auto-select 'second-tab)            ; Much more eager
-;(setopt completion-auto-select t)                     ; See `C-h v completion-auto-select' for more possible values
+;; Programming mode configuration
+(use-package prog-mode
+  :ensure nil
+  :hook
+  (prog-mode . display-line-numbers-mode)
+  (prog-mode . flymake-mode)
+  (prog-mode . corfu-mode)
+  (prog-mode . diff-hl-mode))
 
-(keymap-set minibuffer-mode-map "TAB" 'minibuffer-complete) ; TAB acts more like how it does in the shell
+;; Electric pair mode
+(use-package electric
+  :ensure nil
+  :config
+  (electric-pair-mode t))
 
-;; For a fancier built-in completion option, try ido-mode,
-;; icomplete-vertical, or fido-mode. See also the file extras/base.el
+;; Completion framework
+(use-package vertico
+  :init
+  (vertico-mode t)
+  :config
+  (define-key vertico-map (kbd "RET") #'vertico-directory-enter)
+  (define-key vertico-map (kbd "DEL") #'vertico-directory-delete-word)
+  (define-key vertico-map (kbd "M-d") #'vertico-directory-delete-char))
 
-;(icomplete-vertical-mode)
-;(fido-vertical-mode)
-;(setopt icomplete-delay-completions-threshold 4000)
+;; Rich annotations for minibuffer completions
+(use-package marginalia
+  :after vertico
+  :ensure t
+  :init
+  (marginalia-mode)
+  :custom
+  (marginalia-annotators '(marginalia-annotators-heavy marginalia-annotators-light nil)))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;
-;;;   Interface enhancements/defaults
-;;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Extended completion utilities
+(use-package consult
+  :after (vertico marginalia)
+  :bind
+  ([remap switch-to-buffer] . consult-buffer)
+  ("C-c j" . consult-line)
+  ("C-c i" . consult-imenu)
+  :custom
+  ;; Use consult to preview files and buffers
+  (consult-preview-key 'any)
+  ;; For more content-aware previewing
+  (consult-preview-raw-size 8192)
+  ;; Narrowing lets you restrict results to certain groups
+  (consult-narrow-key "<"))
 
-;; Mode line information
-(setopt line-number-mode t)                        ; Show current line in modeline
-(setopt column-number-mode t)                      ; Show column as well
+;; Which-key - displays available keybindings
+(use-package which-key
+  :init
+  (which-key-mode)
+  :custom
+  (which-key-idle-delay 0.5)
+  (which-key-idle-secondary-delay 0.05))
 
-(setopt x-underline-at-descent-line nil)           ; Prettier underlines
-(setopt switch-to-buffer-obey-display-actions t)   ; Make switching buffers more consistent
+;; Embark - context sensitive actions
+(use-package embark
+  :after marginalia
+  :ensure t
+  :bind
+  (("C-." . embark-act)        ;; pick some comfortable binding
+   ("C-;" . embark-dwim)       ;; good alternative: M-.
+   ("C-h B" . embark-bindings)) ;; alternative for `describe-bindings'
+  :init
+  ;; Replace the key help with a completing-read interface
+  (setq prefix-help-command #'embark-prefix-help-command)
+  :config
+  ;; Hide the mode line of the Embark live/completions buffers
+  (add-to-list 'display-buffer-alist
+               '("\\`\\*Embark Collect \\(Live\\|Completions\\)\\*"
+                 nil
+                 (window-parameters (mode-line-format . none)))))
 
-(setopt show-trailing-whitespace nil)      ; By default, don't underline trailing spaces
-(setopt indicate-buffer-boundaries 'left)  ; Show buffer top and bottom in the margin
+;; Embark-consult integration
+(use-package embark-consult
+  :after (embark consult)
+  :ensure t
+  :hook
+  (embark-collect-mode . consult-preview-at-point-mode))
 
-;; Enable horizontal scrolling
-(setopt mouse-wheel-tilt-scroll t)
-(setopt mouse-wheel-flip-direction t)
+;; LSP Support
+(use-package eglot)
 
-;; Misc. UI tweaks
-(blink-cursor-mode -1)                                ; Steady cursor
-(pixel-scroll-precision-mode)                         ; Smooth scrolling
+;; Inline static analysis
+(use-package flymake
+  :ensure nil
+  :custom
+  (help-at-pt-display-when-idle t)
+  :bind (:map flymake-mode-map
+              ("C-c n" . flymake-goto-next-error)
+              ("C-c p" . flymake-goto-prev-error)))
 
-;; Display line numbers in programming mode
-(add-hook 'prog-mode-hook 'display-line-numbers-mode)
-(setopt display-line-numbers-width 3)           ; Set a minimum width
+;; Pop-up completion
+(use-package corfu
+  :custom
+  (corfu-auto t))
 
-;; Nice line wrapping when working with text
-(add-hook 'text-mode-hook 'visual-line-mode)
+;; DAP Support
+(use-package dape
+  :custom
+  (dape-inlay-hints t)
+  (dape-buffer-window-arrangement 'right))
 
-;; Modes to highlight the current line with
-(let ((hl-line-hooks '(text-mode-hook prog-mode-hook)))
-  (mapc (lambda (hook) (add-hook hook 'hl-line-mode)) hl-line-hooks))
+;; Git client
+(use-package magit
+  :bind
+  ("C-c g" . magit-status))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;
-;;;   Tab-bar configuration
-;;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Indication of local VCS changes
+(use-package diff-hl)
 
-;; Show the tab-bar as soon as tab-bar functions are invoked
-(setopt tab-bar-show 1)
+;; Programming language support
+(use-package json-mode)
+(use-package nasm-mode)
+(use-package sly)
+(use-package yaml-mode)
+(use-package markdown-mode)
 
-;; Add the time to the tab-bar, if visible
-(add-to-list 'tab-bar-format 'tab-bar-format-align-right 'append)
-(add-to-list 'tab-bar-format 'tab-bar-format-global 'append)
-(setopt display-time-format "%a %F %T")
-(setopt display-time-interval 1)
-(display-time-mode)
+;; Outline-based notes management and organizer
+(use-package org
+  :ensure nil
+  :bind
+  ("C-c l" . org-store-link)
+  ("C-c a" . org-agenda))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;
-;;;   Optional extras
-;;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Additional Org-mode related functionality
+(use-package org-contrib)
 
-;; Uncomment the (load-file …) lines or copy code from the extras/ elisp files
-;; as desired
+;; IRC Client
+(use-package rcirc
+  :ensure nil
+  :custom
+  (rcirc-default-nick "ishmael-aqsar_jpmc")
+  :hook
+  (rcirc-mode . rcirc-track-minor-mode)
+  (rcirc-mode . rcirc-omit-mode))
 
-;; UI/UX enhancements mostly focused on minibuffer and autocompletion interfaces
-;; These ones are *strongly* recommended!
-(load-file (expand-file-name "extras/base.el" user-emacs-directory))
+;; EditorConfig support
+(use-package editorconfig
+  :config
+  (editorconfig-mode t))
 
-;; Packages for software development
-(load-file (expand-file-name "extras/dev.el" user-emacs-directory))
+;; In-Emacs Terminal Emulation
+(use-package eat
+  :custom
+  (eat-kill-buffer-on-exit t)
+  (eat-enable-mouse t))
 
-;; Org-mode configuration
-;; WARNING: need to customize things inside the elisp file before use! See
-;; the file extras/org-intro.txt for help.
-;(load-file (expand-file-name "extras/org.el" user-emacs-directory))
+;; Jump to arbitrary positions
+(use-package avy
+  :custom
+  (avy-all-windows 'all-frames)
+  :bind
+  ("C-c z" . avy-goto-word-1))
 
-;; Writing enhancements
-(load-file (expand-file-name "extras/writer.el" user-emacs-directory))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;
-;;;   Built-in customization framework
-;;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(custom-set-variables
- ;; custom-set-variables was added by Custom.
- ;; If you edit it by hand, you could mess it up, so be careful.
- ;; Your init file should contain only one such instance.
- ;; If there is more than one, they won't work right.
- '(package-selected-packages '(which-key)))
-(custom-set-faces
- ;; custom-set-faces was added by Custom.
- ;; If you edit it by hand, you could mess it up, so be careful.
- ;; Your init file should contain only one such instance.
- ;; If there is more than one, they won't work right.
- )
-
-(setq gc-cons-threshold (or bedrock--initial-gc-threshold 800000))
+;;; init.el ends here
