@@ -1,85 +1,276 @@
-PROMPT_COMMAND='
-PS1_CMD1=$(git branch --show-current 2>/dev/null);
-PS1_JOBS=$(jobs -p | wc -l);
-PS1_JOBS=${PS1_JOBS// /}; # Trim spaces
-[[ $PS1_CMD1 ]] && PS1_BRANCH="[$PS1_CMD1]" || PS1_BRANCH="";
-[[ $PS1_JOBS -gt 0 ]] && PS1_JNUM="[$PS1_JOBS]" || PS1_JNUM="";
-PS1=" \w $PS1_JNUM$PS1_BRANCH \$ "
-'
+;;; init.el --- Personal configuration -*- lexical-binding: t -*-
+;;; Commentary:
+;;;
 
-# run these commands only when running in a container
-if [[ -v CONTAINER_ID ]]
-then
-    export LC_ALL=en_US.utf8
-fi
+;; Add MELPA to package archives if not already added
+(require 'package)
+(add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
+(package-initialize)
 
-# Source global definitions
-if [ -f /etc/bashrc ];
-then
-    . /etc/bashrc
-fi
+;; Ensure use-package is installed
+(unless (package-installed-p 'use-package)
+  (package-refresh-contents)
+  (package-install 'use-package))
 
-# Source aliases
-if [ -f ~/.aliases ]
-then
-    . ~/.aliases
-fi
+;; Configure use-package
+(require 'use-package)
+(setq use-package-always-ensure t) ;; Always ensure packages are installed
+(setq use-package-verbose t)       ;; Show more information during loading
 
-# local git workspace
-if ! [ -d ~/workspace ]
-then
-    mkdir ~/workspace
-fi
-export WORKSPACE="$HOME/workspace"
-alias ws='cd $WORKSPACE'
+;; Keep .emacs.d clean with no-littering
+(use-package no-littering
+  :ensure t
+  :config
+  ;; Set paths for custom.el and auto-save files
+  (setq custom-file (expand-file-name "custom.el" no-littering-etc-directory))
+  ;; Keep auto-save files in var directory
+  (setq auto-save-file-name-transforms
+        `((".*" ,(expand-file-name "auto-save/" no-littering-var-directory) t)))
+  ;; Load custom file if it exists
+  (when (file-exists-p custom-file)
+    (load custom-file)))
 
-# check if emacs is installed
-if command -v emacs >/dev/null 2>&1
-then
-    export EDITOR='emacs -nw'
-    # Check if a daemon is already running
-    if ! pgrep -a emacs | grep daemon >/dev/null 2>&1
-    then
-        emacs --daemon --chdir="$WORKSPACE"
-    fi
-    alias e='emacsclient -nw'
-    alias emacs='emacsclient -nw'
-else
-    export EDITOR='nano'
-fi
+;; Fallback for custom-file if no-littering fails to load
+(unless (featurep 'no-littering)
+  (setq custom-file (expand-file-name "custom.el" user-emacs-directory))
+  (when (file-exists-p custom-file)
+    (load custom-file)))
 
-export GIT_OPEN="$EDITOR"
-export VISUAL="$EDITOR"
+;; UI Configuration
+(use-package emacs
+  :ensure nil
+  :custom
+  (font-use-system-font t)
+  (window-resize-pixelwise t)
+  (frame-resize-pixelwise t)
+  (confirm-kill-emacs #'yes-or-no-p)
+  :config
+  ;; Load a custom theme
+  (load-theme 'deeper-blue t)
+  
+  ;; Basic modes
+  (save-place-mode t)
+  (savehist-mode t)
+  (recentf-mode t)
+  
+  ;; Set default major mode
+  (setq-default major-mode
+                (lambda () ; guess major mode from file name
+                  (unless buffer-file-name
+                    (let ((buffer-file-name (buffer-name)))
+                      (set-auto-mode)))))
+  
+  ;; Convenience functions
+  (defalias 'yes-or-no #'y-or-n-p))
 
-# setup cpan local::lib
-if command -v cpanm >/dev/null 2>&1
-then
-    if cpanm --local-lib=~/perl5 local::lib >/dev/null 2>&1
-    then
-        eval $(perl -I ~/perl5/lib/perl5/ -Mlocal::lib)
-    fi
-fi
+;; Version control history as a tree
+(use-package undo-tree
+  :ensure t
+  :bind
+  (("C-x u" . undo-tree-visualize)
+   ("C-/" . undo-tree-undo)
+   ("C-?" . undo-tree-redo))
+  :custom
+  (undo-tree-auto-save-history t)
+  :config
+  ;; Set undo history directory based on whether no-littering loaded
+  (setq undo-tree-history-directory-alist
+        (if (featurep 'no-littering)
+            `(("." . ,(expand-file-name "undo-tree-hist/" no-littering-var-directory)))
+          `(("." . ,(expand-file-name "undo-tree-hist/" user-emacs-directory)))))
+  (global-undo-tree-mode))
 
-# add kubectl completion
-if command -v kubectl >/dev/null 2>&1
-then
-    source <(kubectl completion bash)
-fi
+;; Programming mode configuration
+(use-package prog-mode
+  :ensure nil
+  :hook
+  (prog-mode . display-line-numbers-mode)
+  (prog-mode . flymake-mode)
+  (prog-mode . corfu-mode)
+  (prog-mode . diff-hl-mode))
 
-# podman completion
-if command -v podman >/dev/null 2>&1
-then
-    source <(podman completion bash)
-fi
+;; Electric pair mode
+(use-package electric
+  :ensure nil
+  :config
+  (electric-pair-mode t))
 
-# User specific aliases and functions
-if [ -d ~/.bashrc.d ]
-then
-    for rc in ~/.bashrc.d/*; do
-        [ -r "$rc" ] && . "$rc"
-    done
-fi
-unset rc
+;; Completion framework
+(use-package vertico
+  :init
+  (vertico-mode t)
+  :config
+  (define-key vertico-map (kbd "RET") #'vertico-directory-enter)
+  (define-key vertico-map (kbd "DEL") #'vertico-directory-delete-word)
+  (define-key vertico-map (kbd "M-d") #'vertico-directory-delete-char))
 
-[ -n "$EAT_SHELL_INTEGRATION_DIR" ] && \
-    source "$EAT_SHELL_INTEGRATION_DIR/bash"
+;; Rich annotations for minibuffer completions
+(use-package marginalia
+  :after vertico
+  :ensure t
+  :init
+  (marginalia-mode)
+  :custom
+  (marginalia-annotators '(marginalia-annotators-heavy marginalia-annotators-light nil)))
+
+;; Extended completion utilities
+(use-package consult
+  :after (vertico marginalia)
+  :bind
+  ([remap switch-to-buffer] . consult-buffer)
+  ("C-c j" . consult-line)
+  ("C-c i" . consult-imenu)
+  :custom
+  ;; Use consult to preview files and buffers
+  (consult-preview-key 'any)
+  ;; For more content-aware previewing
+  (consult-preview-raw-size 8192)
+  ;; Narrowing lets you restrict results to certain groups
+  (consult-narrow-key "<"))
+
+;; Which-key - displays available keybindings
+(use-package which-key
+  :init
+  (which-key-mode)
+  :custom
+  (which-key-idle-delay 0.5)
+  (which-key-idle-secondary-delay 0.05))
+
+;; Embark - context sensitive actions
+(use-package embark
+  :after marginalia
+  :ensure t
+  :bind
+  (("C-." . embark-act)        ;; pick some comfortable binding
+   ("C-;" . embark-dwim)       ;; good alternative: M-.
+   ("C-h B" . embark-bindings)) ;; alternative for `describe-bindings'
+  :init
+  ;; Replace the key help with a completing-read interface
+  (setq prefix-help-command #'embark-prefix-help-command)
+  :config
+  ;; Hide the mode line of the Embark live/completions buffers
+  (add-to-list 'display-buffer-alist
+               '("\\`\\*Embark Collect \\(Live\\|Completions\\)\\*"
+                 nil
+                 (window-parameters (mode-line-format . none)))))
+
+;; Embark-consult integration
+(use-package embark-consult
+  :after (embark consult)
+  :ensure t
+  :hook
+  (embark-collect-mode . consult-preview-at-point-mode))
+
+;; LSP Support
+(use-package eglot)
+
+;; Inline static analysis
+(use-package flymake
+  :ensure nil
+  :custom
+  (help-at-pt-display-when-idle t)
+  :bind (:map flymake-mode-map
+              ("C-c n" . flymake-goto-next-error)
+              ("C-c p" . flymake-goto-prev-error)))
+
+;; Pop-up completion
+(use-package corfu
+  :custom
+  (corfu-auto t))
+
+;; DAP Support
+(use-package dape
+  :custom
+  (dape-inlay-hints t)
+  (dape-buffer-window-arrangement 'right))
+
+;; Git client
+(use-package magit
+  :bind
+  ("C-c g" . magit-status))
+
+;; Indication of local VCS changes
+(use-package diff-hl)
+
+;; Programming language support
+(use-package json-mode)
+(use-package nasm-mode)
+(use-package sly)
+(use-package yaml-mode)
+(use-package markdown-mode)
+
+;; Outline-based notes management and organizer
+(use-package org
+  :ensure nil
+  :bind
+  ("C-c l" . org-store-link)
+  ("C-c a" . org-agenda))
+
+;; Additional Org-mode related functionality
+(use-package org-contrib)
+
+;; Org-roam - A plain-text personal knowledge management system
+(use-package org-roam
+  :ensure t
+  :custom
+  (org-roam-directory (file-truename "~/org-roam"))
+  (org-roam-completion-everywhere t)
+  (org-roam-capture-templates
+   '(("d" "default" plain
+      "%?"
+      :if-new (file+head "%<%Y%m%d%H%M%S>-${slug}.org" "#+title: ${title}\n")
+      :unnarrowed t)))
+  :bind (("C-c r l" . org-roam-buffer-toggle)
+         ("C-c r f" . org-roam-node-find)
+         ("C-c r i" . org-roam-node-insert)
+         ("C-c r c" . org-roam-capture)
+         :map org-mode-map
+         ("C-M-i" . completion-at-point))
+  :config
+  ;; If you're using a vertical completion framework, you might want a more informative completion interface
+  (setq org-roam-node-display-template
+        (concat "${title:*} " (propertize "${tags:10}" 'face 'org-tag)))
+  (org-roam-db-autosync-mode))
+
+;; Helpful - a better help system for Emacs
+(use-package helpful
+  :ensure t
+  :bind
+  ([remap describe-function] . helpful-callable)
+  ([remap describe-variable] . helpful-variable)
+  ([remap describe-key] . helpful-key)
+  ("C-h F" . helpful-function)
+  ("C-h C" . helpful-command)
+  :config
+  ;; Make C-h more helpful by showing both helpful and standard help
+  (setq counsel-describe-function-function #'helpful-callable)
+  (setq counsel-describe-variable-function #'helpful-variable))
+
+;; IRC Client
+(use-package rcirc
+  :ensure nil
+  :custom
+  (rcirc-default-nick "aqsar")
+  :hook
+  (rcirc-mode . rcirc-track-minor-mode)
+  (rcirc-mode . rcirc-omit-mode))
+
+;; EditorConfig support
+(use-package editorconfig
+  :config
+  (editorconfig-mode t))
+
+;; In-Emacs Terminal Emulation
+(use-package eat
+  :custom
+  (eat-kill-buffer-on-exit t)
+  (eat-enable-mouse t))
+
+;; Jump to arbitrary positions
+(use-package avy
+  :custom
+  (avy-all-windows 'all-frames)
+  :bind
+  ("C-c z" . avy-goto-word-1))
+
+;;; init.el ends here
