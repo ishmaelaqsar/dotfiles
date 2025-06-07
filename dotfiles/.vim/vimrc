@@ -28,7 +28,7 @@ else
 endif
 syntax on
 set background=dark
-colorscheme quiet
+colorscheme industry
 
 "===== MESSAGES AND INFO =======================================================
 set ruler                       " Show the line and column number of the cursor
@@ -58,7 +58,7 @@ set expandtab                   " Convert all tabs that are typed into spaces
 set autoindent                  " Retain indentation on next line
 
 "===== READING AND WRITING FILES ===============================================
-set cursorline                  " Find the current line quickly.
+"set cursorline                  " Find the current line quickly.
 
 "===== COMMAND LINE EDITING ====================================================
 set showmode                    " Show current mode in command-line.
@@ -67,7 +67,7 @@ set wildmode=full               " Complete the next full match
 
 "===== SEARCHING ===============================================================
 set incsearch                   " Search as characters are entered
-set hlsearch                    " Highlight all matches
+"set hlsearch                    " Highlight all matches
 set ignorecase                  " Ignore case in all searches...
 set smartcase                   " ...unless uppercase letters used
 
