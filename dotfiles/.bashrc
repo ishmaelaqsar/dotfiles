@@ -13,12 +13,6 @@ then
     export LC_ALL=en_US.utf8
 fi
 
-# Source global definitions
-if [ -f /etc/bashrc ];
-then
-    . /etc/bashrc
-fi
-
 # Source aliases
 if [ -f ~/.aliases ]
 then
@@ -34,21 +28,20 @@ export WORKSPACE="$HOME/workspace"
 alias ws='cd $WORKSPACE'
 
 # check if emacs is installed
-#if command -v emacs >/dev/null 2>&1
-#then
-#    export EDITOR='emacs -nw'
-#    # Check if a daemon is already running
-#    if ! pgrep -a emacs | grep daemon >/dev/null 2>&1
-#    then
-#        emacs --daemon --chdir="$WORKSPACE"
-#    fi
-#    alias e='emacsclient -nw'
-#    alias emacs='emacsclient -nw'
-#else
-#    export EDITOR='nano'
-#fi
+if command -v emacs >/dev/null 2>&1
+then
+    export EDITOR='emacs -nw'
+    # Check if a daemon is already running
+    if ! pgrep -a emacs | grep daemon >/dev/null 2>&1
+    then
+        emacs --daemon --chdir="$WORKSPACE"
+    fi
+    alias e='emacsclient -nw'
+    alias emacs='emacsclient -nw'
+else
+    export EDITOR='nano'
+fi
 
-export EDITOR='vi'
 export GIT_OPEN="$EDITOR"
 export VISUAL="$EDITOR"
 
@@ -82,5 +75,5 @@ then
 fi
 unset rc
 
-#[ -n "$EAT_SHELL_INTEGRATION_DIR" ] && \
-#    source "$EAT_SHELL_INTEGRATION_DIR/bash"
+[ -n "$EAT_SHELL_INTEGRATION_DIR" ] && \
+    source "$EAT_SHELL_INTEGRATION_DIR/bash"
