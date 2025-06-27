@@ -46,7 +46,7 @@
   (confirm-kill-emacs #'yes-or-no-p)
   :config
   ;; Load a custom theme
-  (load-theme 'deeper-blue t)
+  (load-theme 'modus-operandi t)
   
   ;; Basic modes
   (save-place-mode t)
