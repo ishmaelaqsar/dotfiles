@@ -1,5 +1,21 @@
 #!/bin/bash
 
+if ! command -v git &> /dev/null
+then
+    echo "Git not found. Skipping git configuration."
+else
+    echo "Configuring global Git settings..."
+
+    # Set autocrlf to 'input' for Unix-like systems (Linux/macOS)
+    git config --global core.autocrlf input
+
+    # Add other common settings (e.g., user info)
+    git config --global user.name "Ishmael Aqsar"
+    git config --global user.email "ishmael-dev@aqsar.dev"
+
+    echo "Git configuration complete."
+fi
+
 # Default target directory to $HOME if no argument is provided
 TARGET_DIR="${1:-$HOME}"
 
