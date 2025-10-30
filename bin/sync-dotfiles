@@ -1,70 +1,54 @@
-#!/usr/bin/perl
+#!/usr/bin/env python3
+"""
+Sync dotfiles from the repository into the target directory.
+Creates symlinks for files and ensures directories exist.
+Optional --backup: rename existing files with .bak before linking.
+"""
 
-use strict;
-use warnings;
-use feature qw(say);
-use Env;
-use File::Basename;
-use File::Spec;
-use File::Find;
-use File::Path qw(make_path);
-use File::Copy qw(copy);
-use File::stat;
-use Fcntl ':mode';
+import os
+import sys
+from pathlib import Path
 
-my $target_path = shift(@ARGV);
+# Parse arguments
+backup_flag = False
+target_arg = None
 
-unless ($target_path) {
-    die "Target path was not provided";
-}
+for arg in sys.argv[1:]:
+    if arg in ("--backup", "-b"):
+        backup_flag = True
+    else:
+        target_arg = arg
 
-unless (-d $target_path) {
-    say "$target_path does not exist... attempting to create it";
-    make_path($target_path) or die "Failed to create directory $target_path: $!";
-}
+target_dir = Path(target_arg if target_arg else Path.home()).expanduser()
+dotfiles_dir = Path(__file__).resolve().parent.parent / "dotfiles"
 
-my $file = __FILE__;
-if (-l $file) {
-    $file = readlink $file;
-}
+if not dotfiles_dir.is_dir():
+    print(f"Error: dotfiles directory not found: {dotfiles_dir}")
+    sys.exit(1)
 
-my $configs_path = File::Spec->rel2abs(dirname($file) . '/../dotfiles');
-my @directories = ($configs_path);
+target_dir.mkdir(parents=True, exist_ok=True)
+print(f"Syncing dotfiles from {dotfiles_dir} to {target_dir} (backup={backup_flag})")
 
-find({ preprocess => \&preprocess, wanted => \&sync, no_chdir => 1 }, @directories);
+for src in dotfiles_dir.rglob("*"):
+    if src.name.endswith("~"):
+        continue
 
-sub preprocess {
-    # Ignore Emacs backups
-    return grep { !/~$/ } @_;
-}
+    rel_path = src.relative_to(dotfiles_dir)
+    dest = target_dir / rel_path
 
-sub sync {
-    return if $_ eq '.' or $_ eq '..';
+    if src.is_dir():
+        dest.mkdir(parents=True, exist_ok=True)
+    else:
+        if dest.exists() or dest.is_symlink():
+            if backup_flag:
+                backup_path = dest.with_suffix(dest.suffix + ".bak")
+                dest.rename(backup_path)
+                print(f"Backed up: {dest} -> {backup_path}")
+            else:
+                dest.unlink()
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.symlink_to(src)
+        print(f"Linked: {src} -> {dest}")
 
-    # Get the relative path of the file/directory inside "dotfiles"
-    my $relative_path = File::Spec->abs2rel($File::Find::name, $configs_path);
-    my $new_path = File::Spec->catfile($target_path, $relative_path);
+print("Dotfiles sync complete.")
 
-    if (-d $File::Find::name) {
-        # Ensure the directory exists and preserve original permissions
-        unless (-d $new_path) {
-            my $orig_stat = stat($File::Find::name);
-            make_path($new_path) or die "Failed to create directory $new_path: $!";
-            if ($orig_stat) {
-                chmod $orig_stat->mode & 07777, $new_path; # Preserve mode
-            }
-        }
-    } else {
-        # Remove existing files or symlinks before linking
-        if (-e $new_path || -l $new_path) {
-            unlink $new_path or warn "Failed to remove existing file $new_path: $!";
-        }
-
-        # Create a symbolic link
-        if (symlink $File::Find::name, $new_path) {
-            say "Linked: $File::Find::name -> $new_path";
-        } else {
-            warn "Failed to link $File::Find::name to $new_path: $!";
-        }
-    }
-}

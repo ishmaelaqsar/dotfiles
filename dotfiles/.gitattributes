@@ -1,0 +1,116 @@
+############################################################
+# Default Behavior
+############################################################
+# Automatically normalize line endings.  
+# On checkout: use native line endings (CRLF on Windows, LF on Linux/macOS)
+# On commit: always store as LF
+* text=auto eol=lf
+
+############################################################
+# Explicit Line Ending Rules
+############################################################
+# Shell scripts and executables should always use LF
+*.sh text eol=lf
+*.bash text eol=lf
+*.zsh text eol=lf
+
+# Python scripts
+*.py text eol=lf
+
+# Configuration files (YAML, JSON, etc.)
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.toml text eol=lf
+*.ini text eol=lf
+*.cfg text eol=lf
+
+# Windows batch and PowerShell scripts should use CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+############################################################
+# Code Formatting / Language Specifics
+############################################################
+# C / C++
+*.c text diff=c
+*.cpp text diff=cpp
+*.h text diff=cpp
+*.hpp text diff=cpp
+
+# Java
+*.java text diff=java
+
+# HTML / CSS / JS / TS
+*.html text
+*.css text
+*.js text
+*.ts text
+*.tsx text
+*.jsx text
+
+# Markdown / Docs
+*.md text diff=markdown
+*.rst text
+*.txt text
+
+# SQL
+*.sql text diff=sql
+
+############################################################
+# Binary Files (never attempt to diff or modify line endings)
+############################################################
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.tar binary
+*.gz binary
+*.7z binary
+*.exe binary
+*.dll binary
+*.so binary
+*.class binary
+*.jar binary
+
+############################################################
+# Git Merge & Diff Customizations
+############################################################
+# Better merge behavior for common file types
+*.lock merge=union
+package-lock.json merge=union
+poetry.lock merge=union
+yarn.lock merge=union
+
+# Treat binary files as binary during diff
+*.png -diff
+*.jpg -diff
+*.jpeg -diff
+*.pdf -diff
+
+############################################################
+# Linguist Overrides (for GitHub stats)
+############################################################
+# Exclude vendored or generated content from language stats
+*.min.js linguist-vendored
+node_modules/* linguist-vendored
+dist/* linguist-vendored
+build/* linguist-vendored
+vendor/* linguist-vendored
+
+############################################################
+# OS / Editor Specific
+############################################################
+# Ignore line ending normalization for IDE metadata
+*.iml text eol=lf
+.idea/* text eol=lf
+.vscode/* text eol=lf
+
+# Preserve Makefiles & similar build files with LF
+Makefile text eol=lf
+Dockerfile text eol=lf
+

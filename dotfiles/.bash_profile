@@ -1,28 +1,37 @@
-# Source global definitions
-if [ -f /etc/profile ]
-then
+# ============================================================
+# Load Global Profile
+# ============================================================
+
+if [[ -f /etc/profile ]]; then
     . /etc/profile
 fi
 
-# if running bash
-if [ -n "$BASH_VERSION" ]
-then
-    # include .bashrc if it exists
-    if [ -f "$HOME/.bashrc" ]
-    then
+# ============================================================
+# Load User .bashrc (for interactive shells)
+# ============================================================
+
+if [[ -n "$BASH_VERSION" ]]; then
+    if [[ -f "$HOME/.bashrc" ]]; then
         . "$HOME/.bashrc"
     fi
 fi
 
-# set PATH so it includes user's private bin if it exists
-if [ -d "$HOME/bin" ]
-then
-    PATH="$HOME/bin:$PATH"
-fi
+# ============================================================
+# PATH Management
+# ============================================================
 
-# set PATH so it includes user's private bin if it exists
-if [ -d "$HOME/.local/bin" ]
-then
-    PATH="$HOME/.local/bin:$PATH"
-fi
+# Helper to prepend to PATH if not already present
+__add_path() {
+    local dir="$1"
+    if [[ -d "$dir" && ":$PATH:" != *":$dir:"* ]]; then
+        PATH="$dir:$PATH"
+    fi
+}
+
+# Add user bin directories
+__add_path "$HOME/bin"
+__add_path "$HOME/.local/bin"
+
+# Clean up helper
+unset -f __add_path
 

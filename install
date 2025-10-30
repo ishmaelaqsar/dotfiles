@@ -1,26 +1,41 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-if ! command -v git &> /dev/null
-then
-    echo "Git not found. Skipping git configuration."
-else
-    echo "Configuring global Git settings..."
-
-    # Set autocrlf to 'input' for Unix-like systems (Linux/macOS)
-    git config --global core.autocrlf input
-
-    # Add other common settings (e.g., user info)
-    git config --global user.name "Ishmael Aqsar"
-    git config --global user.email "ishmael-dev@aqsar.dev"
-
-    echo "Git configuration complete."
-fi
-
-# Default target directory to $HOME if no argument is provided
+# -----------------------------
+# Default target directory
+# -----------------------------
 TARGET_DIR="${1:-$HOME}"
 
-# Get the absolute directory of the script (handles various contexts)
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# -----------------------------
+# Absolute path to this script
+# -----------------------------
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DOTFILES_DIR="$HOME/.dotfiles/dotfiles"
 
-# Run the Perl script located in ./bin/sync-dotfiles.pl
-perl "$SCRIPT_DIR/bin/sync-dotfiles" "$TARGET_DIR"
+# -----------------------------
+# Sync dotfiles via Python
+# -----------------------------
+echo "Syncing dotfiles to $TARGET_DIR..."
+if ! python3 "$SCRIPT_DIR/bin/sync-dotfiles" "$TARGET_DIR"; then
+    echo "Error: sync-dotfiles failed. Aborting."
+    exit 1
+fi
+
+# -----------------------------
+# Git configuration
+# -----------------------------
+if command -v git &> /dev/null; then
+    echo "Configuring global Git settings..."
+
+    git config --global user.name "Ishmael Aqsar"
+    git config --global user.email "ishmael-dev@aqsar.dev"
+    git config --global core.excludesfile "$HOME/.gitignore_global"
+    git config --global core.attributesfile "$HOME/.gitattributes"
+
+    echo "Git configuration complete."
+else
+    echo "Git not found. Skipping git configuration."
+fi
+
+echo "Dotfiles installation complete."
+
