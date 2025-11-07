@@ -1,0 +1,19 @@
+# ============================================================
+# Helper Functions
+# ============================================================
+
+# Check for internet connectivity
+__has_internet() {
+    ping -c 1 -W 1 1.1.1.1 >/dev/null 2>&1 || \
+    ping -c 1 -W 1 8.8.8.8 >/dev/null 2>&1 || \
+    ping -c 1 -W 1 cpan.org >/dev/null 2>&1
+}
+
+# Detect git project root (fallback: current dir)
+__get_project_root() {
+    if git rev-parse --show-toplevel >/dev/null 2>&1; then
+        git rev-parse --show-toplevel
+    else
+        pwd
+    fi
+}

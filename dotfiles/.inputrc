@@ -1,0 +1,3 @@
+# Enable Emacs editing mode
+set editing-mode emacs
+set keymap emacs

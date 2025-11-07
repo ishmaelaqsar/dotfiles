@@ -10,7 +10,8 @@ TARGET_DIR="${1:-$HOME}"
 # Absolute path to this script
 # -----------------------------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DOTFILES_DIR="$HOME/.dotfiles/dotfiles"
+SOURCE_BIN_DIR="$SCRIPT_DIR/bin"
+DOTFILES_DIR="$SCRIPT_DIR/dotfiles"
 
 # -----------------------------
 # Sync dotfiles via Python
@@ -20,6 +21,31 @@ if ! python3 "$SCRIPT_DIR/bin/sync-dotfiles" "$TARGET_DIR"; then
     echo "Error: sync-dotfiles failed. Aborting."
     exit 1
 fi
+
+# -----------------------------
+# Sync custom scripts
+# -----------------------------
+TARGET_BIN_DIR="$TARGET_DIR/bin"
+
+echo "Syncing custom scripts to $TARGET_BIN_DIR..."
+
+# Ensure the target bin directory exists
+mkdir -p "$TARGET_BIN_DIR"
+# Loop through all files in the source bin directory
+for script_path in "$SOURCE_BIN_DIR"/*; do
+    # Check if the glob found any files
+    if [ -e "$script_path" ]; then
+        script_name=$(basename "$script_path")
+        target_path="$TARGET_BIN_DIR/$script_name"
+
+        # Make the source script executable before linking
+        chmod +x "$script_path"
+
+        echo "  -> Linking $script_name"
+        # Create or update the symlink, forcing overwrite
+        ln -sf "$script_path" "$target_path"
+    fi
+done
 
 # -----------------------------
 # Git configuration
@@ -38,4 +64,3 @@ else
 fi
 
 echo "Dotfiles installation complete."
-

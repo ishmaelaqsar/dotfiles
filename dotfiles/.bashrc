@@ -1,24 +1,4 @@
 # ============================================================
-# Helper Functions
-# ============================================================
-
-# Check for internet connectivity
-__has_internet() {
-    ping -c 1 -W 1 1.1.1.1 >/dev/null 2>&1 || \
-    ping -c 1 -W 1 8.8.8.8 >/dev/null 2>&1 || \
-    ping -c 1 -W 1 cpan.org >/dev/null 2>&1
-}
-
-# Detect git project root (fallback: current dir)
-__get_project_root() {
-    if git rev-parse --show-toplevel >/dev/null 2>&1; then
-        git rev-parse --show-toplevel
-    else
-        pwd
-    fi
-}
-
-# ============================================================
 # Bash Prompt with Git Branch & Jobs
 # ============================================================
 
@@ -73,6 +53,11 @@ PROMPT_COMMAND=set_prompt
 # Environment & Basic Setup
 # ============================================================
 
+# Source general helper functions
+if [[ -f ~/.helpers ]]; then
+    . ~/.helpers
+fi
+
 # Run these commands only when running in a container
 if [[ -v CONTAINER_ID ]]; then
     export LC_ALL=en_US.utf8
@@ -81,6 +66,11 @@ fi
 # Source aliases
 if [[ -f ~/.aliases ]]; then
     . ~/.aliases
+fi
+
+# Source venv helpers
+if [[ -f ~/.venv_helpers ]]; then
+    . ~/.venv_helpers
 fi
 
 # Local workspace
@@ -144,203 +134,6 @@ fi
 if command -v podman >/dev/null 2>&1; then
     source <(podman completion bash)
 fi
-
-# ============================================================
-# Python Virtual Environment Helpers
-# ============================================================
-
-# venv-init: create new virtual environment
-# Usage: venv-init [-p python_executable] [dir] [--venv-options]
-venv-init() {
-    local venv_dir=".venv"
-    local python_cmd="python3"
-    local root="$(__get_project_root)"
-
-    # Parse options
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            -p|--python)
-                python_cmd="$2"
-                shift 2
-                ;;
-            -*)
-                # venv option, stop parsing positional args
-                break
-                ;;
-            *)
-                venv_dir="$1"
-                shift
-                ;;
-        esac
-    done
-
-    local target="$root/$venv_dir"
-
-    echo "Creating virtual environment at: $target using $python_cmd"
-    "$python_cmd" -m venv "$target" "$@"
-
-    if [[ $? -eq 0 ]]; then
-        echo "Virtual environment created successfully."
-    else
-        echo "Failed to create virtual environment."
-        return 1
-    fi
-}
-
-# venv-start: activate existing environment
-# Usage: venv-start [dir]
-venv-start() {
-    local venv_dir=".venv"
-    local root="$(__get_project_root)"
-
-    if [[ -n "$1" ]]; then
-        venv_dir="$1"
-    fi
-
-    local target="$root/$venv_dir"
-
-    if [[ -f "$target/bin/activate" ]]; then
-        # shellcheck disable=SC1090
-        source "$target/bin/activate"
-        echo "Activated virtual environment: $target"
-    else
-        echo "No virtual environment found at: $target"
-        echo "Run 'venv-init' first to create one."
-        return 1
-    fi
-}
-
-# venv-stop: deactivate current environment
-venv-stop() {
-    if [[ -n "$VIRTUAL_ENV" ]]; then
-        deactivate
-        echo "Virtual environment deactivated."
-    else
-        echo "No active virtual environment."
-    fi
-}
-
-# venv-restart: convenience wrapper (stop + start)
-venv-restart() {
-    local arg="$1"
-    venv-stop >/dev/null 2>&1
-    venv-start "$arg"
-}
-
-# venv-path: print path of current or detected venv
-venv-path() {
-    if [[ -n "$VIRTUAL_ENV" ]]; then
-        echo "$VIRTUAL_ENV"
-    else
-        local root="$(__get_project_root)"
-        if [[ -d "$root/.venv" ]]; then
-            echo "$root/.venv"
-        else
-            echo "No virtual environment detected."
-            return 1
-        fi
-    fi
-}
-
-# venv-list: list all virtual environments under a directory
-# Shows name, path, Python version, and indicates if active
-venv-list() {
-    local search_dir="${1:-$WORKSPACE}"
-    local found=0
-
-    echo "Searching for virtual environments under: $search_dir"
-    echo "-----------------------------------------------------"
-
-    # Use process substitution to avoid subshell issues
-    while read -r bin_dir; do
-        local venv_dir
-        venv_dir="$(dirname "$bin_dir")"
-
-        local pyver
-        if [[ -x "$bin_dir/python" ]]; then
-            pyver="$("$bin_dir/python" -V 2>&1)"
-        else
-            pyver="Unknown"
-        fi
-
-        local marker=""
-        if [[ "$VIRTUAL_ENV" == "$venv_dir" ]]; then
-            marker="(active)"
-        fi
-
-        # Display: workspace_name -> venv_path [Python version] (active)
-        echo "$(basename "$(dirname "$venv_dir")")  ->  $venv_dir  [$pyver] $marker"
-
-        found=1
-    done < <(find "$search_dir" -type d -name "bin" -path "*/.venv/bin" 2>/dev/null)
-
-    if [[ $found -eq 0 ]]; then
-        echo "No virtual environments found."
-    fi
-}
-
-
-# venv-help: display usage information for venv helpers
-venv-help() {
-    cat <<'EOF'
-
-Python Virtual Environment Helpers
-==================================
-
-Functions:
-
-  venv-init [-p python_executable] [dir] [--venv-options]
-      Create a new virtual environment.
-      -p, --python   Specify Python interpreter (default: python3)
-      dir            Optional directory name (default: .venv)
-      Additional arguments are passed to python -m venv.
-
-  venv-start [dir]
-      Activate an existing virtual environment.
-      dir            Optional directory name (default: .venv)
-
-  venv-stop
-      Deactivate the currently active virtual environment.
-
-  venv-restart [dir]
-      Stop and then start a virtual environment.
-
-  venv-path
-      Print the path of the currently active or detected virtual environment.
-
-  venv-list [search_dir]
-      List all virtual environments under search_dir (default: $WORKSPACE).
-      Shows directory, Python version, and indicates if active.
-
-  venv-help
-      Prints this help information
-
-Aliases:
-
-  vinit      = venv-init
-  vstart     = venv-start
-  vstop      = venv-stop
-  vrestart   = venv-restart
-  vlist      = venv-list
-  vhelp      = venv-help
-
-Examples:
-
-  vinit -p python3.11 myenv       # Create venv named "myenv" with Python 3.11
-  vstart myenv                    # Activate "myenv"
-  vlist                           # List all venvs under $WORKSPACE
-
-EOF
-}
-
-# Short aliases
-alias vinit='venv-init'
-alias vstart='venv-start'
-alias vstop='venv-stop'
-alias vrestart='venv-restart'
-alias vlist='venv-list'
-alias vhelp='venv-help'
-
 
 # ============================================================
 # User-Specific Extensions
