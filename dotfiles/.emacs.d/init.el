@@ -31,6 +31,8 @@
     :config
     ;; For a fully declarative config, remove the load/save custom-file logic.
     (setq custom-file (expand-file-name "custom.el" no-littering-etc-directory))
+    (setq backup-directory-alist
+          `(("." . ,(expand-file-name "backups/" no-littering-var-directory))))
     (setq auto-save-file-name-transforms
         `((".*" ,(expand-file-name "auto-save/" no-littering-var-directory) t)))
     (setq undo-tree-history-directory-alist

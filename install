@@ -23,13 +23,29 @@ if ! python3 "$SCRIPT_DIR/bin/sync-dotfiles" "$TARGET_DIR"; then
 fi
 
 # -----------------------------
+# Create dotfiles alias
+# -----------------------------
+
+BASHRC_D_DIR="$HOME/.bashrc.d"
+ALIAS_FILE="$BASHRC_D_DIR/dotfiles_alias"
+
+mkdir -p "$BASHRC_D_DIR"
+
+echo "Creating dotfiles alias at '$ALIAS_FILE'."
+cat <<EOF > "$ALIAS_FILE"
+# Alias to quickly jump to dotfiles directory
+alias dotfiles='cd $SCRIPT_DIR'
+EOF
+
+echo "Done. '$ALIAS_FILE' created."
+
+# -----------------------------
 # Sync custom scripts
 # -----------------------------
 TARGET_BIN_DIR="$TARGET_DIR/bin"
 
 echo "Syncing custom scripts to $TARGET_BIN_DIR..."
 
-# Ensure the target bin directory exists
 mkdir -p "$TARGET_BIN_DIR"
 # Loop through all files in the source bin directory
 for script_path in "$SOURCE_BIN_DIR"/*; do

@@ -53,64 +53,17 @@ PROMPT_COMMAND=set_prompt
 # Environment & Basic Setup
 # ============================================================
 
-# Source general helper functions
-if [[ -f ~/.helpers ]]; then
-    . ~/.helpers
-fi
-
-# Run these commands only when running in a container
-if [[ -v CONTAINER_ID ]]; then
-    export LC_ALL=en_US.utf8
-fi
-
 # Source aliases
 if [[ -f ~/.aliases ]]; then
     . ~/.aliases
 fi
 
-# Source venv helpers
-if [[ -f ~/.venv_helpers ]]; then
-    . ~/.venv_helpers
-fi
-
-# Local workspace
-if [[ ! -d ~/workspace ]]; then
-    mkdir ~/workspace
-fi
-export WORKSPACE="$HOME/workspace"
+# Local workspace (Alias ONLY)
 alias ws='cd "$WORKSPACE"'
 
-# ============================================================
-# Editor Configuration
-# ============================================================
-
 if command -v emacs >/dev/null 2>&1; then
-    export EDITOR='emacs -nw'
-    # Start emacs daemon if not already running
-    if ! pgrep -a emacs | grep daemon >/dev/null 2>&1; then
-        emacs --daemon --chdir="$WORKSPACE"
-    fi
     alias e='emacsclient -nw'
     alias emacs='emacsclient -nw'
-else
-    export EDITOR='nano'
-fi
-
-export GIT_OPEN="$EDITOR"
-export VISUAL="$EDITOR"
-
-# ============================================================
-# Perl / CPAN Setup
-# ============================================================
-
-if command -v cpanm >/dev/null 2>&1; then
-    if __has_internet; then
-        if cpanm --local-lib=~/perl5 local::lib >/dev/null 2>&1; then
-            eval "$(perl -I ~/perl5/lib/perl5/ -Mlocal::lib)"
-        fi
-    else
-        echo "Skipping cpan local::lib setup (no internet connection)."
-    fi
 fi
 
 # ============================================================
