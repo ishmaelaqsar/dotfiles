@@ -17,3 +17,23 @@ __get_project_root() {
         pwd
     fi
 }
+
+# Usage: add_secret API_KEY "super_secret_value"
+# This runs the python tool, updates the file, AND exports to current shell
+function add_secret() {
+    if [ -z "$1" ] || [ -z "$2" ]; then
+        echo "Usage: add_secret <KEY> <VALUE>"
+        return 1
+    fi
+
+    # We eval the output of the python script to set the env var immediately
+    eval "$(python3 ~/workspace/.dotfiles/bin/manage-secrets encrypt "$1" "$2")"
+}
+
+# Usage: load_secrets
+# This prompts for YubiKey PIN (once per session/day) and exports all vars
+function load_secrets() {
+    echo "Loading secrets from YubiKey..."
+    # Eval the output to export variables into current shell
+    eval "$(python3 ~/workspace/.dotfiles/bin/manage-secrets decrypt)"
+}

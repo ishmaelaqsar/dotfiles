@@ -27,7 +27,7 @@ if not dotfiles_dir.is_dir():
     sys.exit(1)
 
 target_dir.mkdir(parents=True, exist_ok=True)
-print(f"Syncing dotfiles from {dotfiles_dir} to {target_dir} (backup={backup_flag})")
+print(f"Syncing dotfiles to {target_dir}...")
 
 for src in dotfiles_dir.rglob("*"):
     if src.name.endswith("~"):
@@ -43,12 +43,11 @@ for src in dotfiles_dir.rglob("*"):
             if backup_flag:
                 backup_path = dest.with_suffix(dest.suffix + ".bak")
                 dest.rename(backup_path)
-                print(f"Backed up: {dest} -> {backup_path}")
+                print(f"  -> Backed up {rel_path} to {backup_path.name}")
             else:
                 dest.unlink()
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.symlink_to(src)
-        print(f"Linked: {src} -> {dest}")
+        print(f"  -> Linking {rel_path}")
 
 print("Dotfiles sync complete.")
-

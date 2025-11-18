@@ -66,6 +66,22 @@ if command -v emacs >/dev/null 2>&1; then
     alias emacs='emacsclient -nw'
 fi
 
+# -----------------------------------------------------------------------------
+# GPG & SSH Agent Integration
+# -----------------------------------------------------------------------------
+
+# This tells GPG which terminal to draw the PIN prompt on.
+export GPG_TTY=$(tty)
+
+# Link SSH to GPG
+unset SSH_AGENT_PID
+if command -v gpgconf >/dev/null; then
+    export SSH_AUTH_SOCK=$(gpgconf --list-dirs agent-ssh-socket)
+fi
+
+# Ensures the agent knows about the current TTY immediately on shell startup.
+gpg-connect-agent updatestartuptty /bye >/dev/null 2>&1
+
 # ============================================================
 # Shell Completion Setup
 # ============================================================
