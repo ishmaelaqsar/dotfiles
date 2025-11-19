@@ -141,20 +141,6 @@ out/
 *.iws
 out/
 
-# Eclipse
-.project
-.classpath
-.settings/
-bin/
-
-# NetBeans
-nbproject/private/
-build/
-nbbuild/
-dist/
-nbdist/
-.nb-gradle/
-
 # VS Code
 .vscode/
 
@@ -247,4 +233,3 @@ Session.vim
 # Example:
 #   !keep_this_file.txt
 #   data/
-
