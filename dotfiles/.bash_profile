@@ -41,6 +41,8 @@ if [[ -v CONTAINER_ID ]]; then
     export LC_ALL=en_US.utf8
 fi
 
+export IDENTITY="Ishmael Aqsar <ishmael-dev@aqsar.dev>"
+
 # Local workspace
 if [[ ! -d ~/workspace ]]; then
     mkdir ~/workspace
