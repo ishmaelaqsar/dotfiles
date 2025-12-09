@@ -1,0 +1,108 @@
+#!/bin/bash
+
+# Default Configuration
+TARGET_DIR="$HOME/bin"
+MODE="install" # install | clean
+
+# Function to print usage
+usage() {
+    echo "Usage: $(basename "$0") [-d target_dir] [-c] [file1 file2 ...]"
+    echo "  -d  Specify target directory (default: ~/bin)"
+    echo "  -c  Clean mode: Removes symlinks in target that point to current dir"
+    echo "  [files] Optional list of specific files to link/clean. If empty, uses all files."
+    exit 1
+}
+
+# Parse flags
+while getopts ":cd:h" opt; do
+    case ${opt} in
+	c) MODE="clean" ;;
+	d) TARGET_DIR="$OPTARG" ;;
+	h) usage ;;
+	\?) echo "Invalid option: -$OPTARG" >&2; usage ;;
+    esac
+done
+shift $((OPTIND -1))
+
+# Ensure target directory exists
+if [ ! -d "$TARGET_DIR" ]; then
+    echo "Error: Target directory '$TARGET_DIR' does not exist."
+    exit 1
+fi
+
+# Get absolute path of current directory
+CURRENT_DIR=$(pwd -P)
+FILES="${@}"
+
+if [ "$MODE" == "install" ]; then
+    echo "Creating symlinks in '$TARGET_DIR' pointing to '$CURRENT_DIR'..."
+    
+    # If no specific files listed, grab everything in current dir (excluding hidden files)
+    if [ -z "$FILES" ]; then
+        FILES="*"
+    fi
+
+    count=0
+    for f in $FILES; do
+        # Skip if glob match failed (empty directory)
+        [ -e "$f" ] || continue
+        
+        # Don't symlink the script itself if it happens to be in the folder
+        if [ "$f" == "$(basename "$0")" ]; then continue; fi
+
+        src="$CURRENT_DIR/$f"
+        dest="$TARGET_DIR/$f"
+
+        # Check if destination already exists
+        if [ -e "$dest" ] || [ -L "$dest" ]; then
+            echo "  [SKIP] $f (Destination already exists)"
+        else
+            ln -s "$src" "$dest"
+            echo "  [LINK] $f -> $dest"
+            ((count++))
+        fi
+    done
+    echo "Done. Created $count symlinks."
+else
+    echo "Cleaning symlinks in '$TARGET_DIR' that point to '$CURRENT_DIR'..."
+    
+    count=0
+    # Loop through every file in the target directory
+    for link in "$TARGET_DIR"/*; do
+        # Check if it is actually a symlink
+        if [ -L "$link" ]; then
+            # Resolve where the link points to
+            target_point=$(readlink "$link")
+            
+            # If the link is relative, resolve it to absolute to compare
+            if [[ "$target_point" != /* ]]; then
+                target_point=$(cd "$(dirname "$link")" && cd "$(dirname "$target_point")" && pwd)/$(basename "$target_point")
+            fi
+
+            # Check if the link points to our current directory
+            if [[ "$target_point" == "$CURRENT_DIR"* ]]; then
+                
+                # If user specified specific files, only delete those matches
+                filename=$(basename "$link")
+                should_delete=true
+                
+                if [ -n "$FILES" ]; then
+                    should_delete=false
+                    for f in $FILES; do
+                        if [ "$f" == "$filename" ]; then
+                            should_delete=true
+                            break
+                        fi
+                    done
+                fi
+
+                if [ "$should_delete" = true ]; then
+                    rm "$link"
+                    echo "  [RM] $filename"
+                    ((count++))
+                fi
+            fi
+        fi
+    done
+    echo "Done. Removed $count symlinks."
+fi
