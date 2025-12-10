@@ -10,10 +10,15 @@
 (require 'package)
 (setq package-archives '(("org"   . "https://orgmode.org/elpa/")
                             ("melpa" . "https://melpa.org/packages/")
+                            ("nongnu" . "https://elpa.nongnu.org/nongnu/")
                             ("elpa"  . "https://elpa.gnu.org/packages/")))
 (package-initialize)
 
-;; Bootstrap 'use-package' (required since you disabled package-enable-at-startup)
+;; Force a refresh if the archive list seems empty or outdated
+(unless package-archive-contents
+  (package-refresh-contents))
+
+;; Bootstrap 'use-package'
 (unless (package-installed-p 'use-package)
     (package-refresh-contents)
     (package-install 'use-package))
@@ -32,7 +37,7 @@
     ;; For a fully declarative config, remove the load/save custom-file logic.
     (setq custom-file (expand-file-name "custom.el" no-littering-etc-directory))
     (setq backup-directory-alist
-          `(("." . ,(expand-file-name "backups/" no-littering-var-directory))))
+        `(("." . ,(expand-file-name "backups/" no-littering-var-directory))))
     (setq auto-save-file-name-transforms
         `((".*" ,(expand-file-name "auto-save/" no-littering-var-directory) t)))
     (setq undo-tree-history-directory-alist
@@ -150,24 +155,11 @@
 ;;;; Programming & Development
 ;; =========================================================================
 
-;; General programming mode hooks
-(use-package prog-mode
-    :ensure nil
-    :hook
-    (prog-mode . display-line-numbers-mode)
-    (prog-mode . flymake-mode)
-    (prog-mode . corfu-mode)
-    (prog-mode . diff-hl-mode))
-
-;; Electric pair mode for auto-pairing delimiters
-(use-package electric
-    :ensure nil
-    :config
-    (electric-pair-mode t))
-
 ;; LSP Support
 (use-package eglot
-    :hook (prog-mode . eglot-ensure))
+    :ensure nil ;; Eglot is built-in on Emacs 29, remove this line if on Emacs 28
+    :custom
+    (eglot-autoshutdown t))
 
 ;; Inline static analysis
 (use-package flymake
@@ -178,16 +170,30 @@
               ("C-c n" . flymake-goto-next-error)
               ("C-c p" . flymake-goto-prev-error)))
 
-;; Pop-up completion
+                                        ; Pop-up completion
 (use-package corfu
+    ;; Optional: Enable globally (recommended over hooking to prog-mode)
+    :init
+    (global-corfu-mode)
     :custom
-    (corfu-auto t))
+    (corfu-auto t)
+    (corfu-cycle t)           ;; Enable cycling for `corfu-next/previous'
+    (corfu-preselect 'prompt) ;; Always preselect the prompt
+    :init
+    (global-corfu-mode))
 
 ;; DAP (Debug Adapter Protocol) Support
+;; Note: Requires Emacs 29.1+
 (use-package dape
     :custom
     (dape-inlay-hints t)
     (dape-buffer-window-arrangement 'right))
+
+;; Electric pair mode for auto-pairing delimiters
+(use-package electric
+    :ensure nil
+    :config
+    (electric-pair-mode t))
 
 ;; Git client
 (use-package magit
@@ -206,6 +212,15 @@
 (use-package sly)
 (use-package yaml-mode)
 (use-package markdown-mode)
+
+(use-package prog-mode
+    :ensure nil
+    :hook
+    (prog-mode . display-line-numbers-mode)
+    (prog-mode . flymake-mode)
+    (prog-mode . corfu-mode)
+    (prog-mode . diff-hl-mode)
+    (prog-mode . eglot-ensure)) ;; Start LSP automatically
 
 
 ;;;; Org Mode
