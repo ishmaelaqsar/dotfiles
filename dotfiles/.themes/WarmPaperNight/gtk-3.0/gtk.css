@@ -1,0 +1,111 @@
+/* WarmPaper Night Theme for XFCE 4.20
+   Low-Light Optimized / Warm Retro Dark Mode */
+
+/* --- Color Palette Definitions --- */
+@define-color bg_color #2b2724;        /* Deep Espresso Background */
+@define-color fg_color #e6e1d3;        /* Bone/Ivory Text (Not pure white) */
+@define-color base_color #36302c;      /* Slightly lighter for input fields */
+@define-color selected_bg_color #d78d4f; /* Retro Amber/Orange */
+@define-color selected_fg_color #2b2724; /* Dark text on selection for contrast */
+@define-color tooltip_bg_color #e6e1d3;
+@define-color tooltip_fg_color #2b2724;
+@define-color panel_bg #1f1c1a;        /* Very dark brown for panel */
+
+/* --- Global Settings --- */
+* {
+    -gtk-icon-style: regular;
+    border-color: shade(@bg_color, 0.7); /* Subtle dark borders */
+}
+
+/* Base Window Styling */
+window, dialog, main_window {
+    background-color: @bg_color;
+    color: @fg_color;
+    font-family: sans-serif;
+}
+
+/* Typography Readability */
+label {
+    text-shadow: none;
+}
+
+/* --- Buttons --- */
+button {
+    background-color: shade(@bg_color, 1.1); /* Slightly lighter than bg */
+    color: @fg_color;
+    border: 1px solid shade(@bg_color, 0.6);
+    border-radius: 3px;
+    padding: 6px 12px;
+    box-shadow: none;
+}
+
+button:hover {
+    background-color: shade(@bg_color, 1.3);
+    border-color: @selected_bg_color;
+}
+
+button:active {
+    background-color: @selected_bg_color;
+    color: @selected_fg_color;
+}
+
+/* --- Text Entries / Inputs --- */
+entry, textview {
+    background-color: @base_color;
+    color: #ffffff; /* Brighter white for active typing */
+    border: 1px solid shade(@bg_color, 0.5);
+    border-radius: 2px;
+    padding: 4px;
+}
+
+entry:focus, textview:focus {
+    border-color: @selected_bg_color;
+    background-color: shade(@base_color, 1.1);
+}
+
+/* --- Selection Highlighting --- */
+:selected, .view:selected {
+    background-color: @selected_bg_color;
+    color: @selected_fg_color;
+}
+
+/* --- Menus --- */
+menu, .menu {
+    background-color: @bg_color;
+    border: 1px solid shade(@bg_color, 0.5);
+    padding: 4px;
+}
+
+menuitem:hover {
+    background-color: @selected_bg_color;
+    color: @selected_fg_color;
+}
+
+/* --- XFCE Panel Specifics --- */
+.xfce4-panel {
+    background-color: @panel_bg;
+    color: #d1cdc0;
+    font-weight: bold;
+    border-top: 1px solid shade(@panel_bg, 1.2); /* Highlight top edge */
+}
+
+.xfce4-panel button:hover {
+    background-color: shade(@panel_bg, 1.5);
+}
+
+/* --- Scrollbars --- */
+scrollbar {
+    background-color: @bg_color;
+}
+
+scrollbar slider {
+    min-width: 12px;
+    min-height: 12px;
+    border-radius: 6px;
+    background-color: shade(@bg_color, 1.6); /* Lighter grey-brown */
+    border: 2px solid @bg_color;
+}
+
+scrollbar slider:hover {
+    background-color: @selected_bg_color;
+}
