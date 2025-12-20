@@ -28,8 +28,16 @@ git_branch() {
 
 # Prompt setup
 set_prompt() {
-    local git_info jobs_info
+    local git_info jobs_info venv_info
     git_info=$(git_branch)
+
+    # 1. Check for Virtual Env
+    if [[ -n "$VIRTUAL_ENV" ]]; then
+        # Extracts the folder name (e.g., .venv) and colors it Cyan
+        venv_info="${BOLD}${CYAN}($(basename "$VIRTUAL_ENV"))${RESET} "
+    else
+        venv_info=""
+    fi
 
     # Only show Jobs= if there are background jobs
     if [[ $(jobs -p | wc -l) -gt 0 ]]; then
@@ -39,10 +47,12 @@ set_prompt() {
     fi
 
     # Construct PS1
-    PS1="${BOLD}${GREEN}\u${RESET}@${BOLD}${BLUE}\h${RESET} "  # user@host
-    PS1+="${jobs_info}"                                        # conditional jobs
-    PS1+="${BOLD}${CYAN}\w${RESET} "                           # current working directory
-    PS1+="${BOLD}${MAGENTA}${git_info}${RESET} \$ "            # git branch and prompt char
+    # Added venv_info to the very beginning
+    PS1="${venv_info}"
+    PS1+="${BOLD}${GREEN}\u${RESET}@${BOLD}${BLUE}\h${RESET} "   # user@host
+    PS1+="${jobs_info}"                                          # conditional jobs
+    PS1+="${BOLD}${CYAN}\w${RESET} "                             # current working directory
+    PS1+="${BOLD}${MAGENTA}${git_info}${RESET} \$ "              # git branch and prompt char
 }
 
 # Assign to PROMPT_COMMAND so it updates dynamically

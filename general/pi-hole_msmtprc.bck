@@ -1,0 +1,17 @@
+# Default settings
+defaults
+auth           on
+tls            on
+tls_trust_file /etc/ssl/certs/ca-certificates.crt
+logfile        /home/pi/msmtp.log
+
+# Gmail account
+account        gmail
+host           smtp.gmail.com
+port           587
+from           ishmael-dev@aqsar.dev
+user           $GMAIL_ADDRESS
+password       $GMAIL_APP_PASSWORD
+
+# Set this account as default
+account default : gmail
