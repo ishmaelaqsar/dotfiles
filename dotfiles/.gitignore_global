@@ -23,7 +23,6 @@ compile_commands.json
 *.dll
 *.exe
 /slate
-/bin/
 
 # ============================================================
 # Python

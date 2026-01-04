@@ -1,0 +1,251 @@
+#!/usr/bin/env python3
+"""
+vm — Generic QEMU/KVM Virtual Machine Helper
+Wraps 'virsh' for smoother development workflows.
+"""
+
+import os
+import sys
+import subprocess
+import argparse
+import shutil
+
+# ------------------------------------------------------------
+# Helpers
+# ------------------------------------------------------------
+
+def run(cmd, check=True, capture=False):
+    """Run shell command."""
+    if not capture:
+        print(f"→ {' '.join(cmd)}")
+    try:
+        result = subprocess.run(cmd, check=check, capture_output=capture, text=True)
+        return result.stdout.strip() if capture else None
+    except subprocess.CalledProcessError as e:
+        if check:
+            print(f"❌ Command failed: {' '.join(cmd)}", file=sys.stderr)
+            if capture:
+                print(e.stderr, file=sys.stderr)
+            sys.exit(1)
+        raise e
+
+def get_arg_or_env(args, key, env_var):
+    """Resolve value from argument or environment variable."""
+    val = getattr(args, key, None)
+    if val:
+        return val
+    return os.environ.get(env_var)
+
+def require_vm_name(args):
+    name = get_arg_or_env(args, "name", "VM_NAME")
+    if not name:
+        print("❌ Error: No VM name specified.", file=sys.stderr)
+        print("  Use -n <name> or set VM_NAME environment variable.", file=sys.stderr)
+        sys.exit(1)
+    return name
+
+def require_user(args):
+    user = get_arg_or_env(args, "user", "VM_USER")
+    if not user:
+        print("❌ Error: No VM user specified for SSH.", file=sys.stderr)
+        print("  Use -u <user> or set VM_USER environment variable.", file=sys.stderr)
+        sys.exit(1)
+    return user
+
+def get_vm_ip(vm_name):
+    """Extracts IP address using virsh domifaddr."""
+    # 1. Try Guest Agent (Most reliable)
+    try:
+        out = run(["virsh", "domifaddr", vm_name, "--source", "agent"], capture=True, check=False)
+        if out:
+            for line in out.splitlines():
+                if "ipv4" in line:
+                    parts = line.split()
+                    return parts[-1].split('/')[0]
+    except:
+        pass
+
+    # 2. Try ARP Lease (Fallback - works without agent)
+    try:
+        out = run(["virsh", "domifaddr", vm_name, "--source", "lease"], capture=True, check=False)
+        if out:
+            for line in out.splitlines():
+                if "ipv4" in line:
+                    parts = line.split()
+                    return parts[-1].split('/')[0]
+    except:
+        pass
+    return None
+
+# ------------------------------------------------------------
+# Commands
+# ------------------------------------------------------------
+
+def cmd_list(_args):
+    """List all VMs."""
+    run(["virsh", "list", "--all"])
+
+def cmd_start(args):
+    name = require_vm_name(args)
+    state = run(["virsh", "domstate", name], capture=True)
+    if "running" in state:
+        print(f"✅ {name} is already running.")
+    else:
+        run(["virsh", "start", name])
+        print(f"🚀 Started {name}.")
+
+def cmd_stop(args):
+    name = require_vm_name(args)
+    run(["virsh", "shutdown", name])
+    print(f"🛑 Shutdown signal sent to {name}.")
+
+def cmd_force_stop(args):
+    name = require_vm_name(args)
+    run(["virsh", "destroy", name])
+    print(f"💀 Forcefully stopped {name}.")
+
+def cmd_status(args):
+    name = require_vm_name(args)
+    state = run(["virsh", "domstate", name], capture=True)
+    ip = get_vm_ip(name)
+    ip_str = ip if ip else "Unknown (Run 'vm setup' to install agent?)"
+    print(f"VM:     {name}")
+    print(f"State:  {state}")
+    print(f"IP:     {ip_str}")
+
+def cmd_ip(args):
+    name = require_vm_name(args)
+    ip = get_vm_ip(name)
+    if ip:
+        print(ip)
+    else:
+        print(f"❌ Could not detect IP for {name}.", file=sys.stderr)
+        sys.exit(1)
+
+def cmd_ssh(args):
+    name = require_vm_name(args)
+    user = require_user(args)
+    ip = get_vm_ip(name)
+
+    if not ip:
+        print(f"❌ Cannot find IP for {name}. Ensure it is running.", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"🔌 Connecting to {user}@{ip}...")
+    ssh_cmd = ["ssh", f"{user}@{ip}"] + args.extra
+    os.execvp("ssh", ssh_cmd)
+
+def cmd_deploy(args):
+    """Runs a deployment script against the VM."""
+    name = require_vm_name(args)
+    user = require_user(args)
+    ip = get_vm_ip(name)
+
+    if not ip:
+        print(f"❌ Cannot find IP for {name}.", file=sys.stderr)
+        sys.exit(1)
+
+    script = args.script
+    if not os.path.isfile(script):
+        print(f"❌ Deployment script not found: {script}", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"📦 Running {script} against {name} ({ip})...")
+    cmd = [os.path.abspath(script), user, ip] + args.extra
+    subprocess.run(cmd)
+
+def cmd_setup(args):
+    """Installs qemu-guest-agent on the VM to fix IP detection."""
+    name = require_vm_name(args)
+    user = require_user(args)
+
+    print(f"🔍 Attempting to find IP for {name} via ARP lease...")
+    ip = get_vm_ip(name)
+
+    if not ip:
+        print(f"❌ Could not detect IP via ARP.", file=sys.stderr)
+        print("   Ensure the VM is running and connected to the network.", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"🛠️  Installing qemu-guest-agent on {name} ({ip})...")
+    print("   (You may be asked for the VM user password)")
+
+    # The setup commands
+    commands = [
+        "sudo apt update",
+        "sudo apt install -y qemu-guest-agent",
+        "sudo systemctl enable --now qemu-guest-agent",
+        "echo '✅ Agent installed successfully.'"
+    ]
+    remote_cmd = " && ".join(commands)
+
+    ssh_cmd = ["ssh", f"{user}@{ip}", "-t", remote_cmd]
+
+    try:
+        subprocess.run(ssh_cmd, check=True)
+    except subprocess.CalledProcessError:
+        print("❌ Setup failed. Check your SSH connection.", file=sys.stderr)
+
+# ------------------------------------------------------------
+# Main
+# ------------------------------------------------------------
+def main():
+    parser = argparse.ArgumentParser(description="Generic VM Manager")
+
+    # Global arguments
+    parser.add_argument("-n", "--name", help="VM Name (overrides VM_NAME env var)")
+    parser.add_argument("-u", "--user", help="VM User (overrides VM_USER env var)")
+
+    subparsers = parser.add_subparsers(dest="command")
+
+    # Subcommands
+    subparsers.add_parser("list", help="List all VMs")
+    subparsers.add_parser("start", help="Start the VM")
+    subparsers.add_parser("stop", help="Graceful shutdown")
+    subparsers.add_parser("kill", help="Force power off")
+    subparsers.add_parser("status", help="Show info")
+    subparsers.add_parser("ip", help="Print IP address")
+    subparsers.add_parser("setup", help="Install qemu-guest-agent on VM")
+
+    # SSH
+    ssh_p = subparsers.add_parser("ssh", help="SSH into VM")
+    ssh_p.add_argument("extra", nargs=argparse.REMAINDER, help="Commands to run")
+
+    # Deploy
+    dep_p = subparsers.add_parser("deploy", help="Run a deploy script against the VM")
+    dep_p.add_argument("script", help="Path to deployment script (e.g. ./deploy_vm.sh)")
+    dep_p.add_argument("extra", nargs=argparse.REMAINDER, help="Extra args for the script")
+
+    args = parser.parse_args()
+
+    # Default to status if name provided, else help
+    if args.command is None:
+        if args.name or os.environ.get("VM_NAME"):
+            cmd_status(args)
+        else:
+            parser.print_help()
+        sys.exit(0)
+
+    # Dispatch
+    cmds = {
+        "list": cmd_list,
+        "start": cmd_start,
+        "stop": cmd_stop,
+        "kill": cmd_force_stop,
+        "status": cmd_status,
+        "ip": cmd_ip,
+        "ssh": cmd_ssh,
+        "deploy": cmd_deploy,
+        "setup": cmd_setup,
+    }
+
+    if args.command in cmds:
+        cmds[args.command](args)
+    else:
+        parser.print_help()
+
+if __name__ == "__main__":
+    if not shutil.which("virsh"):
+        print("❌ Error: 'virsh' not found. Install libvirt-clients.", file=sys.stderr)
+        sys.exit(1)
+    main()
