@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 vm — Generic QEMU/KVM Virtual Machine Helper
-Wraps 'virsh' for smoother development workflows.
+Wraps 'virsh' and 'virt-install' for smoother development workflows.
 """
 
 import os
@@ -104,6 +104,76 @@ def cmd_force_stop(args):
     run(["virsh", "destroy", name])
     print(f"💀 Forcefully stopped {name}.")
 
+def cmd_delete(args):
+    """Permanently delete the VM and its storage."""
+    name = require_vm_name(args)
+
+    print(f"⚠️  WARNING: This will PERMANENTLY DELETE '{name}' and all its disk images.")
+    confirm = input(f"Type '{name}' to confirm: ")
+
+    if confirm != name:
+        print("❌ Confirmation failed. Aborting.")
+        sys.exit(1)
+
+    state = run(["virsh", "domstate", name], capture=True)
+    if "running" in state:
+        print(f"Stopping {name}...")
+        run(["virsh", "destroy", name], check=False)
+
+    print(f"🗑️  Deleting {name}...")
+    run(["virsh", "undefine", name, "--remove-all-storage", "--nvram"])
+    print(f"✅ {name} has been deleted.")
+
+def cmd_create(args):
+    """Create a new VM using virt-install."""
+    name = require_vm_name(args)
+
+    # Check if VM already exists
+    if run(["virsh", "dominfo", name], check=False, capture=True):
+        print(f"❌ VM '{name}' already exists.", file=sys.stderr)
+        sys.exit(1)
+
+    # Defaults (Minimal Specs)
+    ram = args.ram or "1024"  # 1GB RAM
+    vcpus = args.cpu or "1"   # 1 CPU Core
+    disk_size = args.disk or "8" # 8GB Disk
+
+    print(f"🔨 Preparing to create VM '{name}'...")
+    print(f"   Specs: {ram}MB RAM, {vcpus} CPU, {disk_size}GB Disk")
+
+    # Install Source
+    if args.iso:
+        location_args = ["--cdrom", os.path.abspath(args.iso)]
+        print(f"   Source: ISO ({args.iso})")
+    else:
+        # Default to Debian 12 NetInst if no ISO provided
+        print("   Source: Debian 12 (Bookworm) Network Install")
+        location_args = ["--location", "http://deb.debian.org/debian/dists/bookworm/main/installer-amd64/"]
+
+    # Construct virt-install command
+    cmd = [
+        "virt-install",
+        "--name", name,
+        "--memory", ram,
+        "--vcpus", vcpus,
+        "--disk", f"size={disk_size}",
+        "--os-variant", "debian12",
+        "--network", "network=default",
+        "--graphics", "spice",
+        "--video", "qxl",
+        "--channel", "spicevmc",
+        "--console", "pty,target_type=serial"
+    ] + location_args
+
+    print("\n🚀 Launching installer... (A graphical window should appear)")
+    try:
+        subprocess.run(cmd, check=True)
+        print(f"\n✅ VM '{name}' created successfully.")
+        print("👉 TIP: Remember to create a user during install that matches your 'vm setup' user.")
+    except subprocess.CalledProcessError:
+        print("\n❌ Creation failed.", file=sys.stderr)
+        sys.exit(1)
+
 def cmd_status(args):
     name = require_vm_name(args)
     state = run(["virsh", "domstate", name], capture=True)
@@ -136,7 +206,6 @@ def cmd_ssh(args):
     os.execvp("ssh", ssh_cmd)
 
 def cmd_deploy(args):
-    """Runs a deployment script against the VM."""
     name = require_vm_name(args)
     user = require_user(args)
     ip = get_vm_ip(name)
@@ -155,7 +224,6 @@ def cmd_deploy(args):
     subprocess.run(cmd)
 
 def cmd_setup(args):
-    """Installs qemu-guest-agent on the VM to fix IP detection."""
     name = require_vm_name(args)
     user = require_user(args)
 
@@ -164,13 +232,10 @@ def cmd_setup(args):
 
     if not ip:
         print(f"❌ Could not detect IP via ARP.", file=sys.stderr)
-        print("   Ensure the VM is running and connected to the network.", file=sys.stderr)
         sys.exit(1)
 
     print(f"🛠️  Installing qemu-guest-agent on {name} ({ip})...")
-    print("   (You may be asked for the VM user password)")
 
-    # The setup commands
     commands = [
         "sudo apt update",
         "sudo apt install -y qemu-guest-agent",
@@ -180,11 +245,10 @@ def cmd_setup(args):
     remote_cmd = " && ".join(commands)
 
     ssh_cmd = ["ssh", f"{user}@{ip}", "-t", remote_cmd]
-
     try:
         subprocess.run(ssh_cmd, check=True)
     except subprocess.CalledProcessError:
-        print("❌ Setup failed. Check your SSH connection.", file=sys.stderr)
+        print("❌ Setup failed.", file=sys.stderr)
 
 # ------------------------------------------------------------
 # Main
@@ -198,27 +262,33 @@ def main():
 
     subparsers = parser.add_subparsers(dest="command")
 
-    # Subcommands
+    # Lifecycle
     subparsers.add_parser("list", help="List all VMs")
     subparsers.add_parser("start", help="Start the VM")
     subparsers.add_parser("stop", help="Graceful shutdown")
     subparsers.add_parser("kill", help="Force power off")
+    subparsers.add_parser("delete", help="Permanently delete VM")
     subparsers.add_parser("status", help="Show info")
     subparsers.add_parser("ip", help="Print IP address")
-    subparsers.add_parser("setup", help="Install qemu-guest-agent on VM")
 
-    # SSH
+    # Creation
+    create_p = subparsers.add_parser("create", help="Create a new VM")
+    create_p.add_argument("--ram", help="RAM in MB (default 1024)")
+    create_p.add_argument("--cpu", help="Number of VCPUs (default 1)")
+    create_p.add_argument("--disk", help="Disk size in GB (default 8)")
+    create_p.add_argument("--iso", help="Path to local ISO (overrides network install)")
+
+    # Tools
+    subparsers.add_parser("setup", help="Install qemu-guest-agent on VM")
     ssh_p = subparsers.add_parser("ssh", help="SSH into VM")
     ssh_p.add_argument("extra", nargs=argparse.REMAINDER, help="Commands to run")
 
-    # Deploy
-    dep_p = subparsers.add_parser("deploy", help="Run a deploy script against the VM")
-    dep_p.add_argument("script", help="Path to deployment script (e.g. ./deploy_vm.sh)")
-    dep_p.add_argument("extra", nargs=argparse.REMAINDER, help="Extra args for the script")
+    dep_p = subparsers.add_parser("deploy", help="Run a deploy script")
+    dep_p.add_argument("script", help="Path to deployment script")
+    dep_p.add_argument("extra", nargs=argparse.REMAINDER, help="Extra args")
 
     args = parser.parse_args()
 
-    # Default to status if name provided, else help
     if args.command is None:
         if args.name or os.environ.get("VM_NAME"):
             cmd_status(args)
@@ -228,15 +298,10 @@ def main():
 
     # Dispatch
     cmds = {
-        "list": cmd_list,
-        "start": cmd_start,
-        "stop": cmd_stop,
-        "kill": cmd_force_stop,
-        "status": cmd_status,
-        "ip": cmd_ip,
-        "ssh": cmd_ssh,
-        "deploy": cmd_deploy,
-        "setup": cmd_setup,
+        "list": cmd_list, "start": cmd_start, "stop": cmd_stop,
+        "kill": cmd_force_stop, "delete": cmd_delete, "create": cmd_create,
+        "status": cmd_status, "ip": cmd_ip, "ssh": cmd_ssh,
+        "deploy": cmd_deploy, "setup": cmd_setup,
     }
 
     if args.command in cmds:
