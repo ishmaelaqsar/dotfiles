@@ -1,4 +1,4 @@
-MAILTO="ishmaelaqsar@outlook.com"
+MAILTO="$MAIL_TO_ADDRESS"
 
 # Edit this file to introduce tasks to be run by cron.
 # 

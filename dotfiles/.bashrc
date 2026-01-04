@@ -3,12 +3,13 @@
 # ============================================================
 
 # Color definitions
-RED="\[\033[0;31m\]"
-GREEN="\[\033[0;32m\]"
-YELLOW="\[\033[0;33m\]"
-BLUE="\[\033[0;34m\]"
-MAGENTA="\[\033[0;35m\]"
-CYAN="\[\033[0;36m\]"
+RED="\[\033[0;91m\]"
+GREEN="\[\033[0;92m\]"
+YELLOW="\[\033[0;93m\]"
+BLUE="\[\033[0;94m\]"
+MAGENTA="\[\033[0;95m\]"
+CYAN="\[\033[0;96m\]"
+WHITE="\[\033[1;37m\]"
 BOLD="\[\033[1m\]"
 RESET="\[\033[0m\]"
 
@@ -19,7 +20,7 @@ git_branch() {
     dirty=$(git status --porcelain 2>/dev/null)
     if [[ -n "$branch" ]]; then
         if [[ -n "$dirty" ]]; then
-            echo "(${branch}*)"
+             echo "(${branch}${RED}*${MAGENTA})"
         else
             echo "(${branch})"
         fi
@@ -47,17 +48,22 @@ set_prompt() {
     fi
 
     # Construct PS1
-    # Added venv_info to the very beginning
     PS1="${venv_info}"
-    PS1+="${BOLD}${GREEN}\u${RESET}@${BOLD}${BLUE}\h${RESET} "   # user@host
-    PS1+="${jobs_info}"                                          # conditional jobs
-    PS1+="${BOLD}${CYAN}\w${RESET} "                             # current working directory
-    PS1+="${BOLD}${MAGENTA}${git_info}${RESET} \$ "              # git branch and prompt char
+
+    # User (Green) @ (White) Host (Light Blue)
+    PS1+="${BOLD}${GREEN}\u${RESET}${WHITE}@${RESET}${BOLD}${BLUE}\h${RESET} "
+
+    PS1+="${jobs_info}"
+
+    # Current Working Directory (Cyan)
+    PS1+="${BOLD}${CYAN}\w${RESET} "
+
+    # Git Branch (Magenta)
+    PS1+="${BOLD}${MAGENTA}${git_info}${RESET} \$ "
 }
 
 # Assign to PROMPT_COMMAND so it updates dynamically
 PROMPT_COMMAND=set_prompt
-
 
 # ============================================================
 # Environment & Basic Setup

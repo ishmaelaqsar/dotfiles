@@ -43,6 +43,8 @@ fi
 
 export IDENTITY="Ishmael Aqsar <ishmael-dev@aqsar.dev>"
 
+export VM_USER="ishmael"
+
 # Local workspace
 if [[ ! -d ~/workspace ]]; then
     mkdir ~/workspace
