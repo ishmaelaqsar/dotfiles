@@ -15,6 +15,7 @@ import subprocess
 
 # --- Helper Functions ---
 
+
 def run_emacs_command(lisp: str):
     """
     Executes a Lisp expression in Emacs, creating a new graphical frame.
@@ -31,7 +32,7 @@ def run_emacs_command(lisp: str):
             check=True,
             capture_output=True,
             text=True,
-            timeout=5
+            timeout=5,
         )
     except subprocess.TimeoutExpired:
         print("Error: Emacs command timed out", file=sys.stderr)
@@ -39,6 +40,7 @@ def run_emacs_command(lisp: str):
         print(f"Error executing Emacs command: {e.stderr}", file=sys.stderr)
     except FileNotFoundError:
         print("Error: 'emacsclient' not found. Is Emacs installed?", file=sys.stderr)
+
 
 def check_and_start_daemon():
     """
@@ -51,11 +53,15 @@ def check_and_start_daemon():
             check=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            timeout=2
+            timeout=2,
         )
         # Succeeded, daemon is running
         return
-    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+    except (
+        subprocess.CalledProcessError,
+        FileNotFoundError,
+        subprocess.TimeoutExpired,
+    ):
         # Fails if server isn't running or emacsclient isn't found
         pass
 
@@ -71,12 +77,12 @@ def check_and_start_daemon():
         subprocess.Popen(
             ["emacs", "--daemon", f"--chdir={workspace}"],
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
+            stderr=subprocess.DEVNULL,
         )
 
-        # Wait with retries (poll for up to 3 seconds)
+        # Wait with retries (poll for up to 10 seconds)
         print("Waiting for daemon to start...", end="", flush=True)
-        for i in range(15):  # 15 * 0.2s = 3 seconds
+        for i in range(50):
             time.sleep(0.2)
             try:
                 subprocess.run(
@@ -84,7 +90,7 @@ def check_and_start_daemon():
                     check=True,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
-                    timeout=1
+                    timeout=1,
                 )
                 print(" done!")
                 print("Emacs daemon started successfully.")
@@ -94,36 +100,44 @@ def check_and_start_daemon():
                 continue
 
         print()
-        raise Exception("Daemon did not respond after 3 seconds")
+        raise Exception("Daemon did not respond after 10 seconds")
     except Exception as e:
         print(f"Error: Failed to start Emacs daemon.", file=sys.stderr)
         print(f"Details: {e}", file=sys.stderr)
         sys.exit(1)
 
+
 def get_clipboard_content() -> str:
     """Get clipboard content using available clipboard tools."""
     # Try multiple clipboard tools for better portability
     for cmd in [
+        ["pbpaste"],
         ["xclip", "-o", "-selection", "clipboard"],
         ["xsel", "--clipboard", "--output"],
-        ["wl-paste"],  # Wayland support
+        ["wl-paste"],
     ]:
         try:
             return subprocess.check_output(
-                cmd,
-                text=True,
-                stderr=subprocess.DEVNULL,
-                timeout=2
+                cmd, text=True, stderr=subprocess.DEVNULL, timeout=2
             ).strip()
-        except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        except (
+            FileNotFoundError,
+            subprocess.CalledProcessError,
+            subprocess.TimeoutExpired,
+        ):
             continue
 
-    print("Warning: No clipboard tool found (install xclip, xsel, or wl-paste)", file=sys.stderr)
+    print(
+        "Warning: No clipboard tool found (install xclip, xsel, or wl-paste)",
+        file=sys.stderr,
+    )
     return ""
+
 
 def show_help():
     """Display usage information."""
-    print("""emacs-command - Emacs Client Wrapper
+    print(
+        """emacs-command - Emacs Client Wrapper
 
 Usage: emacs-command [COMMAND] [ARGS...]
 
@@ -131,6 +145,7 @@ Commands:
   capture           Run org-capture
   bookmark          Jump to an Org bookmark
   agenda            Open org-agenda
+  scratch           Open *scratch* buffer
   dired [PATH]      Open dired (prompts if no path given)
   browse [URL]      Browse URL in eww (uses clipboard if no URL)
   clip              Paste clipboard into new buffer
@@ -146,28 +161,34 @@ If given file path(s), opens them in Emacs.
 Examples:
   emacs-command                    # Open new frame
   emacs-command capture            # Run org-capture
+  emacs-command scratch            # Open scratch buffer
   emacs-command dired ~/Documents  # Open dired at ~/Documents
   emacs-command file.txt           # Open file.txt
-  emacs-command *.py               # Open all Python files in splits
-""")
+"""
+    )
+
 
 # --- Command Handlers ---
+
 
 def cmd_capture(args: list):
     """Run org-capture."""
     print("Running Org Capture...")
     run_emacs_command("(org-capture)")
 
+
 def cmd_bookmark(args: list):
     """Jump to an Org bookmark."""
     print("Running Org Bookmark Jump...")
     run_emacs_command("(org-bookmark-jump)")
+
 
 def cmd_agenda(args: list):
     """Open org-agenda."""
     print("Running Org Agenda...")
     # Use the 'd' custom command you have defined
     run_emacs_command('(org-agenda nil "d")')
+
 
 def cmd_dired(args: list):
     """
@@ -182,9 +203,10 @@ def cmd_dired(args: list):
         path = os.path.abspath(os.path.expanduser(args[0]))
         lisp_path = json.dumps(path)
         print(f"Opening dired at: {path}")
-        lisp = f'(dired {lisp_path})'
+        lisp = f"(dired {lisp_path})"
 
     run_emacs_command(lisp)
+
 
 def cmd_browse(args: list):
     """
@@ -211,6 +233,7 @@ def cmd_browse(args: list):
     lisp_url = json.dumps(url)
     run_emacs_command(f"(eww {lisp_url})")
 
+
 def cmd_clip(args: list):
     """
     Take clipboard content and paste it into a new Emacs buffer.
@@ -231,10 +254,12 @@ def cmd_clip(args: list):
     """
     run_emacs_command(lisp)
 
+
 def cmd_find(args: list):
     """Find files using Emacs's find-file with completion."""
     print("Running find-file...")
     run_emacs_command("(call-interactively 'find-file)")
+
 
 def cmd_search(args: list):
     """
@@ -250,10 +275,12 @@ def cmd_search(args: list):
         # Use rgrep with the search term
         run_emacs_command(f'(rgrep {lisp_term} "*" ".")')
 
+
 def cmd_roam_find(args: list):
     """Open org-roam node finder."""
     print("Running Org Roam Find...")
     run_emacs_command("(org-roam-node-find)")
+
 
 def cmd_roam_dailies(args: list):
     """Open org-roam dailies (requires org-roam-dailies extension)."""
@@ -261,10 +288,12 @@ def cmd_roam_dailies(args: list):
     # This will work if you add org-roam-dailies to your config
     run_emacs_command("(org-roam-dailies-capture-today)")
 
+
 def cmd_magit(args: list):
     """Open Magit status."""
     print("Opening Magit...")
     run_emacs_command("(magit-status)")
+
 
 def cmd_M_x(args: list):
     """
@@ -274,20 +303,24 @@ def cmd_M_x(args: list):
     print("Running M-x...")
     run_emacs_command("(call-interactively 'execute-extended-command)")
 
+
+def cmd_scratch(args: list):
+    """Switch to the *scratch* buffer."""
+    print("Opening scratch buffer...")
+    run_emacs_command('(switch-to-buffer "*scratch*")')
+
+
 def cmd_kill_daemon(args: list):
     """Kill the Emacs daemon gracefully."""
     print("Killing Emacs daemon...")
     try:
-        subprocess.run(
-            ["emacsclient", "-e", "(kill-emacs)"],
-            check=True,
-            timeout=5
-        )
+        subprocess.run(["emacsclient", "-e", "(kill-emacs)"], check=True, timeout=5)
         print("Daemon stopped successfully.")
     except subprocess.CalledProcessError:
         print("Failed to stop daemon (it may not be running).", file=sys.stderr)
     except subprocess.TimeoutExpired:
         print("Warning: Daemon did not respond to kill command.", file=sys.stderr)
+
 
 # --- Main Execution ---
 
@@ -303,11 +336,13 @@ COMMANDS = {
     "search": cmd_search,
     "M-x": cmd_M_x,
     "mx": cmd_M_x,  # Alias
+    "scratch": cmd_scratch,
     "kill-daemon": cmd_kill_daemon,
     "help": lambda args: show_help(),
     "--help": lambda args: show_help(),
     "-h": lambda args: show_help(),
 }
+
 
 def main():
     args = sys.argv[1:]
@@ -348,6 +383,7 @@ def main():
               (find-file {json.dumps(files[0])})
               {' '.join(f'(find-file-other-window {json.dumps(f)})' for f in files[1:])})"""
             run_emacs_command(lisp)
+
 
 if __name__ == "__main__":
     try:

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-vm — Generic QEMU/KVM Virtual Machine Helper
-Wraps 'virsh' and 'virt-install' for smoother development workflows.
+vm — Cross-Platform QEMU/KVM Virtual Machine Helper
+Wraps 'virsh' and 'virt-install' with OS-specific defaults for Linux (KVM) and macOS (HVF).
 """
 
 import os
@@ -9,13 +9,153 @@ import sys
 import subprocess
 import argparse
 import shutil
+import platform
+
+# ------------------------------------------------------------
+# Backend Configuration (The "Mapping" Logic)
+# ------------------------------------------------------------
+
+
+class VMBackend:
+    def __init__(self):
+        self.os_type = platform.system()
+        self.arch = platform.machine()
+
+    def get_connection_uri(self):
+        """Returns the appropriate libvirt connection URI."""
+        # Linux usually runs system-wide libvirt (qemu:///system)
+        if self.os_type == "Linux":
+            return os.environ.get("LIBVIRT_DEFAULT_URI", "qemu:///system")
+
+        # macOS (Homebrew) usually runs in session mode (qemu:///session)
+        # unless explicitly configured otherwise.
+        if self.os_type == "Darwin":
+            return os.environ.get("LIBVIRT_DEFAULT_URI", "qemu:///session")
+
+        return "qemu:///system"
+
+    def get_install_args(self):
+        """Returns OS-specific arguments for virt-install."""
+
+        # --- LINUX DEFAULTS (KVM) ---
+        if self.os_type == "Linux":
+            args = [
+                "--connect",
+                self.get_connection_uri(),
+                "--accelerate",
+                "--network",
+                "network=default",
+                "--graphics",
+                "spice",
+                "--video",
+                "qxl",
+                "--channel",
+                "spicevmc",
+            ]
+
+            # Add ARM64-specific settings for Linux ARM systems
+            if self.arch in ("aarch64", "arm64"):
+                args += [
+                    "--arch",
+                    "aarch64",
+                    "--machine",
+                    "virt",
+                    "--boot",
+                    "uefi",
+                ]
+
+            return args
+
+        # --- MACOS DEFAULTS (HVF / Apple Silicon) ---
+        if self.os_type == "Darwin":
+            args = ["--connect", self.get_connection_uri()]
+
+            # Apple Silicon (M1/M2/M3) optimizations
+            if self.arch == "arm64":
+                args += [
+                    "--arch",
+                    "aarch64",
+                    "--machine",
+                    "virt",
+                    "--boot",
+                    "uefi",  # Essential for ARM64
+                ]
+
+            # macOS QEMU Graphics (Spice is rarely supported well on macOS builds)
+            # We use VNC + virtio-gpu which is more stable on macOS
+            args += [
+                "--graphics",
+                "vnc",
+                "--video",
+                "virtio",
+                "--network",
+                "network=default,model=virtio",
+            ]
+            return args
+
+        return []
+
+    def get_virsh_cmd(self, args):
+        """Wraps virsh commands with the correct connection URI."""
+        return ["virsh", "--connect", self.get_connection_uri()] + args
+
+    def get_package_manager_commands(self):
+        """Returns package manager commands for guest agent installation."""
+        # Try to detect distro from common files/commands
+        # This is a best-effort approach for the most common distros
+        return [
+            # Debian/Ubuntu (apt)
+            {
+                "detect": "command -v apt >/dev/null 2>&1",
+                "install": [
+                    "sudo apt update",
+                    "sudo apt install -y qemu-guest-agent",
+                    "sudo systemctl enable --now qemu-guest-agent",
+                ],
+            },
+            # RHEL/Fedora/CentOS (dnf/yum)
+            {
+                "detect": "command -v dnf >/dev/null 2>&1 || command -v yum >/dev/null 2>&1",
+                "install": [
+                    "sudo bash -c 'command -v dnf >/dev/null && dnf install -y qemu-guest-agent || yum install -y qemu-guest-agent'",
+                    "sudo systemctl enable --now qemu-guest-agent",
+                ],
+            },
+            # Arch Linux (pacman)
+            {
+                "detect": "command -v pacman >/dev/null 2>&1",
+                "install": [
+                    "sudo pacman -Sy --noconfirm qemu-guest-agent",
+                    "sudo systemctl enable --now qemu-guest-agent",
+                ],
+            },
+            # Alpine Linux (apk)
+            {
+                "detect": "command -v apk >/dev/null 2>&1",
+                "install": [
+                    "sudo apk update",
+                    "sudo apk add qemu-guest-agent",
+                    "sudo rc-update add qemu-guest-agent default",
+                    "sudo rc-service qemu-guest-agent start",
+                ],
+            },
+        ]
+
+
+# Initialize Backend
+BACKEND = VMBackend()
 
 # ------------------------------------------------------------
 # Helpers
 # ------------------------------------------------------------
 
-def run(cmd, check=True, capture=False):
+
+def run(cmd, check=True, capture=False, dry_run=False):
     """Run shell command."""
+    if dry_run:
+        print(f"🛑 [DRY-RUN] {' '.join(cmd)}")
+        return ""
+
     if not capture:
         print(f"→ {' '.join(cmd)}")
     try:
@@ -24,10 +164,29 @@ def run(cmd, check=True, capture=False):
     except subprocess.CalledProcessError as e:
         if check:
             print(f"❌ Command failed: {' '.join(cmd)}", file=sys.stderr)
-            if capture:
+            if capture and e.stderr:
                 print(e.stderr, file=sys.stderr)
             sys.exit(1)
         raise e
+
+
+def check_libvirt_running():
+    """Check if libvirt daemon is accessible."""
+    try:
+        result = subprocess.run(
+            BACKEND.get_virsh_cmd(["version"]),
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        return result.returncode == 0
+    except (
+        subprocess.TimeoutExpired,
+        subprocess.CalledProcessError,
+        FileNotFoundError,
+    ):
+        return False
+
 
 def get_arg_or_env(args, key, env_var):
     """Resolve value from argument or environment variable."""
@@ -35,6 +194,7 @@ def get_arg_or_env(args, key, env_var):
     if val:
         return val
     return os.environ.get(env_var)
+
 
 def require_vm_name(args):
     name = get_arg_or_env(args, "name", "VM_NAME")
@@ -44,6 +204,7 @@ def require_vm_name(args):
         sys.exit(1)
     return name
 
+
 def require_user(args):
     user = get_arg_or_env(args, "user", "VM_USER")
     if not user:
@@ -52,136 +213,233 @@ def require_user(args):
         sys.exit(1)
     return user
 
+
 def get_vm_ip(vm_name):
     """Extracts IP address using virsh domifaddr."""
-    # 1. Try Guest Agent (Most reliable)
-    try:
-        out = run(["virsh", "domifaddr", vm_name, "--source", "agent"], capture=True, check=False)
-        if out:
-            for line in out.splitlines():
-                if "ipv4" in line:
-                    parts = line.split()
-                    return parts[-1].split('/')[0]
-    except:
-        pass
+    # Build virsh command with backend URI
+    base_cmd = BACKEND.get_virsh_cmd(["domifaddr", vm_name])
 
-    # 2. Try ARP Lease (Fallback - works without agent)
+    # 1. Try Guest Agent (Most reliable, works on all platforms)
     try:
-        out = run(["virsh", "domifaddr", vm_name, "--source", "lease"], capture=True, check=False)
+        out = run(base_cmd + ["--source", "agent"], capture=True, check=False)
         if out:
             for line in out.splitlines():
-                if "ipv4" in line:
+                if "ipv4" in line.lower():
                     parts = line.split()
-                    return parts[-1].split('/')[0]
-    except:
-        pass
+                    if len(parts) > 0:
+                        # Find IP address in the line
+                        for part in parts:
+                            if "/" in part and "." in part:
+                                return part.split("/")[0]
+    except subprocess.CalledProcessError as e:
+        print(f"⚠️  Guest agent query failed: {e}", file=sys.stderr)
+    except Exception as e:
+        print(f"⚠️  Unexpected error querying guest agent: {e}", file=sys.stderr)
+
+    # 2. Try ARP Lease (Fallback)
+    # Note: On macOS with user networking (slirp), this often fails as there is no bridge lease.
+    try:
+        out = run(base_cmd + ["--source", "lease"], capture=True, check=False)
+        if out:
+            for line in out.splitlines():
+                if "ipv4" in line.lower():
+                    parts = line.split()
+                    if len(parts) > 0:
+                        for part in parts:
+                            if "/" in part and "." in part:
+                                return part.split("/")[0]
+    except subprocess.CalledProcessError as e:
+        print(f"⚠️  Lease query failed: {e}", file=sys.stderr)
+    except Exception as e:
+        print(f"⚠️  Unexpected error querying leases: {e}", file=sys.stderr)
+
     return None
+
 
 # ------------------------------------------------------------
 # Commands
 # ------------------------------------------------------------
 
+
 def cmd_list(_args):
     """List all VMs."""
-    run(["virsh", "list", "--all"])
+    run(BACKEND.get_virsh_cmd(["list", "--all"]))
+
 
 def cmd_start(args):
     name = require_vm_name(args)
-    state = run(["virsh", "domstate", name], capture=True)
+
+    if args.dry_run:
+        print(f"🛑 [DRY-RUN] Would start VM: {name}")
+        run(BACKEND.get_virsh_cmd(["start", name]), dry_run=True)
+        return
+
+    state = run(BACKEND.get_virsh_cmd(["domstate", name]), capture=True)
     if "running" in state:
         print(f"✅ {name} is already running.")
     else:
-        run(["virsh", "start", name])
+        run(BACKEND.get_virsh_cmd(["start", name]))
         print(f"🚀 Started {name}.")
+
 
 def cmd_stop(args):
     name = require_vm_name(args)
-    run(["virsh", "shutdown", name])
-    print(f"🛑 Shutdown signal sent to {name}.")
+    run(BACKEND.get_virsh_cmd(["shutdown", name]), dry_run=args.dry_run)
+    if not args.dry_run:
+        print(f"🛑 Shutdown signal sent to {name}.")
+
 
 def cmd_force_stop(args):
     name = require_vm_name(args)
-    run(["virsh", "destroy", name])
-    print(f"💀 Forcefully stopped {name}.")
+    run(BACKEND.get_virsh_cmd(["destroy", name]), dry_run=args.dry_run)
+    if not args.dry_run:
+        print(f"💀 Forcefully stopped {name}.")
+
 
 def cmd_delete(args):
     """Permanently delete the VM and its storage."""
     name = require_vm_name(args)
 
     print(f"⚠️  WARNING: This will PERMANENTLY DELETE '{name}' and all its disk images.")
-    confirm = input(f"Type '{name}' to confirm: ")
 
-    if confirm != name:
-        print("❌ Confirmation failed. Aborting.")
-        sys.exit(1)
+    if args.dry_run:
+        print(f"🛑 [DRY-RUN] Skipping confirmation input.")
+    else:
+        confirm = input(f"Type '{name}' to confirm: ")
+        if confirm != name:
+            print("❌ Confirmation failed. Aborting.")
+            sys.exit(1)
 
-    state = run(["virsh", "domstate", name], capture=True)
-    if "running" in state:
-        print(f"Stopping {name}...")
-        run(["virsh", "destroy", name], check=False)
+    # Stop if running
+    if args.dry_run:
+        print(f"🛑 [DRY-RUN] Check state and stop {name} if running.")
+    else:
+        state = run(BACKEND.get_virsh_cmd(["domstate", name]), capture=True)
+        if "running" in state:
+            print(f"Stopping {name}...")
+            run(BACKEND.get_virsh_cmd(["destroy", name]), check=False)
 
     print(f"🗑️  Deleting {name}...")
-    run(["virsh", "undefine", name, "--remove-all-storage", "--nvram"])
-    print(f"✅ {name} has been deleted.")
+
+    # Check if NVRAM exists before trying to remove it
+    delete_cmd = ["undefine", name, "--remove-all-storage"]
+
+    if not args.dry_run:
+        # Check if VM has NVRAM
+        try:
+            nvram_check = run(
+                BACKEND.get_virsh_cmd(["dumpxml", name]), capture=True, check=False
+            )
+            if nvram_check and "nvram" in nvram_check.lower():
+                delete_cmd.append("--nvram")
+        except:
+            pass  # If we can't check, try without --nvram flag
+    else:
+        delete_cmd.append("--nvram")  # Include in dry-run display
+
+    run(BACKEND.get_virsh_cmd(delete_cmd), dry_run=args.dry_run)
+
+    if not args.dry_run:
+        print(f"✅ {name} has been deleted.")
+
 
 def cmd_create(args):
-    """Create a new VM using virt-install."""
+    """Create a new VM using virt-install with OS-aware defaults."""
     name = require_vm_name(args)
 
-    # Check if VM already exists
-    if run(["virsh", "dominfo", name], check=False, capture=True):
-        print(f"❌ VM '{name}' already exists.", file=sys.stderr)
-        sys.exit(1)
+    # Check if VM already exists (Skip in dry-run)
+    if not args.dry_run:
+        if run(BACKEND.get_virsh_cmd(["dominfo", name]), check=False, capture=True):
+            print(f"❌ VM '{name}' already exists.", file=sys.stderr)
+            sys.exit(1)
 
-    # Defaults (Minimal Specs)
-    ram = args.ram or "1024"  # 1GB RAM
-    vcpus = args.cpu or "1"   # 1 CPU Core
-    disk_size = args.disk or "8" # 8GB Disk
+    # Defaults
+    ram = args.ram or "2048"  # Bumped to 2GB for modern OS comfort
+    vcpus = args.cpu or "2"
+    disk_size = args.disk or "20"
+    variant = args.variant or "debian12"
 
-    print(f"🔨 Preparing to create VM '{name}'...")
+    print(
+        f"🔨 Preparing to create VM '{name}' on {BACKEND.os_type} ({BACKEND.arch})..."
+    )
     print(f"   Specs: {ram}MB RAM, {vcpus} CPU, {disk_size}GB Disk")
+    print(f"   OS Variant: {variant}")
 
     # Install Source
     if args.iso:
-        location_args = ["--cdrom", os.path.abspath(args.iso)]
-        print(f"   Source: ISO ({args.iso})")
+        iso_path = os.path.abspath(args.iso)
+        if not os.path.isfile(iso_path):
+            print(f"❌ ISO file not found: {iso_path}", file=sys.stderr)
+            sys.exit(1)
+        location_args = ["--cdrom", iso_path]
+        print(f"   Source: ISO ({iso_path})")
     else:
-        # Default to Debian 12 NetInst if no ISO provided
-        print("   Source: Debian 12 (Bookworm) Network Install")
-        location_args = ["--location", "http://deb.debian.org/debian/dists/bookworm/main/installer-amd64/"]
+        # Default to Debian 12 NetInst - use appropriate architecture
+        if BACKEND.arch in ("aarch64", "arm64"):
+            installer_arch = "arm64"
+            print(f"   Source: Debian 12 (Bookworm) Network Install (ARM64)")
+        else:
+            installer_arch = "amd64"
+            print(f"   Source: Debian 12 (Bookworm) Network Install (AMD64)")
 
-    # Construct virt-install command
+        location_args = [
+            "--location",
+            f"http://deb.debian.org/debian/dists/bookworm/main/installer-{installer_arch}/",
+        ]
+
+    # Construct Base virt-install command
     cmd = [
         "virt-install",
-        "--name", name,
-        "--memory", ram,
-        "--vcpus", vcpus,
-        "--disk", f"size={disk_size}",
-        "--os-variant", "debian12",
-        "--network", "network=default",
-        "--graphics", "spice",
-        "--video", "qxl",
-        "--channel", "spicevmc",
-        "--console", "pty,target_type=serial"
-    ] + location_args
+        "--name",
+        name,
+        "--memory",
+        ram,
+        "--vcpus",
+        vcpus,
+        "--disk",
+        f"size={disk_size}",
+        "--os-variant",
+        variant,
+        "--console",
+        "pty,target_type=serial",
+    ]
 
-    print("\n🚀 Launching installer... (A graphical window should appear)")
+    # Add Backend-specific args (Architecture, Graphics, Network)
+    cmd += BACKEND.get_install_args()
+
+    # Add Source (ISO/Location)
+    cmd += location_args
+
+    if args.dry_run:
+        print("\n🛑 [DRY-RUN] The following command would be executed:")
+        print(" ".join(cmd))
+        return
+
+    print("\n🚀 Launching installer...")
     try:
         subprocess.run(cmd, check=True)
         print(f"\n✅ VM '{name}' created successfully.")
-        print("👉 TIP: Remember to create a user during install that matches your 'vm setup' user.")
+        print(
+            "👉 TIP: Remember to create a user during install that matches your 'vm setup' user."
+        )
     except subprocess.CalledProcessError:
         print("\n❌ Creation failed.", file=sys.stderr)
         sys.exit(1)
 
+
 def cmd_status(args):
     name = require_vm_name(args)
-    state = run(["virsh", "domstate", name], capture=True)
+    state = run(BACKEND.get_virsh_cmd(["domstate", name]), capture=True)
     ip = get_vm_ip(name)
     ip_str = ip if ip else "Unknown (Run 'vm setup' to install agent?)"
     print(f"VM:     {name}")
     print(f"State:  {state}")
     print(f"IP:     {ip_str}")
+    if BACKEND.os_type == "Darwin" and not ip:
+        print(
+            "        (Note: On macOS with user networking, IPs are hard to detect without the guest agent.)"
+        )
+
 
 def cmd_ip(args):
     name = require_vm_name(args)
@@ -190,25 +448,54 @@ def cmd_ip(args):
         print(ip)
     else:
         print(f"❌ Could not detect IP for {name}.", file=sys.stderr)
+        print(
+            f"   Make sure the VM is running and has qemu-guest-agent installed.",
+            file=sys.stderr,
+        )
+        print(
+            f"   You can install it with: vm setup -n {name} -u <username>",
+            file=sys.stderr,
+        )
         sys.exit(1)
+
 
 def cmd_ssh(args):
     name = require_vm_name(args)
     user = require_user(args)
+
+    if args.dry_run:
+        print(f"🛑 [DRY-RUN] Resolving IP for {name}...")
+
     ip = get_vm_ip(name)
 
     if not ip:
-        print(f"❌ Cannot find IP for {name}. Ensure it is running.", file=sys.stderr)
-        sys.exit(1)
+        if args.dry_run:
+            ip = "1.2.3.4 (PLACEHOLDER)"
+        else:
+            print(
+                f"❌ Cannot find IP for {name}. Ensure it is running.", file=sys.stderr
+            )
+            sys.exit(1)
+
+    ssh_cmd = ["ssh", f"{user}@{ip}"] + args.extra
+
+    if args.dry_run:
+        print(f"🛑 [DRY-RUN] Would exec: {' '.join(ssh_cmd)}")
+        return
 
     print(f"🔌 Connecting to {user}@{ip}...")
-    ssh_cmd = ["ssh", f"{user}@{ip}"] + args.extra
     os.execvp("ssh", ssh_cmd)
+
 
 def cmd_deploy(args):
     name = require_vm_name(args)
     user = require_user(args)
-    ip = get_vm_ip(name)
+
+    if args.dry_run:
+        print(f"🛑 [DRY-RUN] Resolving IP...")
+        ip = "1.2.3.4"
+    else:
+        ip = get_vm_ip(name)
 
     if not ip:
         print(f"❌ Cannot find IP for {name}.", file=sys.stderr)
@@ -219,46 +506,93 @@ def cmd_deploy(args):
         print(f"❌ Deployment script not found: {script}", file=sys.stderr)
         sys.exit(1)
 
-    print(f"📦 Running {script} against {name} ({ip})...")
     cmd = [os.path.abspath(script), user, ip] + args.extra
+
+    if args.dry_run:
+        print(f"🛑 [DRY-RUN] Would run script: {' '.join(cmd)}")
+        return
+
+    print(f"📦 Running {script} against {name} ({ip})...")
     subprocess.run(cmd)
+
 
 def cmd_setup(args):
     name = require_vm_name(args)
     user = require_user(args)
 
-    print(f"🔍 Attempting to find IP for {name} via ARP lease...")
+    if args.dry_run:
+        print(f"🛑 [DRY-RUN] Would find IP and install guest-agent on {name}")
+        return
+
+    print(f"🔍 Attempting to find IP for {name}...")
     ip = get_vm_ip(name)
 
     if not ip:
-        print(f"❌ Could not detect IP via ARP.", file=sys.stderr)
+        print(f"❌ Could not detect IP for {name}.", file=sys.stderr)
+        print(f"   The VM must be running and accessible via network.", file=sys.stderr)
+        print(
+            f"   On macOS, you may need to configure networking or access the VM console first.",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     print(f"🛠️  Installing qemu-guest-agent on {name} ({ip})...")
+    print(f"   Detecting package manager...")
 
-    commands = [
-        "sudo apt update",
-        "sudo apt install -y qemu-guest-agent",
-        "sudo systemctl enable --now qemu-guest-agent",
-        "echo '✅ Agent installed successfully.'"
-    ]
-    remote_cmd = " && ".join(commands)
+    # Build detection and installation command
+    pkg_managers = BACKEND.get_package_manager_commands()
 
-    ssh_cmd = ["ssh", f"{user}@{ip}", "-t", remote_cmd]
+    # Create a comprehensive installation script that tries each package manager
+    install_script_parts = []
+    for i, pm in enumerate(pkg_managers):
+        detect_cmd = pm["detect"]
+        install_cmds = " && ".join(pm["install"])
+
+        if i == 0:
+            install_script_parts.append(f"if {detect_cmd}; then")
+        else:
+            install_script_parts.append(f"elif {detect_cmd}; then")
+
+        install_script_parts.append(f"  echo 'Detected package manager, installing...'")
+        install_script_parts.append(f"  {install_cmds}")
+
+    install_script_parts.append("else")
+    install_script_parts.append(
+        "  echo '❌ Unsupported package manager. Please install qemu-guest-agent manually.'"
+    )
+    install_script_parts.append("  exit 1")
+    install_script_parts.append("fi")
+    install_script_parts.append("echo '✅ Agent installed successfully.'")
+
+    remote_cmd = "\n".join(install_script_parts)
+
+    ssh_cmd = ["ssh", f"{user}@{ip}", "-t", f"bash -c '{remote_cmd}'"]
+
     try:
         subprocess.run(ssh_cmd, check=True)
+        print(f"\n✅ Setup complete! The VM should now report its IP address reliably.")
+        print(f"   Try: vm status -n {name}")
     except subprocess.CalledProcessError:
-        print("❌ Setup failed.", file=sys.stderr)
+        print("\n❌ Setup failed.", file=sys.stderr)
+        print(
+            "   Make sure you can SSH into the VM and have sudo privileges.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
 
 # ------------------------------------------------------------
 # Main
 # ------------------------------------------------------------
 def main():
-    parser = argparse.ArgumentParser(description="Generic VM Manager")
+    parser = argparse.ArgumentParser(description="Generic VM Manager (Cross-Platform)")
 
     # Global arguments
     parser.add_argument("-n", "--name", help="VM Name (overrides VM_NAME env var)")
     parser.add_argument("-u", "--user", help="VM User (overrides VM_USER env var)")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Print commands without executing them"
+    )
 
     subparsers = parser.add_subparsers(dest="command")
 
@@ -273,10 +607,13 @@ def main():
 
     # Creation
     create_p = subparsers.add_parser("create", help="Create a new VM")
-    create_p.add_argument("--ram", help="RAM in MB (default 1024)")
-    create_p.add_argument("--cpu", help="Number of VCPUs (default 1)")
-    create_p.add_argument("--disk", help="Disk size in GB (default 8)")
+    create_p.add_argument("--ram", help="RAM in MB (default 2048)")
+    create_p.add_argument("--cpu", help="Number of VCPUs (default 2)")
+    create_p.add_argument("--disk", help="Disk size in GB (default 20)")
     create_p.add_argument("--iso", help="Path to local ISO (overrides network install)")
+    create_p.add_argument(
+        "--variant", help="OS Variant (default debian12, e.g. ubuntu22.04)"
+    )
 
     # Tools
     subparsers.add_parser("setup", help="Install qemu-guest-agent on VM")
@@ -298,10 +635,17 @@ def main():
 
     # Dispatch
     cmds = {
-        "list": cmd_list, "start": cmd_start, "stop": cmd_stop,
-        "kill": cmd_force_stop, "delete": cmd_delete, "create": cmd_create,
-        "status": cmd_status, "ip": cmd_ip, "ssh": cmd_ssh,
-        "deploy": cmd_deploy, "setup": cmd_setup,
+        "list": cmd_list,
+        "start": cmd_start,
+        "stop": cmd_stop,
+        "kill": cmd_force_stop,
+        "delete": cmd_delete,
+        "create": cmd_create,
+        "status": cmd_status,
+        "ip": cmd_ip,
+        "ssh": cmd_ssh,
+        "deploy": cmd_deploy,
+        "setup": cmd_setup,
     }
 
     if args.command in cmds:
@@ -309,8 +653,28 @@ def main():
     else:
         parser.print_help()
 
+
 if __name__ == "__main__":
+    # Check for required tools
     if not shutil.which("virsh"):
-        print("❌ Error: 'virsh' not found. Install libvirt-clients.", file=sys.stderr)
+        print("❌ Error: 'virsh' not found.", file=sys.stderr)
+        print("   Linux: sudo apt install libvirt-clients", file=sys.stderr)
+        print("   macOS: brew install libvirt virt-manager", file=sys.stderr)
         sys.exit(1)
+
+    # Check for virt-install if needed
+    if len(sys.argv) > 1 and sys.argv[1] == "create":
+        if not shutil.which("virt-install"):
+            print("❌ Error: 'virt-install' not found.", file=sys.stderr)
+            print("   Linux: sudo apt install virtinst", file=sys.stderr)
+            print("   macOS: brew install virt-manager", file=sys.stderr)
+            sys.exit(1)
+
+    # Check if libvirt is running
+    if not check_libvirt_running():
+        print("⚠️  Warning: Cannot connect to libvirt daemon.", file=sys.stderr)
+        print("   Linux: sudo systemctl start libvirtd", file=sys.stderr)
+        print("   macOS: brew services start libvirt", file=sys.stderr)
+        print("   Continuing anyway...\n", file=sys.stderr)
+
     main()

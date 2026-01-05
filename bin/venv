@@ -9,6 +9,7 @@ import subprocess
 import argparse
 from pathlib import Path
 
+
 # ------------------------------------------------------------
 # Utility helpers
 # ------------------------------------------------------------
@@ -20,14 +21,17 @@ def project_root() -> Path:
             return parent
     return cwd
 
+
 def venv_path(venv_dir: str = ".venv") -> Path:
     """Return path to the venv directory relative to project root."""
     return project_root() / venv_dir
+
 
 def run(cmd, check=True, **kwargs):
     """Run shell command with optional error handling."""
     print(f"→ {' '.join(cmd)}")
     subprocess.run(cmd, check=check, **kwargs)
+
 
 # ------------------------------------------------------------
 # Commands
@@ -46,6 +50,7 @@ def cmd_init(args):
         print("❌ Failed to create virtual environment.", file=sys.stderr)
         sys.exit(1)
 
+
 def cmd_start(args):
     """Print activation instructions for the shell."""
     target = venv_path(args.dir)
@@ -57,6 +62,7 @@ def cmd_start(args):
         print("Run 'venv init' first to create one.")
         sys.exit(1)
 
+
 def cmd_stop(_args):
     """Just a reminder—cannot deactivate from outside the shell."""
     venv = os.environ.get("VIRTUAL_ENV")
@@ -66,11 +72,13 @@ def cmd_stop(_args):
     else:
         print("No active virtual environment detected.")
 
+
 def cmd_restart(args):
     """Stop + start equivalent."""
     print("Restarting virtual environment...")
     cmd_stop(args)
     cmd_start(args)
+
 
 def cmd_path(_args):
     venv = os.environ.get("VIRTUAL_ENV")
@@ -84,8 +92,13 @@ def cmd_path(_args):
             print("No virtual environment detected.", file=sys.stderr)
             sys.exit(1)
 
+
 def cmd_list(args):
-    search_dir = Path(args.search_dir).expanduser() if args.search_dir else Path(os.environ.get("WORKSPACE", Path.home()))
+    search_dir = (
+        Path(args.search_dir).expanduser()
+        if args.search_dir
+        else Path(os.environ.get("WORKSPACE", Path.home()))
+    )
     print(f"Searching for virtual environments under: {search_dir}")
     print("-----------------------------------------------------")
 
@@ -93,7 +106,13 @@ def cmd_list(args):
     for bin_dir in search_dir.rglob(".venv/bin"):
         venv_dir = bin_dir.parent
         py = bin_dir / "python"
-        pyver = subprocess.run([str(py), "-V"], capture_output=True, text=True).stdout.strip() if py.exists() else "Unknown"
+        pyver = (
+            subprocess.run(
+                [str(py), "-V"], capture_output=True, text=True
+            ).stdout.strip()
+            if py.exists()
+            else "Unknown"
+        )
         marker = "(active)" if os.environ.get("VIRTUAL_ENV") == str(venv_dir) else ""
         workspace = venv_dir.parent.name
         print(f"{workspace:20} ->  {venv_dir}  [{pyver}] {marker}")
@@ -102,8 +121,10 @@ def cmd_list(args):
     if not found:
         print("No virtual environments found.")
 
+
 def cmd_help(_args):
-    print("""
+    print(
+        """
 Python Virtual Environment Helper
 =================================
 
@@ -129,7 +150,9 @@ Commands:
       List all virtual environments under search_dir (default: $WORKSPACE or ~).
 
 If no command is provided, prints the detected virtualenv path.
-""")
+"""
+    )
+
 
 # ------------------------------------------------------------
 # Main
@@ -170,6 +193,7 @@ def main():
     else:
         print(f"Unknown command: {cmd}\nUse 'venv help' for usage.", file=sys.stderr)
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()
