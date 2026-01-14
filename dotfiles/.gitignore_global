@@ -1,7 +1,6 @@
 # ============================================================
 # C++ / CMake
 # ============================================================
-# Build Systems
 /build/
 /build-*/
 /_deps/
@@ -99,20 +98,15 @@ cmake-build-*/
 # VS Code
 .vscode/
 *.code-workspace
+.devcontainer/
 
-# Emacs
-*~
-\#*\#
-.\#*
-auto-save-list/
-.projectile
-.dir-locals.el
-
-# Vim
+# ============================================================
+# Vim / Vi
+# ============================================================
 *.swp
 *.swo
-Session.vim
 .netrwhist
+Session.vim
 
 # ============================================================
 # OS Generated Files

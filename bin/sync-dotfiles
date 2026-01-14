@@ -30,9 +30,6 @@ target_dir.mkdir(parents=True, exist_ok=True)
 print(f"Syncing dotfiles to {target_dir}...")
 
 for src in dotfiles_dir.rglob("*"):
-    if src.name.endswith("~"):
-        continue
-
     rel_path = src.relative_to(dotfiles_dir)
     dest = target_dir / rel_path
 

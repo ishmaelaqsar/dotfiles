@@ -77,11 +77,6 @@ fi
 # Local workspace (Alias ONLY)
 alias ws='cd "$WORKSPACE"'
 
-if command -v emacs >/dev/null 2>&1; then
-    alias e='emacsclient -nw'
-    alias emacs='emacsclient -nw'
-fi
-
 # -----------------------------------------------------------------------------
 # GPG & SSH Agent Integration
 # -----------------------------------------------------------------------------

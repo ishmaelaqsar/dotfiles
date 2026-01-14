@@ -37,12 +37,11 @@ fi
 # ============================================================
 
 # Run these commands only when running in a container
-if [[ -v CONTAINER_ID ]]; then
+if [[ -v CONTAINER_ID ]] || [[ -n "$REMOTE_CONTAINERS" ]]; then
     export LC_ALL=en_US.utf8
 fi
 
 export IDENTITY="Ishmael Aqsar <ishmael-dev@aqsar.dev>"
-
 export VM_USER="ishmael"
 
 # Local workspace
@@ -51,30 +50,20 @@ if [[ ! -d ~/workspace ]]; then
 fi
 export WORKSPACE="$HOME/workspace"
 
-# Editor Configuration
-if command -v emacs >/dev/null 2>&1; then
-    export EDITOR='emacs -nw'
-    # Start emacs daemon if not already running
-    if ! pgrep -a emacs | grep daemon >/dev/null 2>&1; then
-        emacs --daemon --chdir="$WORKSPACE"
-    fi
+# ------------------------------------------------------------
+# Editor Configuration (VS Code + Vi)
+# ------------------------------------------------------------
+export EDITOR='vi'
+
+# "code" is the VS Code CLI. --wait is required for git commits.
+if command -v code >/dev/null 2>&1; then
+    export VISUAL='code --wait'
+    export GIT_EDITOR='code --wait'
 else
-    export EDITOR='nano'
+    export VISUAL="$EDITOR"
 fi
 
-export GIT_OPEN="$EDITOR"
-export VISUAL="$EDITOR"
-
-# Perl / CPAN Setup
-if command -v cpanm >/dev/null 2>&1; then
-    if __has_internet; then
-        if cpanm --local-lib=~/perl5 local::lib >/dev/null 2>&1; then
-            eval "$(perl -I ~/perl5/lib/perl5/ -Mlocal::lib)"
-        fi
-    else
-        echo "Skipping cpan local::lib setup (no internet connection)."
-    fi
-fi
+export GIT_OPEN="$VISUAL"
 
 # ============================================================
 # Load User .bashrc (for interactive shells)

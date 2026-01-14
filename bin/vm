@@ -177,7 +177,7 @@ def check_libvirt_running():
             BACKEND.get_virsh_cmd(["version"]),
             capture_output=True,
             text=True,
-            timeout=5,
+            timeout=10,
         )
         return result.returncode == 0
     except (
