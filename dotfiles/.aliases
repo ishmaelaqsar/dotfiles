@@ -1,3 +1,43 @@
-alias ll='ls -lav'   # show long listing of all except ".."
-alias l='ls -lv'   # show long listing but no hidden dotfiles except "."
+# Make grep color results by default
+alias grep='grep --color=auto'
+alias fgrep='fgrep --color=auto'
+alias egrep='egrep --color=auto'
+
+# Allow aliases to be sudo'ed (e.g. 'sudo ll')
+alias sudo='sudo '
+
+alias ..='cd ..'
+alias ...='cd ../..'
+alias ....='cd ../../..'
+alias ~='cd ~'
+alias -- -='cd -'  # Go back to previous directory
+
+# Detects if we are using GNU ls (Linux) or BSD ls (macOS)
+if ls --version >/dev/null 2>&1; then
+    # --------------------------------------------------------
+    # Linux / GNU Coreutils
+    # --------------------------------------------------------
+    alias ls='ls --color=auto --group-directories-first'
+    
+    # Your original preferences, preserved:
+    # -v = sort by version (natural sort)
+    alias ll='ls -lav --group-directories-first'
+    alias l='ls -lv --group-directories-first'
+else
+    # --------------------------------------------------------
+    # macOS / BSD
+    # --------------------------------------------------------
+    # -G enables color on macOS
+    alias ls='ls -G'
+    
+    # Removed -v to prevent crash on macOS
+    alias ll='ls -la'
+    alias l='ls -l'
+fi
+
+# Quickly reload bash configuration
+alias reload='source ~/.bashrc && echo "Bash config reloaded."'
+
+# Show my public IP (useful for whitelisting)
+alias myip='curl ifconfig.me'
 
