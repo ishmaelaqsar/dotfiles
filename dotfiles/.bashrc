@@ -74,8 +74,11 @@ if [[ -f ~/.aliases ]]; then
     . ~/.aliases
 fi
 
-# Local workspace (Alias ONLY)
-alias ws='cd "$WORKSPACE"'
+# Local workspace
+if [[ -d ~/workspace ]]; then
+    export WORKSPACE="$HOME/workspace"
+    alias ws='cd "$WORKSPACE"'
+fi
 
 # -----------------------------------------------------------------------------
 # GPG & SSH Agent Integration
