@@ -64,6 +64,14 @@ for script_path in "$SOURCE_BIN_DIR"/*; do
 done
 
 # -----------------------------
+# Install Starship (Prompt)
+# -----------------------------
+if ! command -v starship >/dev/null; then
+    echo "Installing Starship..."
+    curl -sS https://starship.rs/install.sh | sh -s -- -y -b "$TARGET_DIR/bin"
+fi
+
+# -----------------------------
 # Git configuration
 # -----------------------------
 if command -v git &> /dev/null; then
