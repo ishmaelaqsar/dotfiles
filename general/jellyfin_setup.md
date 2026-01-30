@@ -1,6 +1,6 @@
 # Raspberry Pi 5 Media Stack (Integrated Single-Hostname Setup)
 
-This configuration is optimized for an ASUS router environment where only one hostname (`jellyfin-pi.internal`) is assigned to the Pi. It includes Jellyfin (Media), qBittorrent (Downloads), and FileBrowser (File Management).
+This configuration is optimized for an ASUS router environment where only one hostname (`jellyfin-pi.internal`) is assigned to the Pi. It includes Jellyfin (Media), qBittorrent (Downloads), and MeTube (YouTube Downloader).
 
 ## 1. Prerequisites & OS Tuning
 We install **Log2Ram** to prevent frequent log writes from wearing out your SD card.
@@ -25,6 +25,7 @@ sudo blkid
 
 # 2. Create mount point & set permissions
 sudo mkdir -p /mnt/media
+sudo mkdir -p /mnt/media/YouTube
 sudo chown -R $USER:$USER /mnt/media
 
 # 3. Add to fstab for auto-mount (replace YOUR-UUID-HERE)
@@ -45,9 +46,7 @@ sudo usermod -aG docker $USER
 newgrp docker 
 
 # Create configuration directories
-mkdir -p ~/media-stack/{jellyfin,qbit,caddy-data,caddy-config,filebrowser-config,filebrowser-database}
-# Create the specific database file FileBrowser needs
-touch ~/media-stack/filebrowser-database/filebrowser.db
+mkdir -p ~/media-stack/{jellyfin,qbit,metube-config,caddy-data,caddy-config}
 cd ~/media-stack
 ```
 
@@ -84,17 +83,19 @@ services:
       - /mnt/media:/downloads
     restart: unless-stopped
 
-  filebrowser:
-    image: filebrowser/filebrowser:latest
-    container_name: filebrowser
-    user: 1000:1000
-    environment:
-      - FB_BASE_URL=/files
-    volumes:
-      - /mnt/media:/srv
-      - ./filebrowser-config:/config
-      - ./filebrowser-database/filebrowser.db:/database/filebrowser.db
+  metube:
+    image: alexta69/metube:latest
+    container_name: metube
     restart: unless-stopped
+    environment:
+      - URL_PREFIX=/youtube
+      - DOWNLOAD_DIR=/downloads
+      - STATE_DIR=/config
+      - YTDL_OPTIONS={"format":"bestvideo[height<=1080]+bestaudio/best[height<=1080]"}
+      - OUTPUT_TEMPLATE=%(title)s.%(ext)s
+    volumes:
+      - /mnt/media/YouTube:/downloads
+      - ./metube-config:/config
 
   caddy:
     image: caddy:latest
@@ -115,16 +116,19 @@ jellyfin-pi.internal {
     tls internal
 
     # Route for qBittorrent
-    handle_path /torrent/* {
+    handle_path /torrent* {
         reverse_proxy qbittorrent:8080 {
             header_up Host {upstream_hostport}
             header_up X-Forwarded-Host {host}
         }
     }
 
-    # Route for FileBrowser (Requires handle to keep /files prefix)
-    handle /files* {
-        reverse_proxy filebrowser:80
+    # Consolidated MeTube Route (Handles subpath + leaked root assets)
+    @metube_stuff {
+        path /youtube* /scripts-*.js /polyfills-*.js /main-*.js /styles-*.css /favicon.ico /socket.io* /assets/* /version /youtubesocket.io*
+    }
+    handle @metube_stuff {
+        reverse_proxy metube:8081
     }
 
     # Default route for Jellyfin
@@ -148,9 +152,9 @@ docker compose up -d
 ## 6. Initial Configuration Tips
 
 1.  **ASUS Router:** Set the Pi's hostname to `jellyfin-pi` in your DHCP reservation list.
-2.  **Jellyfin (`/`):** Go to Playback settings. Enable **V4L2** and check **HEVC** for hardware acceleration.
+2.  **Jellyfin (`/`):** Go to Playback settings. Enable **V4L2** and check **HEVC** for hardware acceleration. Add `/media/YouTube` as a new library.
 3.  **qBittorrent (`/torrent/`):** Log in and uncheck **"Enable Cross-Site Request Forgery (CSRF) protection"** in Web UI settings to allow the reverse proxy.
-4.  **FileBrowser (`/files/`):** Default login is `admin` / `admin`. Use the "Upload > Download from URL" tool to pull files directly to the HDD.
+4.  **MeTube (`/youtube/`):** Access the UI and paste any URL. Downloads will automatically be capped at 1080p and saved to the `YouTube` folder on your HDD.
 
 ## 7. Maintenance Schedule (Cron)
 Run `crontab -e` and add the following:
