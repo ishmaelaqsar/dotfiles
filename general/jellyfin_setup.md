@@ -1,9 +1,9 @@
-# Raspberry Pi 5 Media Stack (Single Hostname Setup)
+# Raspberry Pi 5 Media Stack (Integrated Single-Hostname Setup)
 
-This configuration is optimized for an ASUS router environment where only one hostname (`jellyfin-pi.internal`) is assigned to the Pi.
+This configuration is optimized for an ASUS router environment where only one hostname (`jellyfin-pi.internal`) is assigned to the Pi. It includes Jellyfin (Media), qBittorrent (Downloads), and FileBrowser (File Management).
 
 ## 1. Prerequisites & OS Tuning
-Protect your SD card by moving high-frequency log writes to RAM.
+We install **Log2Ram** to prevent frequent log writes from wearing out your SD card.
 
 ```bash
 # Update system
@@ -17,37 +17,37 @@ cd ..
 ```
 
 ## 2. Mount External HDD
-Mount your media drive. This assumes your movies and shows are in the root of the drive.
+Mount your media drive to `/mnt/media`. This assumes your movies/shows are in the root of the drive.
 
 ```bash
-# 1. Identify UUID (e.g., /dev/sda1)
+# 1. Identify UUID
 sudo blkid
 
-# 2. Create mount point
+# 2. Create mount point & set permissions
 sudo mkdir -p /mnt/media
 sudo chown -R $USER:$USER /mnt/media
 
 # 3. Add to fstab for auto-mount (replace YOUR-UUID-HERE)
 sudo nano /etc/fstab
-# Add this line:
-# UUID=YOUR-UUID-HERE /mnt/media ext4 defaults,nofail 0 2
+# Add line: UUID=YOUR-UUID-HERE /mnt/media ext4 defaults,nofail 0 2
 
 # 4. Mount the drive
 sudo mount -a
 ```
 
 ## 3. Docker & Directory Setup
-Install Docker and create the necessary persistence folders.
+Install Docker and prepare the persistence folders.
 
 ```bash
 # Install Docker
 curl -fsSL [https://get.docker.com](https://get.docker.com) -o get-docker.sh && sudo sh get-docker.sh
 sudo usermod -aG docker $USER
-# Force apply group permissions
 newgrp docker 
 
 # Create configuration directories
-mkdir -p ~/media-stack/{jellyfin,qbit,caddy-data,caddy-config}
+mkdir -p ~/media-stack/{jellyfin,qbit,caddy-data,caddy-config,filebrowser-config,filebrowser-database}
+# Create the specific database file FileBrowser needs
+touch ~/media-stack/filebrowser-database/filebrowser.db
 cd ~/media-stack
 ```
 
@@ -66,6 +66,10 @@ services:
     devices:
       - /dev/dri:/dev/dri      # Pi 5 Hardware Acceleration
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8096/health"]
+      interval: 1m
+      timeout: 10s
 
   qbittorrent:
     image: lscr.io/linuxserver/qbittorrent:latest
@@ -77,7 +81,19 @@ services:
       - WEBUI_PORT=8080
     volumes:
       - ./qbit:/config
-      - /mnt/media:/downloads  # Torrents download to HDD root
+      - /mnt/media:/downloads
+    restart: unless-stopped
+
+  filebrowser:
+    image: filebrowser/filebrowser:latest
+    container_name: filebrowser
+    user: 1000:1000
+    environment:
+      - FB_BASE_URL=/files
+    volumes:
+      - /mnt/media:/srv
+      - ./filebrowser-config:/config
+      - ./filebrowser-database/filebrowser.db:/database/filebrowser.db
     restart: unless-stopped
 
   caddy:
@@ -94,14 +110,11 @@ services:
 ```
 
 ### `Caddyfile`
-This configuration routes your single hostname to two different apps.
-
 ```caddy
 jellyfin-pi.internal {
     tls internal
 
-    # Route for qBittorrent (Subpath)
-    # Note: The trailing slash in /torrent/ is important
+    # Route for qBittorrent
     handle_path /torrent/* {
         reverse_proxy qbittorrent:8080 {
             header_up Host {upstream_hostport}
@@ -109,46 +122,43 @@ jellyfin-pi.internal {
         }
     }
 
-    # Default route for Jellyfin (Root)
+    # Route for FileBrowser (Requires handle to keep /files prefix)
+    handle /files* {
+        reverse_proxy filebrowser:80
+    }
+
+    # Default route for Jellyfin
     handle {
         reverse_proxy jellyfin:8096
     }
 }
 ```
 
-## 5. Permissions & Deployment
-Fix ownership issues before launching.
+## 5. Deployment & Permissions
+To avoid "Permission Denied" errors, we ensure your user owns everything before launching.
 
 ```bash
-# Reclaim ownership of config folders
+# Reclaim ownership
 sudo chown -R $USER:$USER ~/media-stack
 
-# Launch the stack
+# Launch stack
 docker compose up -d
 ```
 
 ## 6. Initial Configuration Tips
 
-1.  **ASUS Router:** Set the Pi's hostname to `jellyfin-pi` in your DHCP reservation.
-2.  **Jellyfin:** Access at `https://jellyfin-pi.internal`. In **Playback settings**, enable **V4L2** and check **HEVC** for hardware acceleration.
-3.  **qBittorrent:** Access at `https://jellyfin-pi.internal/torrent/`. 
-    * *Note:* If you get a white screen, go to **Settings > WebUI** (via the local IP `192.168.1.x:8080`) and uncheck **"Enable Cross-Site Request Forgery (CSRF) protection"**.
+1.  **ASUS Router:** Set the Pi's hostname to `jellyfin-pi` in your DHCP reservation list.
+2.  **Jellyfin (`/`):** Go to Playback settings. Enable **V4L2** and check **HEVC** for hardware acceleration.
+3.  **qBittorrent (`/torrent/`):** Log in and uncheck **"Enable Cross-Site Request Forgery (CSRF) protection"** in Web UI settings to allow the reverse proxy.
+4.  **FileBrowser (`/files/`):** Default login is `admin` / `admin`. Use the "Upload > Download from URL" tool to pull files directly to the HDD.
 
 ## 7. Maintenance Schedule (Cron)
-Run `crontab -e` and add your maintenance logic.
+Run `crontab -e` and add the following:
 
 ```bash
-# === DAILY ===
 # 03:30 - Write logs to SD (Log2Ram)
 30 3 * * * /usr/sbin/log2ram write >> /home/ishmael/maintenance.log 2>&1
 
-# === WEEKLY ===
-# Sun 04:00 - OS Updates
-0 4 * * 0 sudo apt-get update && sudo apt-get upgrade -y && sudo apt-get autoremove -y
-
-# Sun 04:15 - Pull newest Docker images
-15 4 * * 0 cd /home/ishmael/media-stack && /usr/bin/docker compose pull && /usr/bin/docker compose up -d
-
-# Sun 04:30 - Weekly Reboot
-30 4 * * 0 /sbin/reboot
+# Sun 04:00 - Weekly OS and Docker Updates + Reboot
+0 4 * * 0 sudo apt-get update && sudo apt-get upgrade -y && cd /home/ishmael/media-stack && /usr/bin/docker compose pull && /usr/bin/docker compose up -d && /sbin/reboot
 ```
