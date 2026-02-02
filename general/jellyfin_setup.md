@@ -1,6 +1,8 @@
-# Raspberry Pi 5 Media Stack (Integrated Single-Hostname Setup)
+# Raspberry Pi 5 Media Stack
 
-This configuration is optimized for an ASUS router environment where only one hostname (`jellyfin-pi.internal`) is assigned to the Pi. It includes Jellyfin (Media), qBittorrent (Downloads), and MeTube (YouTube Downloader).
+This configuration is optimized for an environment using `<your-domain>.dev`. It uses a custom Caddy build to handle **DNS-01 challenges** via Cloudflare, providing a valid SSL certificate for your internal services without opening any router ports.
+
+---
 
 ## 1. Prerequisites & OS Tuning
 We install **Log2Ram** to prevent frequent log writes from wearing out your SD card.
@@ -15,6 +17,8 @@ curl -L [https://github.com/azlux/log2ram/archive/master.tar.gz](https://github.
 cd log2ram-master && sudo ./install.sh
 cd ..
 ```
+
+---
 
 ## 2. Mount External HDD
 Mount your media drive to `/mnt/media`. This assumes your movies/shows are in the root of the drive.
@@ -36,6 +40,8 @@ sudo nano /etc/fstab
 sudo mount -a
 ```
 
+---
+
 ## 3. Docker & Directory Setup
 Install Docker and prepare the persistence folders.
 
@@ -48,7 +54,14 @@ newgrp docker
 # Create configuration directories
 mkdir -p ~/media-stack/{jellyfin,qbit,metube-config,caddy-data,caddy-config}
 cd ~/media-stack
+
+# Create the environment file for Cloudflare API
+nano .env
+# Paste: CF_API_TOKEN=<YOUR_CLOUDFLARE_TOKEN>
+chmod 600 .env
 ```
+
+---
 
 ## 4. Configuration Files
 
@@ -98,11 +111,19 @@ services:
       - ./metube-config:/config
 
   caddy:
-    image: caddy:latest
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM caddy:builder AS builder
+        RUN xcaddy build --with [github.com/caddy-dns/cloudflare](https://github.com/caddy-dns/cloudflare)
+        FROM caddy:latest
+        COPY --from=builder /usr/bin/caddy /usr/bin/caddy
     container_name: caddy
     ports:
       - "80:80"
       - "443:443"
+    environment:
+      - CF_API_TOKEN=${CF_API_TOKEN}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
       - ./caddy-data:/data
@@ -112,15 +133,15 @@ services:
 
 ### `Caddyfile`
 ```caddy
-jellyfin-pi.internal {
-    tls internal
+jellyfin.<your-domain>.dev {
+    tls {
+        dns cloudflare {env.CF_API_TOKEN}
+        resolvers 1.1.1.1 1.0.0.1
+    }
 
     # Route for qBittorrent
     handle_path /torrent* {
-        reverse_proxy qbittorrent:8080 {
-            header_up Host {upstream_hostport}
-            header_up X-Forwarded-Host {host}
-        }
+        reverse_proxy qbittorrent:8080
     }
 
     # Consolidated MeTube Route (Handles subpath + leaked root assets)
@@ -138,6 +159,8 @@ jellyfin-pi.internal {
 }
 ```
 
+---
+
 ## 5. Deployment & Permissions
 To avoid "Permission Denied" errors, we ensure your user owns everything before launching.
 
@@ -145,24 +168,32 @@ To avoid "Permission Denied" errors, we ensure your user owns everything before 
 # Reclaim ownership
 sudo chown -R $USER:$USER ~/media-stack
 
-# Launch stack
+# Build custom Caddy and launch stack
+docker compose build caddy
 docker compose up -d
+
+# Verify SSL status
+docker logs -f caddy
 ```
+
+---
 
 ## 6. Initial Configuration Tips
 
-1.  **ASUS Router:** Set the Pi's hostname to `jellyfin-pi` in your DHCP reservation list.
-2.  **Jellyfin (`/`):** Go to Playback settings. Enable **V4L2** and check **HEVC** for hardware acceleration. Add `/media/YouTube` as a new library.
-3.  **qBittorrent (`/torrent/`):** Log in and uncheck **"Enable Cross-Site Request Forgery (CSRF) protection"** in Web UI settings to allow the reverse proxy.
-4.  **MeTube (`/youtube/`):** Access the UI and paste any URL. Downloads will automatically be capped at 1080p and saved to the `YouTube` folder on your HDD.
+1.  **Networking (Split-Brain):** Map `jellyfin.<your-domain>.dev` to your Pi's internal IP in your router's Local DNS settings.
+2.  **Jellyfin:** Go to Dashboard > Networking. Set **Secure connection mode** to "Handled by reverse proxy". Enable **V4L2** and check **HEVC** for hardware acceleration.
+3.  **qBittorrent:** Log in and uncheck **"Enable Cross-Site Request Forgery (CSRF) protection"** in Web UI settings to allow the reverse proxy.
+4.  **MeTube:** Access the UI via `/youtube/`. Downloads will automatically be saved to the `YouTube` folder on your HDD.
+
+---
 
 ## 7. Maintenance Schedule (Cron)
 Run `crontab -e` and add the following:
 
 ```bash
 # 03:30 - Write logs to SD (Log2Ram)
-30 3 * * * /usr/sbin/log2ram write >> /home/ishmael/maintenance.log 2>&1
+30 3 * * * /usr/sbin/log2ram write >> /home/<your-user>/maintenance.log 2>&1
 
 # Sun 04:00 - Weekly OS and Docker Updates + Reboot
-0 4 * * 0 sudo apt-get update && sudo apt-get upgrade -y && cd /home/ishmael/media-stack && /usr/bin/docker compose pull && /usr/bin/docker compose up -d && /sbin/reboot
+0 4 * * 0 sudo apt-get update && sudo apt-get upgrade -y && cd /home/<your-user>/media-stack && /usr/bin/docker compose pull && /usr/bin/docker compose up -d --build && /sbin/reboot
 ```
