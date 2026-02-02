@@ -1,7 +1,8 @@
 # 📓 Logseq Self-Hosted Hub
 **Hardware:** Raspberry Pi Zero 2W (512MB RAM)  
 **OS:** Raspberry Pi OS Lite (64-bit)  
-**Primary Tech:** Forgejo + Caddy (TLS) + msmtp (Relay) + fail2ban + Cloudflare Tunnel + Rclone  
+**Security:** AppArmor (Enforced) + fail2ban (Active) + Caddy (DNS-01 TLS)  
+**Goal:** Trusted mail delivery, high-speed local Git pushes, and secure global access.
 
 ---
 
@@ -15,7 +16,7 @@
 * **Install Core Utilities & Security:**
   ```bash
   sudo apt update && sudo apt upgrade -y
-  sudo apt install apparmor apparmor-utils msmtp msmtp-mta fail2ban ca-certificates curl wget -y
+  sudo apt install apparmor apparmor-utils msmtp msmtp-mta fail2ban ca-certificates curl wget rclone -y
   ```
 
 ### 2. SD Card Longevity (Log2Ram)
@@ -28,7 +29,9 @@ sudo reboot
 ---
 
 ## 📧 Phase 2: Multi-Identity Mail Relay (msmtp)
-### 1. Configure the Relay: `sudo nano /etc/msmtprc`
+Configures the Pi to send trusted mail from your custom domain aliases using Google’s SMTP.
+
+### 1. Configure Relay: `sudo nano /etc/msmtprc`
 ```text
 defaults
 auth           on
@@ -77,7 +80,7 @@ sudo mv forgejo-14.0.1-linux-arm64 /usr/local/bin/forgejo
 sudo chmod +x /usr/local/bin/forgejo
 ```
 
-### 2. Forgejo Config: `sudo nano /etc/forgejo/app.ini`
+### 2. Config Enhancements: `sudo nano /etc/forgejo/app.ini`
 ```ini
 [server]
 DOMAIN = git.<your-domain>.dev
@@ -123,10 +126,7 @@ sudo mv caddy /usr/local/bin/caddy
 sudo setcap CAP_NET_BIND_SERVICE=+eip /usr/local/bin/caddy
 ```
 
-### 2. Config Setup
-`nano ~/.caddy_env` -> `CF_API_TOKEN=<your_token>`
-
-`nano ~/Caddyfile`:
+### 2. Caddyfile Setup: `nano ~/Caddyfile`
 ```caddy
 {
     email <your-email>
@@ -148,7 +148,6 @@ git.<your-domain>.dev {
 [Unit]
 Description=Caddy SSL Gateway
 After=network.target network-online.target
-Requires=network-online.target
 
 [Service]
 User=<your-username>
@@ -159,7 +158,6 @@ ExecReload=/usr/local/bin/caddy reload --config /home/<your-username>/Caddyfile 
 AmbientCapabilities=CAP_NET_BIND_SERVICE
 CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 Restart=on-failure
-TimeoutStopSec=5s
 
 [Install]
 WantedBy=multi-user.target
@@ -169,40 +167,27 @@ WantedBy=multi-user.target
 ---
 
 ## 🌐 Phase 5: Global Access (Cloudflare Tunnel)
-### 1. Install Cloudflared
+### 1. Install & Authenticate
 ```bash
 curl -L [https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64.deb](https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64.deb) -o cloudflared.deb
 sudo dpkg -i cloudflared.deb
-```
 
-### 2. Authenticate & Create Tunnel
-```bash
-# Follow the link provided by this command to log in
 cloudflared tunnel login
-
-# Create the tunnel and copy the ID (UUID)
 cloudflared tunnel create logseq-tunnel
-
-# Route the tunnel to your domain
 cloudflared tunnel route dns logseq-tunnel git.<your-domain>.dev
 ```
 
-### 3. Tunnel Configuration: `sudo nano /etc/cloudflared/config.yml`
+### 2. Config: `sudo nano /etc/cloudflared/config.yml`
 ```yaml
-tunnel: <YOUR-TUNNEL-UUID>
-credentials-file: /home/<your-username>/.cloudflared/<YOUR-TUNNEL-UUID>.json
+tunnel: <TUNNEL-UUID>
+credentials-file: /home/<your-username>/.cloudflared/<TUNNEL-UUID>.json
 
 ingress:
   - hostname: git.<your-domain>.dev
     service: http://localhost:3000
   - service: http_status:404
 ```
-
-### 4. Install Service
-```bash
-sudo cloudflared service install
-sudo systemctl start cloudflared
-```
+`sudo cloudflared service install && sudo systemctl start cloudflared`
 
 ---
 
@@ -218,7 +203,6 @@ failregex = ^.*Failed authentication attempt for .* from <HOST>
 ```text
 [forgejo]
 enabled = true
-port = http,https
 filter = forgejo
 logpath = /var/lib/forgejo/log/forgejo.log
 maxretry = 5
@@ -251,6 +235,33 @@ sudo systemctl start forgejo
 
 ---
 
-## 📱 Phase 8: Mobile & Deliverability
-* **DNS:** Add TXT record `v=spf1 include:_spf.mx.cloudflare.net include:_spf.google.com ~all`.
-* **Gmail:** Add identities in Desktop Gmail Settings (Accounts & Import) using `smtp.gmail.com` and App Password.
+## 📱 Phase 8: Mobile & Networking
+* **Split-Brain DNS:** Map `git.<your-domain>.dev` to Pi's internal IP in your router for local speed.
+* **SPF Record:** TXT record `v=spf1 include:_spf.mx.cloudflare.net include:_spf.google.com ~all`.
+* **Mobile Mail:** Sync identities to Gmail App using "Send Mail As" (Desktop Settings) with `smtp.gmail.com` and App Password.
+
+---
+
+## 🆘 Phase 9: Disaster Recovery (Restoration Guide)
+### 1. Re-initialize
+Follow **Phases 1-4** on a new SD card. **Do not run the web installer.**
+
+### 2. Restore Data
+```bash
+sudo systemctl stop forgejo
+sudo rclone copy gdrive:Forgejo_Backup /var/lib/forgejo/ --progress
+```
+
+### 3. Permissions & Restart
+```bash
+sudo chown -R git:git /var/lib/forgejo/
+sudo chmod -R 750 /var/lib/forgejo/
+sudo systemctl start forgejo
+```
+
+---
+
+## 🩹 Phase 10: Troubleshooting
+**Tunnel Connectivity:** If the tunnel fails after a reboot, check logs:
+`journalctl -u cloudflared`. Often caused by system time being out of sync (Pi Zero quirk).
+**SMTP Failures:** Check `tail -f /var/log/msmtp.log`. Common fix: Renew Google App Password.
