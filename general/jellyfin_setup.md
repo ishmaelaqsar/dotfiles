@@ -1,33 +1,41 @@
 # Raspberry Pi 5 Media Stack
 
-This configuration is optimized for an environment using `<your-domain>.dev`. It uses a custom Caddy build to handle **DNS-01 challenges** via Cloudflare, providing a valid SSL certificate for your internal services without opening any router ports.
+This configuration is specifically tuned for a **2GB Raspberry Pi 5**.
 
 ---
 
 ## 1. Prerequisites & OS Tuning
-We install **Log2Ram** to prevent frequent log writes from wearing out your SD card.
+We install **Log2Ram** to protect the SD card and enable **Cgroups** to allow Docker to limit RAM usage.
 
 ```bash
 # Update system
 sudo apt update && sudo apt upgrade -y
 sudo apt install -y curl git-core
 
-# Install Log2Ram
+# 1. Install Log2Ram
 curl -L [https://github.com/azlux/log2ram/archive/master.tar.gz](https://github.com/azlux/log2ram/archive/master.tar.gz) | tar zx
 cd log2ram-master && sudo ./install.sh
 cd ..
+
+# 2. Enable Cgroup Memory Support (Required for Docker RAM limits)
+# Add parameters to the end of the existing line (do not create a new line)
+sudo nano /boot/firmware/cmdline.txt
+# Add to end: cgroup_enable=cpuset cgroup_enable=memory cgroup_memory=1
+
+# 3. Reboot to apply kernel changes
+sudo reboot
 ```
 
 ---
 
 ## 2. Mount External HDD
-Mount your media drive to `/mnt/media`. This assumes your movies/shows are in the root of the drive.
+Mount your media drive to `/mnt/media`. 
 
 ```bash
 # 1. Identify UUID
 sudo blkid
 
-# 2. Create mount point & set permissions
+# 2. Create mount point
 sudo mkdir -p /mnt/media
 sudo mkdir -p /mnt/media/YouTube
 sudo chown -R $USER:$USER /mnt/media
@@ -52,7 +60,7 @@ sudo usermod -aG docker $USER
 newgrp docker 
 
 # Create configuration directories
-mkdir -p ~/media-stack/{jellyfin,qbit,metube-config,caddy-data,caddy-config}
+mkdir -p ~/media-stack/{jellyfin/config,jellyfin/cache,qbit,metube-config,caddy-data,caddy-config,filebrowser}
 cd ~/media-stack
 
 # Create the environment file for Cloudflare API
@@ -73,10 +81,15 @@ services:
     container_name: jellyfin
     user: 1000:1000
     volumes:
-      - ./jellyfin:/config
+      - ./jellyfin/config:/config
+      - ./jellyfin/cache:/cache
       - /mnt/media:/media:ro
     devices:
-      - /dev/dri:/dev/dri      # Pi 5 Hardware Acceleration
+      - /dev/dri:/dev/dri
+    deploy:
+      resources:
+        limits:
+          memory: 1200M        # Prevents Pi 5 2GB lockups
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8096/health"]
@@ -110,6 +123,20 @@ services:
       - /mnt/media/YouTube:/downloads
       - ./metube-config:/config
 
+  filebrowser:
+    image: filebrowser/filebrowser:latest
+    container_name: filebrowser
+    user: 1000:1000
+    # Forces correct pathing for reverse proxy
+    command: ["--address", "0.0.0.0", "--port", "80", "--baseurl", "/files"]
+    environment:
+      - FB_DATABASE=/database/filebrowser.db
+    volumes:
+      - /mnt/media:/srv
+      - ./filebrowser/filebrowser.db:/database/filebrowser.db
+      - ./filebrowser/settings.json:/config/settings.json
+    restart: unless-stopped
+
   caddy:
     build:
       context: .
@@ -122,6 +149,7 @@ services:
     ports:
       - "80:80"
       - "443:443"
+      - "443:443/udp"
     environment:
       - CF_API_TOKEN=${CF_API_TOKEN}
     volumes:
@@ -139,12 +167,17 @@ jellyfin.<your-domain>.dev {
         resolvers 1.1.1.1 1.0.0.1
     }
 
-    # Route for qBittorrent
+    # File Manager
+    handle /files* {
+        reverse_proxy filebrowser:80
+    }
+
+    # qBittorrent
     handle_path /torrent* {
         reverse_proxy qbittorrent:8080
     }
 
-    # Consolidated MeTube Route (Handles subpath + leaked root assets)
+    # MeTube
     @metube_stuff {
         path /youtube* /scripts-*.js /polyfills-*.js /main-*.js /styles-*.css /favicon.ico /socket.io* /assets/* /version /youtubesocket.io*
     }
@@ -152,7 +185,7 @@ jellyfin.<your-domain>.dev {
         reverse_proxy metube:8081
     }
 
-    # Default route for Jellyfin
+    # Default Jellyfin
     handle {
         reverse_proxy jellyfin:8096
     }
@@ -162,38 +195,26 @@ jellyfin.<your-domain>.dev {
 ---
 
 ## 5. Deployment & Permissions
-To avoid "Permission Denied" errors, we ensure your user owns everything before launching.
-
 ```bash
-# Reclaim ownership
+cd ~/media-stack
+
+# 1. Pre-initialize FileBrowser DB
+touch ./filebrowser/filebrowser.db
+chmod 666 ./filebrowser/filebrowser.db
+
+# 2. Final ownership check
 sudo chown -R $USER:$USER ~/media-stack
 
-# Build custom Caddy and launch stack
+# 3. Launch
 docker compose build caddy
 docker compose up -d
-
-# Verify SSL status
-docker logs -f caddy
 ```
 
 ---
 
 ## 6. Initial Configuration Tips
 
-1.  **Networking (Split-Brain):** Map `jellyfin.<your-domain>.dev` to your Pi's internal IP in your router's Local DNS settings.
-2.  **Jellyfin:** Go to Dashboard > Networking. Set **Secure connection mode** to "Handled by reverse proxy". Enable **V4L2** and check **HEVC** for hardware acceleration.
-3.  **qBittorrent:** Log in and uncheck **"Enable Cross-Site Request Forgery (CSRF) protection"** in Web UI settings to allow the reverse proxy.
-4.  **MeTube:** Access the UI via `/youtube/`. Downloads will automatically be saved to the `YouTube` folder on your HDD.
-
----
-
-## 7. Maintenance Schedule (Cron)
-Run `crontab -e` and add the following:
-
-```bash
-# 03:30 - Write logs to SD (Log2Ram)
-30 3 * * * /usr/sbin/log2ram write >> /home/<your-user>/maintenance.log 2>&1
-
-# Sun 04:00 - Weekly OS and Docker Updates + Reboot
-0 4 * * 0 sudo apt-get update && sudo apt-get upgrade -y && cd /home/<your-user>/media-stack && /usr/bin/docker compose pull && /usr/bin/docker compose up -d --build && /sbin/reboot
-```
+1.  **FileBrowser:** Check logs (`docker logs filebrowser`) to get your unique **initial admin password**.
+2.  **qBittorrent:** Go to Advanced Settings and set **"Physical memory usage limit"** to **128 MiB**.
+3.  **Jellyfin:** Ensure Hardware Acceleration is set to **V4L2**.
+4.  **ZRAM:** Run `zramctl` to ensure your swap is compressed in RAM for better performance.
