@@ -4,31 +4,17 @@
 # Insert a blank line between shell commands
 add_newline = false
 
-# Replace the "snake" and "branch" icons with text
-[git_branch]
-symbol = "git:"
-style = "bold purple"
-
-[git_status]
-style = "bold red"
-# Standard text indicators instead of icons
-conflicted = "conflicted"
-ahead = "^"
-behind = "v"
-diverged = "<>"
-up_to_date = ""
-untracked = "?"
-stashed = "$"
-modified = "!"
-staged = "+"
-renamed = "»"
-deleted = "x"
-
 [python]
 symbol = "Py "
 style = "bold yellow"
 detect_extensions = ["py"]
-detect_files = [".python-version", "Pipfile", "__init__.py", "pyproject.toml", "requirements.txt"]
+detect_files = [
+  ".python-version",
+  "Pipfile",
+  "__init__.py",
+  "pyproject.toml",
+  "requirements.txt",
+]
 
 [jobs]
 symbol = "Jobs:"
@@ -38,13 +24,7 @@ style = "bold blue"
 min_time = 2000
 format = "took [$duration](bold yellow)"
 
-[character]
-# Simple arrow for success, standard 'x' for error
-success_symbol = "[>](bold green)"
-error_symbol = "[x](bold red)"
-
 [directory]
 truncation_length = 3
 truncate_to_repo = false
 style = "bold cyan"
-
