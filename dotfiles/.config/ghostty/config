@@ -1,0 +1,19 @@
+theme = Zenburn
+font-family = "0xProto Nerd Font Mono"
+font-size = 12
+background-opacity = 1.0
+background-blur = 0
+
+window-padding-x = 10
+window-padding-y = 10
+macos-titlebar-style = native
+
+cursor-style = block
+cursor-style-blink = false
+copy-on-select = true
+
+# Ensures that when you 'summon' Ghostty, it doesn't steal focus 
+quick-terminal-autohide = true
+
+# Meta + Shift + O to open the current directory in VS Code
+keybind = alt+shift+o=text:code .\r

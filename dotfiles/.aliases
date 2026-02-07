@@ -1,8 +1,3 @@
-# Make grep color results by default
-alias grep='grep --color=auto'
-alias fgrep='fgrep --color=auto'
-alias egrep='egrep --color=auto'
-
 # Allow aliases to be sudo'ed (e.g. 'sudo ll')
 alias sudo='sudo '
 
@@ -12,28 +7,9 @@ alias ....='cd ../../..'
 alias ~='cd ~'
 alias -- -='cd -'  # Go back to previous directory
 
-# Detects if we are using GNU ls (Linux) or BSD ls (macOS)
-if ls --version >/dev/null 2>&1; then
-    # --------------------------------------------------------
-    # Linux / GNU Coreutils
-    # --------------------------------------------------------
-    alias ls='ls --color=auto --group-directories-first'
-    
-    # Your original preferences, preserved:
-    # -v = sort by version (natural sort)
-    alias ll='ls -lav --group-directories-first'
-    alias l='ls -lv --group-directories-first'
-else
-    # --------------------------------------------------------
-    # macOS / BSD
-    # --------------------------------------------------------
-    # -G enables color on macOS
-    alias ls='ls -G'
-    
-    # Removed -v to prevent crash on macOS
-    alias ll='ls -la'
-    alias l='ls -l'
-fi
+alias grep='rg --smart-case'
+alias find='fd'
+alias ls='eza --icons --group-directories-first'
 
 # Quickly reload bash configuration
 alias reload='source ~/.bashrc && echo "Bash config reloaded."'
@@ -41,3 +17,12 @@ alias reload='source ~/.bashrc && echo "Bash config reloaded."'
 # Show my public IP (useful for whitelisting)
 alias myip='curl ifconfig.me'
 
+# Usage: cv some-project-name
+# It finds the folder and opens it in VS Code
+cv() {
+    local dir
+    dir=$(fd --type d --max-depth 3 . "$WORKSPACE" | fzf --query="$1" --select-1 --exit-0)
+    if [ -n "$dir" ]; then
+        code "$dir"
+    fi
+}

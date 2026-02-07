@@ -21,6 +21,7 @@ __add_path() {
 # Add user bin directories
 __add_path "$HOME/bin"
 __add_path "$HOME/.local/bin"
+__add_path "$HOME/.cargo/bin"
 
 # Clean up helper
 unset -f __add_path
