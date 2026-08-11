@@ -30,10 +30,13 @@ TARGET_DIR="${TARGET_DIR%/}"           # normalise trailing slash so the $HOME t
 IS_HOME_INSTALL=0
 [ "$TARGET_DIR" = "$HOME" ] && IS_HOME_INSTALL=1
 
-# Dev containers get symlinks and config only — no packages, fonts, or apps
+# Dev containers get symlinks and config only — no packages, fonts, or apps.
+# DOTFILES_FORCE_HOST=1 disables the detection (container-based testing).
 IN_CONTAINER=0
-if [ -n "${REMOTE_CONTAINERS:-}" ] || [ -n "${CONTAINER_ID:-}" ] || [ -n "${CODESPACES:-}" ] || [ -f /.dockerenv ]; then
-    IN_CONTAINER=1
+if [ -z "${DOTFILES_FORCE_HOST:-}" ]; then
+    if [ -n "${REMOTE_CONTAINERS:-}" ] || [ -n "${CONTAINER_ID:-}" ] || [ -n "${CODESPACES:-}" ] || [ -f /.dockerenv ]; then
+        IN_CONTAINER=1
+    fi
 fi
 
 # -----------------------------
@@ -60,62 +63,9 @@ if [ "$IS_HOME_INSTALL" -eq 1 ] \
 fi
 
 # -----------------------------
-# Package manager detection
+# Package installation
 # -----------------------------
-# Prefer the native manager over linuxbrew, and yay over pacman on Arch.
-# yay must not run under sudo (it escalates itself), hence per-manager sudo.
-__detect_pkg_mgr() {
-    if [[ "$OSTYPE" == darwin* ]] && command -v brew >/dev/null 2>&1; then
-        echo brew; return
-    fi
-    if command -v apt-get >/dev/null 2>&1; then echo apt
-    elif command -v yay >/dev/null 2>&1; then echo yay
-    elif command -v pacman >/dev/null 2>&1; then echo pacman
-    elif command -v dnf >/dev/null 2>&1; then echo dnf
-    elif command -v brew >/dev/null 2>&1; then echo brew
-    else echo none
-    fi
-}
-
-# Map a tool name to this manager's package name
-__pkg_name() {
-    local mgr=$1 tool=$2
-    case "$mgr:$tool" in
-        brew:fd)              echo "fd" ;;
-        apt:fd|dnf:fd)        echo "fd-find" ;;
-        *:fd)                 echo "fd" ;;
-        brew:bash-completion) echo "bash-completion@2" ;;
-        *:bash-completion)    echo "bash-completion" ;;
-        brew:pinentry)        echo "pinentry-mac" ;;
-        apt:pinentry)         echo "pinentry-gnome3" ;;
-        *:pinentry)           echo "pinentry" ;;
-        dnf:gnupg)            echo "gnupg2" ;;
-        *)                    echo "$tool" ;;
-    esac
-}
-
-# Best-effort: one missing package must not sink the rest
-__pkg_install() {
-    local mgr=$1; shift
-    local tool pkg failed=""
-    for tool in "$@"; do
-        command -v "$tool" >/dev/null 2>&1 && continue
-        pkg="$(__pkg_name "$mgr" "$tool")"
-        echo "  -> Installing $pkg ($mgr)"
-        case "$mgr" in
-            brew)   brew install "$pkg" || failed="$failed $tool" ;;
-            apt)    sudo apt-get install -y "$pkg" || failed="$failed $tool" ;;
-            yay)    yay -S --needed --noconfirm "$pkg" || failed="$failed $tool" ;;
-            pacman) sudo pacman -S --needed --noconfirm "$pkg" || failed="$failed $tool" ;;
-            dnf)    sudo dnf install -y "$pkg" || failed="$failed $tool" ;;
-            *)      failed="$failed $tool" ;;
-        esac
-    done
-    if [ -n "$failed" ]; then
-        echo "Warning: could not install:$failed — install manually." >&2
-    fi
-}
-
+source "$SCRIPT_DIR/lib/pkg.sh"
 PKG_MGR="$(__detect_pkg_mgr)"
 
 if [ "$IN_CONTAINER" -eq 1 ]; then
@@ -123,7 +73,7 @@ if [ "$IN_CONTAINER" -eq 1 ]; then
 elif [ "$IS_HOME_INSTALL" -eq 1 ] && [ "$PKG_MGR" != "none" ]; then
     echo "Installing packages via $PKG_MGR..."
     if [ "$PKG_MGR" = "apt" ]; then
-        sudo apt-get update || echo "Warning: apt-get update failed." >&2
+        __pkg_sudo apt-get update || echo "Warning: apt-get update failed." >&2
     fi
     __pkg_install "$PKG_MGR" eza fzf zellij gnupg
     command -v rg >/dev/null 2>&1     || __pkg_install "$PKG_MGR" ripgrep
@@ -156,6 +106,7 @@ mkdir -p "$BASHRC_D_DIR"
 
 echo "Creating dotfiles alias at '$ALIAS_FILE'."
 cat <<EOF > "$ALIAS_FILE"
+# managed-by-dotfiles (cleanup.sh removes files carrying this marker)
 # Alias to quickly jump to dotfiles directory
 alias dotfiles='cd $SCRIPT_DIR'
 EOF
@@ -329,7 +280,9 @@ else
 
         if [ -n "$FINGERPRINT" ]; then
             echo "Setting ultimate trust for $FINGERPRINT..."
-            echo -e "5\ny\n" | gpg --command-fd 0 --expert --edit-key "$FINGERPRINT" trust >/dev/null 2>&1
+            # --import-ownertrust is the scriptable route; the interactive
+            # --edit-key trust dance exits non-zero and trips set -e
+            echo "$FINGERPRINT:6:" | gpg --import-ownertrust
         fi
     else
         echo "No public.asc found in dotfiles. Skipping GPG import."

@@ -28,7 +28,7 @@ git clone https://github.com/ishmaelaqsar/dotfiles.git ~/.dotfiles
 ```
 
 The `install.sh` script will:
-1. **Install packages** via the detected manager (brew / apt / yay / pacman / dnf): `eza`, `fd`, `ripgrep`, `fzf`, `git-delta`, `zellij`, plus [OpenCode](https://opencode.ai) and [Ghostty](https://ghostty.org) (best-effort).
+1. **Install packages** via the detected manager (brew / apt / yay / pacman / dnf): `eza`, `fd`, `ripgrep`, `fzf`, `git-delta`, `zellij` (Arch/brew only — Debian and Fedora lack a package), plus [OpenCode](https://opencode.ai) and [Ghostty](https://ghostty.org) (best-effort).
 2. Symlink configuration files (`.bashrc`, `.vimrc`, etc.) to your home directory.
 3. Symlink scripts from `bin/` to `$HOME/bin`.
 4. Install the vendored **0xProto Nerd Font** from `general/0xProto/`.
@@ -40,6 +40,29 @@ Flags and safety:
 * `./install.sh /some/dir` — **probe run**: file layout only; skips packages, git config, and all GPG keyring/agent changes. Use to test changes safely.
 * It **refuses to run** if a different dotfiles checkout already owns `~/.dotfiles`; `-f` overrides.
 * After install, run `opencode auth login` once to connect a model provider.
+
+### Language toolchains (opt-in, run manually)
+
+`install.sh` stops at shell/terminal tooling. Per-language dev environments — compiler/runtime,
+LSP server, debugger — are separate scripts, run only on machines that need them (idempotent):
+
+| Script | Toolchain | LSP | Debugger |
+| :--- | :--- | :--- | :--- |
+| `setup-c.sh` | C/C++ (CLT / build-essential / base-devel), cmake | clangd | lldb, gdb + valgrind (Linux) |
+| `setup-python.sh` | uv (manages interpreters) | ruff + basedpyright | debugpy |
+| `setup-go.sh` | go | gopls | delve |
+| `setup-java.sh` | sdkman → Temurin LTS, maven, gradle | jdtls (brew/AUR) | JDWP/jdb (in the JDK) |
+| `setup-sbcl.sh` | SBCL + Quicklisp | none — CL uses Swank/Slynk via the editor | SBCL built-in |
+
+Shared package-manager logic lives in `lib/pkg.sh`; shell init written by these scripts goes to
+`~/.bashrc.d/` (marked, so cleanup can find it), never into tracked dotfiles.
+
+### Cleanup
+
+`./cleanup.sh` undoes an install: removes this repo's symlinks, managed `~/.bashrc.d` files,
+fonts, and generated config; unsets the git config it set. `-a` also removes toolchains
+(sdkman, quicklisp, uv — never `~/go`). It refuses on a machine owned by a different dotfiles
+checkout, and never uninstalls system packages (it prints the list instead).
 
 ---
 
