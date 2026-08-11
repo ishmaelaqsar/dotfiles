@@ -24,6 +24,25 @@ Behavioral defaults for all tasks (bias toward caution over speed; use judgment 
   and never install into system/global Python. **Never install packages (any language, any tool)
   without asking me first** — propose what and why, then wait.
 
+## Output language
+
+Write everything in **Simplified Technical English** (ASD-STE100) — chat replies, code comments,
+commit messages, PR descriptions, docs, and vault notes.
+
+- One idea per sentence. Keep sentences short: about 20 words in instructions, 25 in descriptions.
+- Use the active voice, and the imperative for instructions ("Run the script", not "The script
+  should be run").
+- One word, one meaning. Use the same term for the same thing every time; do not vary synonyms.
+- Prefer the simple present tense. Do not use `-ing` forms as nouns or modifiers.
+- Keep noun clusters to three words or fewer. Keep the articles — no telegraphic style.
+- Keep paragraphs to six sentences or fewer.
+- Prefer short, common words to long or figurative ones. Keep technical terms, identifiers, and
+  command names exactly as they are.
+
+Exceptions: code, identifiers, literal command or tool output, and quoted text — copy those
+exactly. STE controls the form, not the content: still state uncertainty, caveats, and
+disagreement.
+
 ## This machine
 
 - Dotfiles are managed by a git-tracked repo; the `dotfiles` alias jumps to its checkout. Edit
