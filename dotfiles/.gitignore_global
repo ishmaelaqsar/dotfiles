@@ -7,7 +7,8 @@
 CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
-Makefile
+# (`Makefile` dropped — it hid hand-written ones; CMake's generated Makefile
+#  lives under /build*/ which is already ignored)
 CTestTestfile.cmake
 install_manifest.txt
 compile_commands.json
@@ -135,3 +136,8 @@ Thumbs.db
 *.zip
 *.log
 *.sqlite
+
+# ============================================================
+# Agent CLIs — machine-local settings
+# ============================================================
+**/.claude/settings.local.json

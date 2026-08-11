@@ -10,10 +10,14 @@ macos-titlebar-style = native
 
 cursor-style = block
 cursor-style-blink = false
-copy-on-select = true
 
-# Ensures that when you 'summon' Ghostty, it doesn't steal focus 
-quick-terminal-autohide = true
+# `clipboard` = copy selections to the system clipboard too, not just the
+# primary selection (`true` never reaches ctrl+shift+v on Linux)
+copy-on-select = clipboard
 
 # Meta + Shift + O to open the current directory in VS Code
 keybind = alt+shift+o=text:code .\r
+
+# Machine-local overrides (untracked); opt in to the quick terminal here
+# with `config-file = quick-terminal.conf` (automatic on macOS via install.sh)
+config-file = ?config.local

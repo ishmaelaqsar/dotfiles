@@ -10,6 +10,11 @@ fi
 # PATH Management
 # ============================================================
 
+# Find /opt/homebrew/bin/bash before /bin/bash (no-op on Linux)
+if [[ -d "/opt/homebrew/bin" ]]; then
+    export PATH="/opt/homebrew/bin:$PATH"
+fi
+
 # Helper to prepend to PATH if not already present
 __add_path() {
     local dir="$1"
@@ -22,16 +27,10 @@ __add_path() {
 __add_path "$HOME/bin"
 __add_path "$HOME/.local/bin"
 __add_path "$HOME/.cargo/bin"
+__add_path "$HOME/go/bin"
 
 # Clean up helper
 unset -f __add_path
-
-# ============================================================
-# Source Helper Functions
-# ============================================================
-if [[ -f ~/.helpers ]]; then
-    . ~/.helpers
-fi
 
 # ============================================================
 # Environment & One-Time Setup
@@ -44,6 +43,9 @@ fi
 
 export IDENTITY="Ishmael Aqsar <ishmael-dev@aqsar.dev>"
 export VM_USER="ishmael"
+
+# Second brain vault — defaults to ~/vault (.helpers); override per machine:
+# export OBSIDIAN_VAULT="$HOME/some/other/vault"
 
 # Local workspace
 if [[ ! -d ~/workspace ]]; then

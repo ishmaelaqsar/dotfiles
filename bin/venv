@@ -3,10 +3,11 @@
 venv — Python virtual environment helper
 """
 
-import os
-import sys
-import subprocess
 import argparse
+import os
+import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 
@@ -41,11 +42,25 @@ def cmd_init(args):
     target = root / args.dir
     python_cmd = args.python or "python3"
 
-    print(f"Creating virtual environment at: {target} using {python_cmd}")
-    cmd = [python_cmd, "-m", "venv", str(target)] + args.venv_options
+    # Check if uv is available on the system
+    has_uv = shutil.which("uv") is not None
+
+    if has_uv:
+        print(f"⚡ Creating virtual environment using 'uv' at: {target} (Python: {python_cmd})")
+        # uv syntax: uv venv <target> --python <python_cmd>
+        cmd = ["uv", "venv", str(target), "--python", python_cmd] + args.venv_options
+    else:
+        print(f"Creating virtual environment at: {target} using {python_cmd}")
+        # Standard venv syntax
+        cmd = [python_cmd, "-m", "venv", str(target)] + args.venv_options
+
     try:
         run(cmd)
-        print("✅ Virtual environment created successfully.")
+        if has_uv:
+             # uv doesn't output much by default, so we add a clear success message
+             print("✅ Virtual environment created successfully (superfast).")
+        else:
+             print("✅ Virtual environment created successfully.")
     except subprocess.CalledProcessError:
         print("❌ Failed to create virtual environment.", file=sys.stderr)
         sys.exit(1)

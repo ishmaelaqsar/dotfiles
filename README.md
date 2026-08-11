@@ -28,10 +28,18 @@ git clone https://github.com/ishmaelaqsar/dotfiles.git ~/.dotfiles
 ```
 
 The `install.sh` script will:
-1. Symlink configuration files (`.bashrc`, `.vimrc`, etc.) to your home directory.
-2. Symlink scripts from `bin/` to `$HOME/bin`.
-3. **Configure GPG Agent** for SSH support and YubiKey usage (detects OS and pinentry).
-4. **Install Git Hooks** to prevent committing unencrypted secrets.
+1. **Install packages** via the detected manager (brew / apt / yay / pacman / dnf): `eza`, `fd`, `ripgrep`, `fzf`, `git-delta`, `zellij`, plus [OpenCode](https://opencode.ai) and [Ghostty](https://ghostty.org) (best-effort).
+2. Symlink configuration files (`.bashrc`, `.vimrc`, etc.) to your home directory.
+3. Symlink scripts from `bin/` to `$HOME/bin`.
+4. Install the vendored **0xProto Nerd Font** from `general/0xProto/`.
+5. **Configure GPG Agent** for SSH support and YubiKey usage (detects OS and pinentry).
+6. **Install Git Hooks** to prevent committing unencrypted secrets.
+
+Flags and safety:
+
+* `./install.sh /some/dir` — **probe run**: file layout only; skips packages, git config, and all GPG keyring/agent changes. Use to test changes safely.
+* It **refuses to run** if a different dotfiles checkout already owns `~/.dotfiles`; `-f` overrides.
+* After install, run `opencode auth login` once to connect a model provider.
 
 ---
 
@@ -42,6 +50,10 @@ The `install.sh` script will:
 * **Terminal Editor:** Vi / Vim.
     * Used for quick edits in the terminal.
     * Includes a minimal `.vimrc` for syntax highlighting and standard behavior.
+
+These are defaults set in `.bash_profile`. To switch editors on one machine, drop a file in
+`~/.bashrc.d/` (sourced last) exporting `EDITOR`, `VISUAL`, and `GIT_EDITOR` — e.g.
+`export EDITOR=emacs VISUAL=emacs GIT_EDITOR=emacs`.
 
 ---
 
@@ -79,7 +91,7 @@ gpg -k
 ```
 
 ### Workflow
-Add the helpers to your shell (already done if you source `.bash_profile`):
+Add the helpers to your shell (already done if you source `.bashrc`):
 
 ```bash
 source ~/.helpers
@@ -99,5 +111,24 @@ add_secret OPENAI_API_KEY "sk-..."
 # Load keys at start of session
 load_secrets
 ```
+
+---
+
+## Terminal Agent & Second Brain
+
+[OpenCode](https://opencode.ai) is the terminal agent. Global config ships from
+`dotfiles/.config/opencode/`: behavioural rules in `AGENTS.md`, and commands for the
+Obsidian-vault "second brain" — `/brief`, `/daily`, `/kb`, `/project`, `/remind`, `/report`.
+
+The vault lives at `$OBSIDIAN_VAULT` (default `~/vault`). Shell-side companions in `.helpers`:
+`jot <text>` appends to today's daily note (no LLM), `sb` opens the agent over the vault.
+
+---
+
+## Ghostty
+
+Config in `dotfiles/.config/ghostty/`. The Quake-style quick terminal is **opt-in per machine**
+via the untracked `config.local` (the installer enables it on macOS; Linux needs compositor
+setup — see `quick-terminal.conf`).
 
 ---

@@ -28,8 +28,8 @@ encrypt() {
     local recipient
     local output
 
-    if [[ ! -t 0 ]]; then
-        # If piping, the first argument (if present) is interpreted as the recipient
+    # Check if data is being piped in via stdin (e.g., echo "hi" | encrypt)
+    if [[ -p /dev/stdin ]] || [[ ! -t 0 ]]; then
         recipient="${1:-${IDENTITY:-$KEYID}}"
         output="encrypted.$(date +%s).enc"
 
@@ -38,17 +38,13 @@ encrypt() {
             return 1
         fi
 
-        # GPG reads from stdin automatically when no input file is given
+        # GPG reads from stdin automatically
         gpg --encrypt --armor --output "$output" -r "$recipient" && \
         echo "Encrypted message from stdin -> $output"
         return 0
     fi
 
     local input="${1%/}" # Removes trailing slash
-    # If file mode, 2nd arg is recipient. Fallback to env vars.
-    recipient="${2:-${IDENTITY:-$KEYID}}"
-    local file_to_encrypt="$input"
-    local is_temp_file=false
 
     if [[ -z "$input" ]]; then
         echo "Usage: encrypt <filename/folder> [recipient]"
@@ -56,10 +52,15 @@ encrypt() {
         return 1
     fi
 
+    # If file mode, 2nd arg is recipient. Fallback to env vars.
+    recipient="${2:-${IDENTITY:-$KEYID}}"
     if [[ -z "$recipient" ]]; then
         echo "Error: No recipient specified. Pass as 2nd arg or set \$IDENTITY."
         return 1
     fi
+
+    local file_to_encrypt="$input"
+    local is_temp_file=false
 
     # Handle Directory (Compress first)
     if [[ -d "$input" ]]; then
@@ -182,6 +183,41 @@ verify() {
     gpg --verify "$sig_file" "$input"
 }
 
+# Usage: __are_secrets_loaded
+#
+# Parses the .secrets file and checks if every defined key exists in the
+# current environment. Returns 0 (true) if all are loaded, 1 (false) if any are missing.
+__are_secrets_loaded() {
+    local secrets_file="$HOME/.secrets"
+    if [[ ! -f "$secrets_file" ]]; then
+        return 0
+    fi
+
+    # If keys are passed as arguments, only check those
+    if [[ $# -gt 0 ]]; then
+        for key in "$@"; do
+            # If any requested key is empty in the environment, return false
+            if [[ -z "${!key}" ]]; then
+                return 1
+            fi
+        done
+        return 0
+    fi
+
+    # Check all keys in the file
+    while IFS= read -r line; do
+        [[ -z "$line" || "$line" == \#* ]] && continue
+        if [[ "$line" =~ ^([A-Za-z0-9_]+)= ]]; then
+            local key="${BASH_REMATCH[1]}"
+            if [[ -z "${!key}" ]]; then
+                return 1
+            fi
+        fi
+    done < "$secrets_file"
+
+    return 0
+}
+
 # Usage: add_secret API_KEY "super_secret_value"
 # This runs the python tool, updates the file, AND exports to current shell
 function add_secret() {
@@ -191,13 +227,209 @@ function add_secret() {
     fi
 
     # We eval the output of the python script to set the env var immediately
-    eval "$(python3 ~/workspace/.dotfiles/bin/manage-secrets encrypt "$1" "$2")"
+    eval "$(manage-secrets encrypt "$1" "$2")"
 }
 
 # Usage: load_secrets
 # This prompts for YubiKey PIN (once per session/day) and exports all vars
 function load_secrets() {
     echo "Loading secrets from YubiKey..."
-    # Eval the output to export variables into current shell
-    eval "$(python3 ~/workspace/.dotfiles/bin/manage-secrets decrypt)"
+    # Pass all arguments (e.g., specific keys) down to the python script
+    eval "$(manage-secrets decrypt "$@")"
+}
+
+# ============================================================
+# Kubernetes Helpers
+# ============================================================
+kube-debug() {
+    local namespace="${KUBE_NS:-default}"
+    local pod=""
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -n|--namespace)
+                namespace="$2"
+                shift 2
+                ;;
+            *)
+                # If it's not a flag, assume it's the pod name
+                pod="$1"
+                shift
+                ;;
+        esac
+    done
+
+    # Validate that a pod was actually provided
+    if [[ -z "$pod" ]]; then
+        echo "Error: Pod name is required."
+        echo "Usage: kube-debug [-n namespace] <pod_name>"
+        return 1
+    fi
+
+    # Execute the command
+    echo "Attaching debug container to '$pod' in namespace '$namespace'..."
+    kubectl debug -it -n "$namespace" "$pod" --image=alpine
+}
+
+kube-dump() {
+    local namespace="${KUBE_NS:-default}"
+    local pod=""
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -n|--namespace) namespace="$2"; shift 2 ;;
+            *) pod="$1"; shift ;;
+        esac
+    done
+
+    if [[ -z "$pod" ]]; then
+        echo "Usage: kube-dump [-n namespace] <pod_name>"
+        return 1
+    fi
+
+    local filename="${pod}_$(date +%s).log"
+    echo "Dumping ALL logs for '$pod' in '$namespace' to $filename..."
+
+    # --all-containers gets sidecars too
+    # --timestamps adds exact UTC times to the left column
+    # --tail=-1 ensures it grabs from the very beginning of the container's life
+    kubectl logs -n "$namespace" "$pod" --all-containers --timestamps --tail=-1 > "$filename"
+
+    echo "✅ Done. You can now open $filename in your editor."
+}
+
+kube-crash() {
+    local namespace="${KUBE_NS:-default}"
+    local pod=""
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -n|--namespace) namespace="$2"; shift 2 ;;
+            *) pod="$1"; shift ;;
+        esac
+    done
+
+    if [[ -z "$pod" ]]; then
+        echo "Usage: kube-crash [-n namespace] <pod_name>"
+        return 1
+    fi
+
+    echo "Fetching previous (crashed) logs for '$pod' in '$namespace'..."
+    # The -p flag (previous) is the magic here
+    kubectl logs -n "$namespace" "$pod" -p --all-containers | less
+}
+
+alias kfind='kubectl get pods -A | rg -i'
+
+# ============================================================
+# Git Helpers
+# ============================================================
+git-pull() {
+    local target_dir
+
+    if [[ -z "$1" ]]; then
+        # Default to current directory if no argument provided
+        target_dir="$(pwd)"
+    else
+        target_dir="$WORKSPACE/$1"
+    fi
+
+    if [[ ! -d "$target_dir/.git" ]]; then
+        echo "Error: Directory '$target_dir' is not a git repository."
+        return 1
+    fi
+
+    echo "Pulling in $target_dir..."
+    git -C "$target_dir" pull
+}
+
+# git-gone: delete local branches whose upstream on the remote is gone.
+# Prunes remote-tracking refs first, then deletes any local branch that
+# `git branch -vv` marks as '[<remote>: gone]'. Skips the current branch.
+# Usage: git-gone [-n|--dry-run] [-f|--force]
+#   -n, --dry-run  list what would be deleted without deleting
+#   -f, --force    force-delete (git branch -D) unmerged branches too
+git-gone() {
+    if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        echo "Error: not inside a git repository." >&2
+        return 1
+    fi
+
+    local dry_run=0 force=0
+    for arg in "$@"; do
+        case "$arg" in
+            -n|--dry-run) dry_run=1 ;;
+            -f|--force)   force=1 ;;
+            *)
+                echo "Unknown option: $arg" >&2
+                echo "Usage: git-gone [-n|--dry-run] [-f|--force]" >&2
+                return 1
+                ;;
+        esac
+    done
+
+    echo "Pruning remote-tracking refs..."
+    git fetch --prune >/dev/null 2>&1
+
+    # Branches whose upstream is gone. Handle the '*'/'+' checked-out markers.
+    local branches
+    branches=$(git branch -vv | awk '/: gone\]/ { if ($1 == "*" || $1 == "+") print $2; else print $1 }')
+
+    if [[ -z "$branches" ]]; then
+        echo "No gone branches to clean up."
+        return 0
+    fi
+
+    local current
+    current=$(git symbolic-ref --short HEAD 2>/dev/null)
+
+    local flag="-d"
+    [[ $force -eq 1 ]] && flag="-D"
+
+    local b
+    while IFS= read -r b; do
+        [[ -z "$b" ]] && continue
+        if [[ "$b" == "$current" ]]; then
+            echo "Skipping current branch: $b"
+            continue
+        fi
+        if [[ $dry_run -eq 1 ]]; then
+            echo "Would delete: $b"
+        else
+            git branch "$flag" "$b"
+        fi
+    done <<< "$branches"
+}
+
+# ============================================================
+# Second brain (Obsidian vault)
+# ============================================================
+: "${OBSIDIAN_VAULT:=$HOME/vault}"
+export OBSIDIAN_VAULT
+
+# jot: append a raw bullet to today's daily note — no LLM, instant.
+# For agent-formatted capture use /daily inside sb.
+# Usage: jot remember to fix the fence   |   jot "#idea try X"
+jot() {
+    if [[ $# -eq 0 ]]; then
+        echo "Usage: jot <text>" >&2
+        return 1
+    fi
+    local dir="$OBSIDIAN_VAULT/Daily Notes"
+    local file="$dir/$(date +%F).md"
+    mkdir -p "$dir"
+    printf '* %s %s\n' "$(date +%H:%M)" "$*" >> "$file"
+    echo "jotted → Daily Notes/$(date +%F).md"
+}
+
+# sb: enter the vault and launch the terminal agent over it as a second brain.
+# Forwards any args to opencode (e.g. `sb /brief`).
+sb() {
+    cd "$OBSIDIAN_VAULT" || return 1
+    if command -v opencode >/dev/null 2>&1; then
+        opencode "$@"
+    else
+        echo "opencode is not installed — vault is at $OBSIDIAN_VAULT (https://opencode.ai)"
+    fi
 }

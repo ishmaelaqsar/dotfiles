@@ -1,3 +1,9 @@
+# If not running interactively, don't do anything
+case $- in
+    *i*) ;;
+      *) return;;
+esac
+
 # ============================================================
 # Starship Prompt
 # ============================================================
@@ -15,6 +21,11 @@ fi
 # Source aliases
 if [[ -f ~/.aliases ]]; then
     . ~/.aliases
+fi
+
+# Source Helper Functions
+if [[ -f ~/.helpers ]]; then
+    . ~/.helpers
 fi
 
 # Local workspace
@@ -44,7 +55,9 @@ gpg-connect-agent updatestartuptty /bye >/dev/null 2>&1
 # ============================================================
 
 if ! shopt -oq posix; then
-    if [[ -f /usr/share/bash-completion/bash_completion ]]; then
+    if [[ -f /opt/homebrew/etc/bash_completion ]]; then
+        . /opt/homebrew/etc/bash_completion
+    elif [[ -f /usr/share/bash-completion/bash_completion ]]; then
         . /usr/share/bash-completion/bash_completion
     elif [[ -f /etc/bash_completion ]]; then
         . /etc/bash_completion
@@ -61,6 +74,12 @@ if command -v podman >/dev/null 2>&1; then
     source <(podman completion bash)
 fi
 
+# FNM setup
+if command -v fnm >/dev/null 2>&1; then
+    eval "$(fnm env --use-on-cd --shell bash)"
+    source <(fnm completions --shell bash)
+fi
+
 # ============================================================
 # User-Specific Extensions
 # ============================================================
@@ -71,4 +90,3 @@ if [[ -d ~/.bashrc.d ]]; then
     done
 fi
 unset rc
-

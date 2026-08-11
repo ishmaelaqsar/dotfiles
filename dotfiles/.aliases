@@ -7,22 +7,67 @@ alias ....='cd ../../..'
 alias ~='cd ~'
 alias -- -='cd -'  # Go back to previous directory
 
-alias grep='rg --smart-case'
-alias find='fd'
-alias ls='eza --icons --group-directories-first'
+# Modern replacements, guarded so a fresh box keeps stock ls/grep/find.
+# Debian installs fd as `fdfind`, hence the elif.
+command -v rg >/dev/null && alias grep='rg --smart-case'
+if command -v fd >/dev/null; then
+    alias find='fd'
+elif command -v fdfind >/dev/null; then
+    alias find='fdfind'
+fi
+if command -v eza >/dev/null; then
+    alias ls='eza --icons --group-directories-first'
+    alias l='eza --icons --group-directories-first'
+    alias ll='eza --icons --group-directories-first -l'
+    alias la='eza --icons --group-directories-first -a'
+    alias lla='eza --icons --group-directories-first -la'
+    alias llt='eza --icons --group-directories-first -lars modified'
+fi
 
 # Quickly reload bash configuration
 alias reload='source ~/.bashrc && echo "Bash config reloaded."'
+
+# Restart GPG agent to fix YubiKey issues
+alias fixgpg="gpgconf --kill gpg-agent && gpg-connect-agent /bye && gpg --card-status"
 
 # Show my public IP (useful for whitelisting)
 alias myip='curl ifconfig.me'
 
 # Usage: cv some-project-name
-# It finds the folder and opens it in VS Code
+# Fuzzy find a folder and opens it in VS Code
 cv() {
     local dir
-    dir=$(fd --type d --max-depth 3 . "$WORKSPACE" | fzf --query="$1" --select-1 --exit-0)
+    dir=$(fd --type d --max-depth 3 . "$WORKSPACE" | fzf --height 40% --reverse --query="$1" --select-1 --exit-0)
     if [ -n "$dir" ]; then
         code "$dir"
     fi
 }
+
+# Fuzzy find and cd into a directory within $WORKSPACE
+pj() {
+    local dir
+    dir=$(fd --type d --max-depth 3 . "$WORKSPACE" | fzf --height 40% --reverse --prompt="Workspace > ")
+    if [[ -n "$dir" ]]; then
+        cd "$dir" || return
+    fi
+}
+
+# List all background Zellij sessions
+alias zl="zellij list-sessions"
+
+# Attach to an existing session by name (Usage: za <session_name>)
+alias za="zellij attach"
+
+# "Smart" Zellij Start:
+# Typing 'zm' will attach to a session named "main" if it exists.
+# If it doesn't exist, it will create it.
+alias zm="zellij attach -c main"
+
+# Start a new named Zellij session
+alias zn="zellij attach -c"
+
+# Kill all active Zellij sessions instantly
+alias zkill="zellij kill-all-sessions"
+
+# Deletes exited/ghost sessions (The cleanup command)
+alias zclean="zellij delete-all-sessions --force"

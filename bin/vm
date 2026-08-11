@@ -10,6 +10,7 @@ import subprocess
 import argparse
 import shutil
 import platform
+import time
 
 # ------------------------------------------------------------
 # Backend Configuration (The "Mapping" Logic)
@@ -465,19 +466,30 @@ def cmd_ssh(args):
 
     if args.dry_run:
         print(f"🛑 [DRY-RUN] Resolving IP for {name}...")
-
-    ip = get_vm_ip(name)
+        ip = "1.2.3.4 (PLACEHOLDER)"
+    else:
+        print(f"🔍 Waiting for {name} to report IP address...", end="", flush=True)
+        ip = None
+        for _ in range(30): # Wait up to 60 seconds
+            ip = get_vm_ip(name)
+            if ip:
+                print(f" Found: {ip}")
+                break
+            print(".", end="", flush=True)
+            time.sleep(2)
 
     if not ip:
-        if args.dry_run:
-            ip = "1.2.3.4 (PLACEHOLDER)"
-        else:
-            print(
-                f"❌ Cannot find IP for {name}. Ensure it is running.", file=sys.stderr
-            )
-            sys.exit(1)
+        print(f"\n❌ Cannot find IP for {name}. Ensure it is running and agent is installed.", file=sys.stderr)
+        sys.exit(1)
 
-    ssh_cmd = ["ssh", f"{user}@{ip}"] + args.extra
+    # Ignore host keys and don't save them to known_hosts for local VMs
+    ssh_cmd = [
+        "ssh", 
+        "-o", "StrictHostKeyChecking=no", 
+        "-o", "UserKnownHostsFile=/dev/null",
+        "-o", "LogLevel=ERROR",
+        f"{user}@{ip}"
+    ] + args.extra
 
     if args.dry_run:
         print(f"🛑 [DRY-RUN] Would exec: {' '.join(ssh_cmd)}")
@@ -495,10 +507,18 @@ def cmd_deploy(args):
         print(f"🛑 [DRY-RUN] Resolving IP...")
         ip = "1.2.3.4"
     else:
-        ip = get_vm_ip(name)
+        print(f"🔍 Waiting for {name} to report IP address...", end="", flush=True)
+        ip = None
+        for _ in range(30):
+            ip = get_vm_ip(name)
+            if ip:
+                print(f" Found: {ip}")
+                break
+            print(".", end="", flush=True)
+            time.sleep(2)
 
     if not ip:
-        print(f"❌ Cannot find IP for {name}.", file=sys.stderr)
+        print(f"\n❌ Cannot find IP for {name}.", file=sys.stderr)
         sys.exit(1)
 
     script = args.script
@@ -513,6 +533,9 @@ def cmd_deploy(args):
         return
 
     print(f"📦 Running {script} against {name} ({ip})...")
+    
+    # We don't automatically inject the SSH ignores into the deploy script since 
+    # it executes a separate file, but the script author should be aware.
     subprocess.run(cmd)
 
 
@@ -524,11 +547,18 @@ def cmd_setup(args):
         print(f"🛑 [DRY-RUN] Would find IP and install guest-agent on {name}")
         return
 
-    print(f"🔍 Attempting to find IP for {name}...")
-    ip = get_vm_ip(name)
+    print(f"🔍 Waiting for {name} to report IP address...", end="", flush=True)
+    ip = None
+    for _ in range(30):
+        ip = get_vm_ip(name)
+        if ip:
+            print(f" Found: {ip}")
+            break
+        print(".", end="", flush=True)
+        time.sleep(2)
 
     if not ip:
-        print(f"❌ Could not detect IP for {name}.", file=sys.stderr)
+        print(f"\n❌ Could not detect IP for {name}.", file=sys.stderr)
         print(f"   The VM must be running and accessible via network.", file=sys.stderr)
         print(
             f"   On macOS, you may need to configure networking or access the VM console first.",
@@ -566,7 +596,15 @@ def cmd_setup(args):
 
     remote_cmd = "\n".join(install_script_parts)
 
-    ssh_cmd = ["ssh", f"{user}@{ip}", "-t", f"bash -c '{remote_cmd}'"]
+    ssh_cmd = [
+        "ssh", 
+        "-o", "StrictHostKeyChecking=no", 
+        "-o", "UserKnownHostsFile=/dev/null",
+        "-o", "LogLevel=ERROR",
+        f"{user}@{ip}", 
+        "-t", 
+        f"bash -c '{remote_cmd}'"
+    ]
 
     try:
         subprocess.run(ssh_cmd, check=True)
@@ -678,3 +716,4 @@ if __name__ == "__main__":
         print("   Continuing anyway...\n", file=sys.stderr)
 
     main()
+
