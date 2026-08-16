@@ -134,7 +134,6 @@ services:
     volumes:
       - /mnt/media:/srv
       - ./filebrowser/filebrowser.db:/database/filebrowser.db
-      - ./filebrowser/settings.json:/config/settings.json
     restart: unless-stopped
 
   caddy:
@@ -198,9 +197,11 @@ jellyfin.<your-domain>.dev {
 ```bash
 cd ~/media-stack
 
-# 1. Pre-initialize FileBrowser DB
+# 1. Pre-initialize the FileBrowser database.
+# Docker creates a directory for a bind mount whose source is absent, so the
+# file must exist first. `touch` gives it your UID, which matches the
+# container's 1000:1000 — no chmod is needed.
 touch ./filebrowser/filebrowser.db
-chmod 666 ./filebrowser/filebrowser.db
 
 # 2. Final ownership check
 sudo chown -R $USER:$USER ~/media-stack
