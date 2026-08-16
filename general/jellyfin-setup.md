@@ -48,6 +48,22 @@ sudo nano /etc/fstab
 sudo mount -a
 ```
 
+### Make Docker wait for the drive
+Every container except Caddy bind-mounts `/mnt/media`. If Docker starts before
+the drive is ready — or the drive is switched off — those containers fail to
+create, and `restart: unless-stopped` does not retry them. Caddy keeps running,
+so the site answers with a 502 and the box looks healthy.
+
+```bash
+sudo systemctl edit docker.service
+```
+```ini
+[Unit]
+RequiresMountsFor=/mnt/media
+```
+`nofail` in fstab still lets the Pi boot without the drive. This only stops
+Docker racing the mount.
+
 ---
 
 ## 3. Docker & Directory Setup
@@ -219,3 +235,51 @@ docker compose up -d
 2.  **qBittorrent:** Go to Advanced Settings and set **"Physical memory usage limit"** to **128 MiB**.
 3.  **Jellyfin:** Ensure Hardware Acceleration is set to **V4L2**.
 4.  **ZRAM:** Run `zramctl` to ensure your swap is compressed in RAM for better performance.
+
+---
+
+## 7. Troubleshooting
+
+### The site returns 502, but SSH works
+Caddy is up and the other containers are not. Check the media drive first: it
+is the usual cause, and a drive that is switched off looks identical to a drive
+that failed.
+
+```bash
+cd ~/media-stack
+docker compose ps -a          # `ps` alone hides stopped containers
+ls /mnt/media                 # force the automount
+findmnt /mnt/media            # must show ext4, not only autofs
+```
+`Exited (128)` on every container that mounts `/mnt/media` confirms it. Turn
+the drive on, then `docker compose up -d`.
+
+The 502 log line is misleading. It shows Caddy dialling the **host** address,
+not a container:
+```
+dial tcp 192.168.1.252:8096: connect: connection refused
+```
+With the container gone, Docker's embedded DNS has no record for `jellyfin`, so
+Caddy falls through to the host resolver — often the LAN DNS server — which
+answers with the Pi's own address. Nothing listens there. The Caddyfile is not
+at fault.
+
+### Do not test Jellyfin with `curl localhost:8096`
+No service in this stack publishes a host port except Caddy. Jellyfin is
+reachable only on the Docker network, so that test always fails. Test one of
+these instead:
+```bash
+curl -I http://localhost                                   # through Caddy
+docker exec caddy wget -qS -O /dev/null http://jellyfin:8096/
+```
+Give Jellyfin 30-60 seconds after `up -d` before you judge. First start on a Pi
+is slow.
+
+### Containers will not start after a kernel upgrade
+Check the cgroup flags. A kernel package can rewrite `cmdline.txt`, and
+Jellyfin's memory limit needs the memory controller:
+```bash
+grep memory /proc/cgroups     # the "enabled" column must read 1
+```
+Raspberry Pi OS ships `cgroup_disable=memory`. Remove it rather than appending
+`cgroup_enable=memory` after it — both on one line works only by parse order.
