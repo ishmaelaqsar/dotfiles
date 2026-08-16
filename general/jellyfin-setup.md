@@ -238,7 +238,66 @@ docker compose up -d
 
 ---
 
-## 7. Troubleshooting
+## 7. Watchdog
+
+This stack fails quietly. The drive goes off, four containers stop, and Caddy
+keeps answering, so nothing looks wrong. A watchdog turns that silence into an
+alarm.
+
+Create a check at healthchecks.io. Set the period to 15 minutes and the grace
+time to 30 minutes. This Pi has no msmtp relay, so healthchecks.io sends the
+mail.
+
+```bash
+sudo tee /etc/media-stack-check.env >/dev/null <<'EOF'
+HC_URL=https://hc-ping.com/<your-uuid>
+EOF
+sudo chmod 600 /etc/media-stack-check.env
+```
+
+### `sudo nano /usr/local/bin/media-stack-check.sh`
+```bash
+#!/bin/bash
+set -euo pipefail
+
+# shellcheck source=/dev/null
+[ -r /etc/media-stack-check.env ] && . /etc/media-stack-check.env
+HC_URL="${HC_URL:-}"
+cd /home/<your-username>/media-stack
+
+hc() {   # $1 = "" | /fail
+    [ -n "$HC_URL" ] || return 0
+    curl -fsS -m 10 -o /dev/null "${HC_URL}$1" || true
+}
+
+# 1. The media drive. This is the usual cause.
+mountpoint -q /mnt/media || { hc /fail; exit 1; }
+
+# 2. Every service runs. Compare the count, because a container that fails to
+#    create does not appear in `docker compose ps` at all.
+running=$(docker compose ps --services --filter status=running | wc -l)
+expected=$(docker compose config --services | wc -l)
+[ "$running" -eq "$expected" ] || { hc /fail; exit 1; }
+
+# 3. Caddy answers.
+curl -fsS -m 10 -o /dev/null http://localhost/ || { hc /fail; exit 1; }
+
+hc
+```
+```bash
+sudo chown root:root /usr/local/bin/media-stack-check.sh
+sudo chmod 700 /usr/local/bin/media-stack-check.sh
+sudo /usr/local/bin/media-stack-check.sh && echo OK
+```
+
+Schedule it in root's crontab with `sudo crontab -e`:
+```bash
+*/15 * * * * /usr/local/bin/media-stack-check.sh
+```
+
+---
+
+## 8. Troubleshooting
 
 ### The site returns 502, but SSH works
 Caddy is up, and the other containers are not. Check the media drive first. It
