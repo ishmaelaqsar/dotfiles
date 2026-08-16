@@ -9,9 +9,19 @@
 ## 🏗️ Phase 1: System Foundation
 ### 1. OS & Security Prep
 * **OS:** Raspberry Pi OS Lite (64-bit).
-* **Enable AppArmor:** 
+* **Enable AppArmor:** append ` lsm=apparmor` to the single line in
+  `/boot/firmware/cmdline.txt`. Edit it by hand. The `sed` below is not
+  idempotent, and a kernel package upgrade can rewrite the file, so check the
+  flag again after any upgrade.
   ```bash
-  sudo sed -i '$ s/$/ lsm=apparmor/' /boot/firmware/cmdline.txt
+  sudo sed -i '$ s/$/ lsm=apparmor/' /boot/firmware/cmdline.txt   # once only
+  sudo reboot
+  ```
+  Verify after the reboot. `aa-status` reporting `apparmor filesystem is not
+  mounted` means the flag never took, and every profile below is inert:
+  ```bash
+  grep -o 'lsm=[a-z,]*' /proc/cmdline
+  sudo aa-status
   ```
 * **Install Core Utilities & Security:**
   ```bash
@@ -58,6 +68,11 @@ password       <16-character-app-password>
 account default : personal
 ```
 `sudo chmod 600 /etc/msmtprc`
+
+Mode 600 makes the file **root-only**. msmtp then reports `no configuration
+file available` for any other user, which reads like a missing file rather than
+a permission problem. Keep 600 and run msmtp as root, which is what the backup
+job in Phase 7 does.
 
 ### 2. AppArmor Logging Fix
 ```bash
@@ -234,45 +249,84 @@ bantime = 1h
 ---
 
 ## 💾 Phase 7: Backups & Automation
-### 1. Rclone Backup Script: `nano ~/backup-forgejo.sh`
+
+**Run the whole job as root.** `/var/lib/forgejo` is `git:git` and mode 750, so
+a normal user cannot read it and rclone fails with `permission denied`. Root
+also reads `/etc/msmtprc`, which is mode 600. Running as root removes both
+problems, and it needs no sudo rules.
+
+### 1. Give root its own rclone remote
+rclone reads the configuration of the user that runs it. Root has none by
+default, so copy yours:
+```bash
+sudo mkdir -p /root/.config/rclone
+sudo cp ~/.config/rclone/rclone.conf /root/.config/rclone/
+sudo chmod 600 /root/.config/rclone/rclone.conf
+sudo rclone lsd gdrive:        # must list your folders
+```
+
+### 2. Backup Script: `sudo nano /usr/local/bin/backup-forgejo.sh`
 ```bash
 #!/bin/bash
 set -euo pipefail
 
 # Always bring Forgejo back, even if rclone hangs or the script is killed.
 # Without this trap, one bad run leaves the server down until you notice.
-trap 'sudo systemctl start forgejo' EXIT
+trap 'systemctl start forgejo' EXIT
 
 notify() {
     printf 'Subject: %s\n\n%s\n' "$1" "$2" | msmtp -a dev <user>@<your-domain>.dev
 }
 
-sudo systemctl stop forgejo
+systemctl stop forgejo
 
+# Exclude the volatile state. Forgejo rebuilds all of it at startup, and it
+# changes on every restart, so including it guarantees a permanent mismatch
+# between the host and the remote. A clean shutdown checkpoints the SQLite WAL
+# into forgejo.db, so the -wal and -shm files are not needed either.
 # No --progress: cron has no tty, so it only fills the mail with noise.
-if rclone sync /var/lib/forgejo/ gdrive:Forgejo_Backup; then
+if rclone sync /var/lib/forgejo/ gdrive:Forgejo_Backup \
+        --exclude '/data/queues/**' \
+        --exclude '/data/indexers/**' \
+        --exclude '/data/sessions/**' \
+        --exclude '*.db-shm' --exclude '*.db-wal'; then
     notify "Backup Success" "rclone sync completed."
 else
-    notify "BACKUP FAILED" "rclone sync failed. Check the rclone log."
+    notify "BACKUP FAILED" "rclone sync failed on $(hostname)."
 fi
 ```
+```bash
+sudo chown root:root /usr/local/bin/backup-forgejo.sh
+sudo chmod 700 /usr/local/bin/backup-forgejo.sh
+sudo /usr/local/bin/backup-forgejo.sh      # test it before you schedule it
+```
 
-### 2. Automation (`crontab -e`)
+### 3. Automation (`sudo crontab -e`)
+Use **root's** crontab, not your own:
 ```bash
 # Daily Backup at 3 AM
-0 3 * * * /bin/bash /home/<your-username>/backup-forgejo.sh
+0 3 * * * /usr/local/bin/backup-forgejo.sh
 # Weekly Update & Reboot. apt-get needs the noninteractive settings, or an
 # unattended upgrade blocks on a config-file prompt and never reboots.
-0 4 * * 0 sudo DEBIAN_FRONTEND=noninteractive apt-get update -y && sudo DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::=--force-confold upgrade && /sbin/reboot
+0 4 * * 0 DEBIAN_FRONTEND=noninteractive apt-get update -y && DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::=--force-confold upgrade && /sbin/reboot
 ```
+Raspberry Pi OS already grants the first user `NOPASSWD: ALL` in
+`/etc/sudoers.d/010_<your-username>-nopasswd`. Confirm with `sudo cat
+/etc/sudoers.d/010_*`. Do not add a second sudoers file; root cron needs none.
 
-### 3. Sudo Rights for Cron
-Both jobs run from a user crontab and call `sudo`, where no password prompt is
-possible. Grant the exact commands with
-`sudo visudo -f /etc/sudoers.d/forgejo-backup`:
-```text
-<your-username> ALL=(root) NOPASSWD: /usr/bin/systemctl start forgejo, /usr/bin/systemctl stop forgejo
+### 4. Verify the Backup
+A backup you never check is a guess. `rclone check` compares both sides and
+reports differences without changing anything:
+```bash
+sudo rclone check /var/lib/forgejo/ gdrive:Forgejo_Backup --one-way \
+    --exclude '/data/queues/**' \
+    --exclude '/data/indexers/**' \
+    --exclude '/data/sessions/**' \
+    --exclude '*.db-shm' --exclude '*.db-wal'
 ```
+Use the same exclusions as the sync. Without them the check always reports
+differences on the queue, index and SQLite scratch files, because the restart
+at the end of the previous run rewrites them.
 
 ---
 
@@ -305,4 +359,23 @@ sudo systemctl start forgejo
 ## 🩹 Phase 10: Troubleshooting
 **Tunnel Connectivity:** If the tunnel fails after a reboot, check logs:
 `journalctl -u cloudflared`. Often caused by system time being out of sync (Pi Zero quirk).
-**SMTP Failures:** Check `tail -f /var/log/msmtp.log`. Common fix: Renew Google App Password.
+
+**SMTP Failures:** Check `tail -f /var/log/msmtp.log`. Common fix: Renew Google
+App Password. `account dev not found: no configuration file available` is not a
+missing account — it means the caller cannot read `/etc/msmtprc`. Run as root.
+If AppArmor enforces the `msmtp` profile, a `passwordeval` command may be
+blocked; check with `journalctl -k | grep -i apparmor`.
+
+**Backup Failures:** The job is silent by design, so prove it runs.
+```bash
+sudo crontab -l                                  # the schedule lives in root's crontab
+journalctl -u cron --since "7 days ago" | grep backup-forgejo
+journalctl -u forgejo --since "7 days ago" | grep -i stopping
+sudo bash -x /usr/local/bin/backup-forgejo.sh    # watch a run end to end
+```
+`failed to open directory "": open /var/lib/forgejo: permission denied` means
+the job is not running as root. `didn't find section in config file` means root
+has no `/root/.config/rclone/rclone.conf` — see Phase 7 step 1.
+
+A folder date of months ago in the Google Drive web interface proves nothing.
+Drive does not update a folder when its contents change. Use `rclone check`.
