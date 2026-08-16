@@ -1,6 +1,6 @@
-# Redacted template for /etc/msmtprc — substitute the placeholders by hand.
-# msmtp does NOT expand shell variables in this file, so a "$VAR" here is sent
-# as that literal string.
+# Redacted template for /etc/msmtprc. Substitute the placeholders by hand.
+# msmtp does NOT expand a shell variable in this file. A "$VAR" that stays here
+# becomes that literal string.
 
 # Default settings
 defaults

@@ -2,7 +2,7 @@
 **Hardware:** Raspberry Pi Zero 2W (512MB RAM)  
 **OS:** Raspberry Pi OS Lite (64-bit)  
 **Security:** AppArmor (Enforced) + fail2ban (Active) + Caddy (DNS-01 TLS)  
-**Goal:** Trusted mail delivery, high-speed local Git pushes, and secure global access.
+**Goal:** Send trusted mail. Push to Git quickly on the LAN. Keep global access secure.
 
 ---
 
@@ -10,15 +10,16 @@
 ### 1. OS & Security Prep
 * **OS:** Raspberry Pi OS Lite (64-bit).
 * **Enable AppArmor:** append ` lsm=apparmor` to the single line in
-  `/boot/firmware/cmdline.txt`. Edit it by hand. The `sed` below is not
-  idempotent, and a kernel package upgrade can rewrite the file, so check the
-  flag again after any upgrade.
+  `/boot/firmware/cmdline.txt`. Edit the file by hand. The `sed` command below
+  is not idempotent. A kernel package upgrade can also rewrite the file. Check
+  the flag again after each upgrade.
   ```bash
   sudo sed -i '$ s/$/ lsm=apparmor/' /boot/firmware/cmdline.txt   # once only
   sudo reboot
   ```
-  Verify after the reboot. `aa-status` reporting `apparmor filesystem is not
-  mounted` means the flag never took, and every profile below is inert:
+  Check the result after the reboot. If `aa-status` reports `apparmor
+  filesystem is not mounted`, the flag did not take effect. Every profile below
+  is then inert:
   ```bash
   grep -o 'lsm=[a-z,]*' /proc/cmdline
   sudo aa-status
@@ -39,7 +40,7 @@ sudo reboot
 ---
 
 ## 📧 Phase 2: Multi-Identity Mail Relay (msmtp)
-Configures the Pi to send trusted mail from your custom domain aliases using Google’s SMTP.
+This relay sends trusted mail from your domain aliases. It sends the mail through the Google SMTP server.
 
 ### 1. Configure Relay: `sudo nano /etc/msmtprc`
 ```text
@@ -69,10 +70,10 @@ account default : personal
 ```
 `sudo chmod 600 /etc/msmtprc`
 
-Mode 600 makes the file **root-only**. msmtp then reports `no configuration
-file available` for any other user, which reads like a missing file rather than
-a permission problem. Keep 600 and run msmtp as root, which is what the backup
-job in Phase 7 does.
+Mode 600 makes the file **root-only**. For any other user, msmtp then reports
+`no configuration file available`. That message looks like a missing file, but
+the true cause is the permission. Keep mode 600, and run msmtp as root. The
+backup job in Phase 7 does this.
 
 ### 2. AppArmor Logging Fix
 ```bash
@@ -114,12 +115,12 @@ SENDMAIL_PATH = /usr/bin/msmtp -a dev
 FROM = "Forgejo Hub" <<dev-alias>@<your-domain>.dev>
 ```
 
-`TRUSTED_PROXIES` gives Forgejo the real client IP from Caddy. Do **not** add
-`REVERSE_PROXY_AUTHENTICATION_USER` here. That key names the header which
-carries an authenticated **username** (its default is `X-WEBAUTH-USER`), not
-the client IP. Point it at `X-Forwarded-For` and a client-supplied header
-becomes a login name as soon as `[service] ENABLE_REVERSE_PROXY_AUTHENTICATION`
-is on.
+`TRUSTED_PROXIES` gives Forgejo the true client IP from Caddy. Do **not** add
+`REVERSE_PROXY_AUTHENTICATION_USER` here. That key names the header which holds
+an authenticated **username**. Its default is `X-WEBAUTH-USER`. It does not
+name the client IP. If you set it to `X-Forwarded-For`, the client controls a
+login name. This becomes a risk when you set `[service]
+ENABLE_REVERSE_PROXY_AUTHENTICATION` to true.
 
 ### 3. Service Setup: `sudo nano /etc/systemd/system/forgejo.service`
 ```ini
@@ -250,10 +251,10 @@ bantime = 1h
 
 ## 💾 Phase 7: Backups & Automation
 
-**Run the whole job as root.** `/var/lib/forgejo` is `git:git` and mode 750, so
-a normal user cannot read it and rclone fails with `permission denied`. Root
-also reads `/etc/msmtprc`, which is mode 600. Running as root removes both
-problems, and it needs no sudo rules.
+**Run the whole job as root.** `/var/lib/forgejo` is `git:git` and mode 750. A
+normal user cannot read it, and rclone then stops with `permission denied`.
+Root also reads `/etc/msmtprc`, which is mode 600. Root removes both problems,
+and it needs no sudo rules.
 
 ### 1. Give root its own rclone remote
 rclone reads the configuration of the user that runs it. Root has none by
@@ -281,9 +282,9 @@ notify() {
 systemctl stop forgejo
 
 # Exclude the volatile state. Forgejo rebuilds all of it at startup, and it
-# changes on every restart, so including it guarantees a permanent mismatch
-# between the host and the remote. A clean shutdown checkpoints the SQLite WAL
-# into forgejo.db, so the -wal and -shm files are not needed either.
+# changes at each restart. If you include it, the host and the remote never
+# agree. A clean shutdown also moves the SQLite WAL into forgejo.db, so the
+# -wal and -shm files are not necessary.
 # No --progress: cron has no tty, so it only fills the mail with noise.
 if rclone sync /var/lib/forgejo/ gdrive:Forgejo_Backup \
         --exclude '/data/queues/**' \
@@ -315,8 +316,9 @@ Raspberry Pi OS already grants the first user `NOPASSWD: ALL` in
 /etc/sudoers.d/010_*`. Do not add a second sudoers file; root cron needs none.
 
 ### 4. Verify the Backup
-A backup you never check is a guess. `rclone check` compares both sides and
-reports differences without changing anything:
+Always check the backup. An unchecked backup is only an assumption. `rclone
+check` compares the two sides. It reports the differences, and it changes
+nothing:
 ```bash
 sudo rclone check /var/lib/forgejo/ gdrive:Forgejo_Backup --one-way \
     --exclude '/data/queues/**' \
@@ -324,16 +326,16 @@ sudo rclone check /var/lib/forgejo/ gdrive:Forgejo_Backup --one-way \
     --exclude '/data/sessions/**' \
     --exclude '*.db-shm' --exclude '*.db-wal'
 ```
-Use the same exclusions as the sync. Without them the check always reports
-differences on the queue, index and SQLite scratch files, because the restart
-at the end of the previous run rewrites them.
+Use the same exclusions as the sync. The previous run restarts Forgejo at its
+end, and that restart rewrites the queue, the index and the SQLite scratch
+files. Without the exclusions, the check always reports these differences.
 
 ---
 
 ## 📱 Phase 8: Mobile & Networking
-* **Split-Brain DNS:** Map `git.<your-domain>.dev` to Pi's internal IP in your router for local speed.
+* **Split-Brain DNS:** In your router, map `git.<your-domain>.dev` to the internal IP of the Pi. This keeps local access fast.
 * **SPF Record:** TXT record `v=spf1 include:_spf.mx.cloudflare.net include:_spf.google.com ~all`.
-* **Mobile Mail:** Sync identities to Gmail App using "Send Mail As" (Desktop Settings) with `smtp.gmail.com` and App Password.
+* **Mobile Mail:** Add the identities to the Gmail app with "Send Mail As" in the desktop settings. Use `smtp.gmail.com` and the App Password.
 
 ---
 
@@ -357,14 +359,16 @@ sudo systemctl start forgejo
 ---
 
 ## 🩹 Phase 10: Troubleshooting
-**Tunnel Connectivity:** If the tunnel fails after a reboot, check logs:
-`journalctl -u cloudflared`. Often caused by system time being out of sync (Pi Zero quirk).
+**Tunnel Connectivity:** If the tunnel fails after a reboot, read the log with
+`journalctl -u cloudflared`. The usual cause is an incorrect system time. This
+is a known fault of the Pi Zero.
 
-**SMTP Failures:** Check `tail -f /var/log/msmtp.log`. Common fix: Renew Google
-App Password. `account dev not found: no configuration file available` is not a
-missing account — it means the caller cannot read `/etc/msmtprc`. Run as root.
-If AppArmor enforces the `msmtp` profile, a `passwordeval` command may be
-blocked; check with `journalctl -k | grep -i apparmor`.
+**SMTP Failures:** Read `/var/log/msmtp.log`. The usual fix is a new Google App
+Password. The message `account dev not found: no configuration file available`
+does not mean a missing account. It means the caller cannot read
+`/etc/msmtprc`. Run msmtp as root. AppArmor can also block a `passwordeval`
+command when it enforces the `msmtp` profile. Check with `journalctl -k | grep
+-i apparmor`.
 
 **Backup Failures:** The job is silent by design, so prove it runs.
 ```bash
@@ -377,5 +381,5 @@ sudo bash -x /usr/local/bin/backup-forgejo.sh    # watch a run end to end
 the job is not running as root. `didn't find section in config file` means root
 has no `/root/.config/rclone/rclone.conf` — see Phase 7 step 1.
 
-A folder date of months ago in the Google Drive web interface proves nothing.
-Drive does not update a folder when its contents change. Use `rclone check`.
+Do not trust the folder date in the Google Drive web interface. Drive does not
+change that date when the contents change. Use `rclone check` instead.

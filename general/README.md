@@ -1,7 +1,7 @@
 # general/
 
-Assets and reference material that are **not** dotfiles. Only `0xProto/` is
-consumed by the tooling. Everything else is documentation you read by hand.
+Assets and reference material that are **not** dotfiles. The tooling uses only
+`0xProto/`. Everything else is documentation that you read by hand.
 
 | Path | Used by | What it is |
 |---|---|---|
@@ -16,8 +16,9 @@ consumed by the tooling. Everything else is documentation you read by hand.
 
 The `.example` files are **redacted templates**, not restorable backups.
 Placeholders use angle brackets, such as `<your-email>`. Substitute them by
-hand: neither cron nor msmtp expands shell variables in its configuration file,
-so a `$VAR` left in place is used as that literal string.
+hand. Neither cron nor msmtp expands a shell variable in its configuration
+file. A `$VAR` that stays in place becomes that literal string.
 
 Keep secrets out of this directory. It is a public repository. Read a password
-through `passwordeval` or an equivalent indirection instead of writing it down.
+through `passwordeval`, or through an equivalent indirect method. Do not write
+the password in a file here.

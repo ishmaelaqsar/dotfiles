@@ -1,5 +1,5 @@
-# Redacted template — substitute the placeholders by hand. cron does NOT expand
-# shell variables here, so MAILTO must hold a literal address.
+# Redacted template. Substitute the placeholders by hand. cron does NOT expand
+# a shell variable here. MAILTO must hold a literal address.
 MAILTO="<your-email>"
 
 # Edit this file to introduce tasks to be run by cron.
@@ -37,14 +37,14 @@ MAILTO="<your-email>"
 # * * * * *  command to execute
 
 # === Pi-hole & System Maintenance ===
-# cron mails any output of a job to MAILTO. Do not send stderr to a log file
-# as well, or the mail arrives empty and the errors stay on the host.
+# cron mails any output of a job to MAILTO. Do not also send stderr to a log
+# file. The mail then arrives empty, and the errors stay on the host.
 
 # Weekly: Update Pi-hole (every Sunday at 02:30)
 30 2 * * 0 /usr/local/bin/pihole -up --unattended
 
 # Weekly: Update and clean system packages (Sunday at 03:00). The
-# noninteractive settings stop an unattended upgrade blocking on a prompt.
+# noninteractive settings prevent a block on a configuration prompt.
 0 3 * * 0 DEBIAN_FRONTEND=noninteractive apt-get update -y && DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::=--force-confold upgrade && apt-get autoremove -y
 
 # Daily: Sync log2ram to SD (03:30)
