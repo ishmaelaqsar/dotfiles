@@ -39,9 +39,21 @@ The `install.sh` script will:
 
 Flags and safety:
 
+| Flag | Effect |
+| :--- | :--- |
+| `-n`, `--dry-run` | Print every change and make none. Reads the whole plan — packages, symlinks, git config, systemd units, GNOME keys — before anything happens. |
+| `--desktop` | Run the desktop steps (GNOME settings, `wl-clipboard`) whatever the session looks like. Needed when installing over ssh, where `DISPLAY` is unset. |
+| `--no-desktop` | Skip them, for a server that happens to have X libraries. |
+| `-f` | Install even when a different dotfiles checkout owns `~/.dotfiles`. |
+| `-h`, `--help` | Usage. |
+
 * `./install.sh /some/dir` — **probe run**: file layout only; skips packages, git config, and all GPG keyring/agent changes. Use to test changes safely.
-* It **refuses to run** if a different dotfiles checkout already owns `~/.dotfiles`; `-f` overrides.
+* It **refuses to run** if a different dotfiles checkout already owns `~/.dotfiles`; `-f` overrides. A `--dry-run` is allowed through, since it changes nothing.
+* Warnings are repeated as a numbered summary at the end, so a failure in the middle of a long package run does not scroll past unread.
 * After install, run `opencode auth login` once to connect a model provider.
+
+Without a flag the desktop steps follow the session: a Wayland or X display, or `gnome-shell`
+on `PATH`, means desktop.
 
 ### Language toolchains (opt-in, run manually)
 

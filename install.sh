@@ -4,7 +4,7 @@ set -euo pipefail
 # =============================================================================
 # Personal dotfiles installer — macOS, Debian, Arch (GNOME), Fedora.
 #
-# Usage: ./install.sh [-f] [target-dir]
+# Usage: ./install.sh [-f] [-n] [--desktop|--no-desktop] [target-dir]
 #
 # A non-$HOME target is a probe run: file layout only, all live-state steps
 # (git --global, GPG keyring/agent, packages) are skipped.
@@ -14,15 +14,44 @@ set -euo pipefail
 # Options & target directory
 # -----------------------------
 FORCE=0
-while getopts ":f" opt; do
-    case "$opt" in
-        f)  FORCE=1 ;;
-        \?) echo "Usage: $0 [-f] [target-dir]" >&2; exit 2 ;;
-    esac
-done
-shift $((OPTIND - 1))
+DRY_RUN=0
+DESKTOP_OVERRIDE=""
+TARGET_ARG=""
 
-TARGET_DIR="${1:-$HOME}"
+__usage() {
+    cat <<'EOF'
+Usage: ./install.sh [-f] [-n] [--desktop|--no-desktop] [target-dir]
+
+  -f              install even when another dotfiles checkout owns ~/.dotfiles
+  -n, --dry-run   print every change without making one
+  --desktop       run the desktop steps (GNOME settings, clipboard) regardless
+  --no-desktop    skip them, whatever the session looks like
+  -h, --help      show this text
+
+A non-$HOME target is a probe run: file layout only, no live-state steps.
+EOF
+}
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -f)            FORCE=1 ;;
+        -n|--dry-run)  DRY_RUN=1 ;;
+        --desktop)     DESKTOP_OVERRIDE=1 ;;
+        --no-desktop)  DESKTOP_OVERRIDE=0 ;;
+        -h|--help)     __usage; exit 0 ;;
+        -*)            echo "Unknown option: $1" >&2; __usage >&2; exit 2 ;;
+        *)             TARGET_ARG="$1" ;;
+    esac
+    shift
+done
+
+# Exported, so the shared helpers in lib/pkg.sh plan instead of installing.
+export DOTFILES_DRY_RUN="$DRY_RUN"
+if [ "$DRY_RUN" -eq 1 ]; then
+    echo "=== Dry run: nothing on this machine changes. ==="
+fi
+
+TARGET_DIR="${TARGET_ARG:-$HOME}"
 TARGET_DIR="${TARGET_DIR%/}"           # normalise trailing slash so the $HOME test holds
 [ -z "$TARGET_DIR" ] && TARGET_DIR="/"
 
@@ -45,6 +74,11 @@ IS_GRAPHICAL=0
 if [ -n "${WAYLAND_DISPLAY:-}" ] || [ -n "${DISPLAY:-}" ] || command -v gnome-shell >/dev/null 2>&1; then
     IS_GRAPHICAL=1
 fi
+# --desktop / --no-desktop beat the detection. Needed for an install over ssh
+# into a desktop box (no DISPLAY), and for a server that happens to have X libs.
+if [ -n "$DESKTOP_OVERRIDE" ]; then
+    IS_GRAPHICAL="$DESKTOP_OVERRIDE"
+fi
 
 # -----------------------------
 # Absolute path to this script
@@ -64,9 +98,15 @@ if [ "$IS_HOME_INSTALL" -eq 1 ] \
    && [ -n "$OTHER_DIR" ] \
    && [ "$OTHER_DIR" != "$SELF_DIR" ] \
    && [ "$FORCE" -ne 1 ]; then
-    echo "Dotfiles already present at $EXISTING_DOTFILES — refusing to install." >&2
-    echo "Run with -f to force." >&2
-    exit 1
+    # A dry run changes nothing, and a machine owned by another checkout is
+    # exactly where reading the plan first is worth the most.
+    if [ "$DRY_RUN" -eq 1 ]; then
+        echo "Note: $EXISTING_DOTFILES belongs to another checkout. A real run would refuse; -f overrides."
+    else
+        echo "Dotfiles already present at $EXISTING_DOTFILES — refusing to install." >&2
+        echo "Run with -f to force." >&2
+        exit 1
+    fi
 fi
 
 # -----------------------------
@@ -81,7 +121,7 @@ if [ "$PKG_MGR" = "pacman" ] && [ "$IS_HOME_INSTALL" -eq 1 ] && [ "$IN_CONTAINER
     if __bootstrap_aur_helper; then
         PKG_MGR="$(__detect_pkg_mgr)"
     else
-        echo "Warning: no AUR helper — AUR-only packages will be skipped." >&2
+        __warn "no AUR helper — AUR-only packages will be skipped."
     fi
 fi
 
@@ -90,7 +130,7 @@ if [ "$IN_CONTAINER" -eq 1 ]; then
 elif [ "$IS_HOME_INSTALL" -eq 1 ] && [ "$PKG_MGR" != "none" ]; then
     echo "Installing packages via $PKG_MGR..."
     if [ "$PKG_MGR" = "apt" ]; then
-        __pkg_sudo apt-get update || echo "Warning: apt-get update failed." >&2
+        __pkg_sudo apt-get update || __warn "apt-get update failed."
     fi
     __pkg_install "$PKG_MGR" eza fzf zellij gnupg
     command -v rg >/dev/null 2>&1     || __pkg_install "$PKG_MGR" ripgrep
@@ -108,7 +148,7 @@ elif [ "$IS_HOME_INSTALL" -eq 1 ] && [ "$PKG_MGR" != "none" ]; then
         if command -v systemctl >/dev/null 2>&1; then
             echo "  -> Enabling pcscd.socket"
             __pkg_sudo systemctl enable --now pcscd.socket \
-                || echo "Warning: could not enable pcscd.socket — enable it manually." >&2
+                || __warn "could not enable pcscd.socket — enable it manually."
         fi
 
         # Wayland clipboard, on a desktop box only. .aliases maps
@@ -128,20 +168,22 @@ elif [ "$IS_HOME_INSTALL" -eq 1 ] && [ "$PKG_MGR" != "none" ]; then
         if command -v paccache >/dev/null 2>&1 && command -v systemctl >/dev/null 2>&1; then
             echo "  -> Enabling paccache.timer"
             __pkg_sudo systemctl enable --now paccache.timer \
-                || echo "Warning: could not enable paccache.timer — enable it manually." >&2
+                || __warn "could not enable paccache.timer — enable it manually."
         fi
     fi
 elif [ "$IS_HOME_INSTALL" -eq 0 ]; then
     echo "[probe] Skipping package installation."
 else
-    echo "Warning: no supported package manager found — skipping packages." >&2
+    __warn "no supported package manager found — skipping packages."
 fi
 
 # -----------------------------
 # Sync dotfiles via Python
 # -----------------------------
 echo "Syncing dotfiles to $TARGET_DIR..."
-if ! python3 "$SCRIPT_DIR/bin/sync-dotfiles" "$TARGET_DIR"; then
+if [ "$DRY_RUN" -eq 1 ]; then
+    python3 "$SCRIPT_DIR/bin/sync-dotfiles" --dry-run "$TARGET_DIR"
+elif ! python3 "$SCRIPT_DIR/bin/sync-dotfiles" "$TARGET_DIR"; then
     echo "Error: sync-dotfiles failed. Aborting."
     exit 1
 fi
@@ -152,16 +194,20 @@ fi
 BASHRC_D_DIR="$TARGET_DIR/.bashrc.d"
 ALIAS_FILE="$BASHRC_D_DIR/dotfiles_alias"
 
-mkdir -p "$BASHRC_D_DIR"
+if [ "$DRY_RUN" -eq 1 ]; then
+    echo "  [dry-run] write $ALIAS_FILE"
+else
+    mkdir -p "$BASHRC_D_DIR"
 
-echo "Creating dotfiles alias at '$ALIAS_FILE'."
-cat <<EOF > "$ALIAS_FILE"
+    echo "Creating dotfiles alias at '$ALIAS_FILE'."
+    cat <<EOF > "$ALIAS_FILE"
 # managed-by-dotfiles (cleanup.sh removes files carrying this marker)
 # Alias to quickly jump to dotfiles directory
 alias dotfiles='cd $SCRIPT_DIR'
 EOF
 
-echo "Done. '$ALIAS_FILE' created."
+    echo "Done. '$ALIAS_FILE' created."
+fi
 
 # -----------------------------
 # Sync custom scripts
@@ -170,13 +216,18 @@ TARGET_BIN_DIR="$TARGET_DIR/bin"
 
 echo "Syncing custom scripts to $TARGET_BIN_DIR..."
 
-mkdir -p "$TARGET_BIN_DIR"
+__run mkdir -p "$TARGET_BIN_DIR"
 # Loop through all files in the source bin directory
 for script_path in "$SOURCE_BIN_DIR"/*; do
     # Check if the glob found any files
     if [ -e "$script_path" ]; then
         script_name=$(basename "$script_path")
         target_path="$TARGET_BIN_DIR/$script_name"
+
+        if [ "$DRY_RUN" -eq 1 ]; then
+            echo "  [dry-run] link $script_name"
+            continue
+        fi
 
         # Make the source script executable before linking
         chmod +x "$script_path"
@@ -191,8 +242,12 @@ done
 # Install Starship (Prompt)
 # -----------------------------
 if ! command -v starship >/dev/null; then
-    echo "Installing Starship..."
-    curl -sS https://starship.rs/install.sh | sh -s -- -y -b "$TARGET_DIR/bin"
+    if [ "$DRY_RUN" -eq 1 ]; then
+        echo "  [dry-run] install Starship into $TARGET_DIR/bin"
+    else
+        echo "Installing Starship..."
+        curl -sS https://starship.rs/install.sh | sh -s -- -y -b "$TARGET_DIR/bin"
+    fi
 fi
 
 # -----------------------------
@@ -208,12 +263,16 @@ if [ "$IN_CONTAINER" -eq 1 ]; then
     echo "[container] Skipping font installation (fonts render on the host)."
 else
     echo "Installing 0xProto Nerd Font to $FONT_DIR..."
-    mkdir -p "$FONT_DIR"
-    cp "$SCRIPT_DIR"/general/0xProto/*.ttf "$FONT_DIR/"
+    __run mkdir -p "$FONT_DIR"
+    if [ "$DRY_RUN" -eq 1 ]; then
+        echo "  [dry-run] copy the 0xProto TTFs into $FONT_DIR"
+    else
+        cp "$SCRIPT_DIR"/general/0xProto/*.ttf "$FONT_DIR/"
+    fi
 fi
 
 if [ "$IS_HOME_INSTALL" -eq 1 ] && [ "$IN_CONTAINER" -eq 0 ] && [[ "$OSTYPE" != darwin* ]] && command -v fc-cache >/dev/null 2>&1; then
-    fc-cache -f "$FONT_DIR"
+    __run fc-cache -f "$FONT_DIR"
 fi
 
 # -----------------------------
@@ -224,10 +283,10 @@ if [ "$IS_HOME_INSTALL" -eq 0 ]; then
 elif command -v git &> /dev/null; then
     echo "Configuring global Git settings..."
 
-    git config --global user.name "Ishmael Aqsar"
-    git config --global user.email "ishmael-dev@aqsar.dev"
-    git config --global core.excludesfile "$HOME/.gitignore_global"
-    git config --global core.attributesfile "$HOME/.gitattributes"
+    __run git config --global user.name "Ishmael Aqsar"
+    __run git config --global user.email "ishmael-dev@aqsar.dev"
+    __run git config --global core.excludesfile "$HOME/.gitignore_global"
+    __run git config --global core.attributesfile "$HOME/.gitattributes"
 
     # HTTPS remotes: keep the token in the GNOME keyring, not in a cleartext
     # ~/.git-credentials. Arch ships the helper inside git itself; other
@@ -237,7 +296,7 @@ elif command -v git &> /dev/null; then
                       /usr/libexec/git-core/git-credential-libsecret; do
             if [ -x "$helper" ]; then
                 echo "  -> Using $helper for HTTPS credentials"
-                git config --global credential.helper "$helper"
+                __run git config --global credential.helper "$helper"
                 break
             fi
         done
@@ -256,8 +315,8 @@ fi
 echo "Configuring GPG Agent..."
 
 GNUPG_DIR="$TARGET_DIR/.gnupg"
-mkdir -p "$GNUPG_DIR"
-chmod 700 "$GNUPG_DIR"
+__run mkdir -p "$GNUPG_DIR"
+__run chmod 700 "$GNUPG_DIR"
 
 PINENTRY_PATH=""
 
@@ -288,6 +347,11 @@ else
 fi
 
 AGENT_CONF="$GNUPG_DIR/gpg-agent.conf"
+
+if [ "$DRY_RUN" -eq 1 ]; then
+    echo "  [dry-run] write $AGENT_CONF (pinentry: ${PINENTRY_PATH:-none found})"
+else
+
 echo "Writing gpg-agent.conf to $AGENT_CONF..."
 
 cat <<EOF > "$AGENT_CONF"
@@ -317,12 +381,14 @@ else
     echo "  -> Warning: Could not detect pinentry program."
 fi
 
+fi  # end of the dry-run guard around the gpg-agent.conf write
+
 if [ "$IS_HOME_INSTALL" -eq 0 ]; then
     echo "[probe] Skipping gpg-agent reload and key import."
 else
     if command -v gpg-connect-agent >/dev/null; then
         echo "Reloading gpg-agent..."
-        gpg-connect-agent reloadagent /bye
+        __run gpg-connect-agent reloadagent /bye
     fi
 
     # ---------------------------------------------------------------
@@ -337,18 +403,24 @@ else
     # these two steps make sure the right agent is behind it.
     if command -v systemctl >/dev/null 2>&1 && [ -d "/run/user/$(id -u)" ]; then
         echo "  -> Enabling gpg-agent-ssh.socket"
-        systemctl --user enable gpg-agent-ssh.socket 2>/dev/null \
-            || echo "Warning: could not enable gpg-agent-ssh.socket." >&2
+        __run systemctl --user enable gpg-agent-ssh.socket 2>/dev/null \
+            || __warn "could not enable gpg-agent-ssh.socket."
         # Starting it now fails when the agent this script just reloaded
         # already holds the socket file. The enable above is what matters —
         # systemd takes the socket at the next login.
-        systemctl --user start gpg-agent-ssh.socket >/dev/null 2>&1 || true
+        if [ "$DRY_RUN" -eq 0 ]; then
+            systemctl --user start gpg-agent-ssh.socket >/dev/null 2>&1 || true
+        fi
 
         for unit in gcr-ssh-agent.socket gcr-ssh-agent.service gnome-keyring-ssh.service; do
             if systemctl --user cat "$unit" >/dev/null 2>&1; then
-                echo "  -> Masking $unit (GNOME's SSH agent)"
-                systemctl --user mask --now "$unit" >/dev/null 2>&1 \
-                    || echo "Warning: could not mask $unit." >&2
+                if [ "$DRY_RUN" -eq 1 ]; then
+                    echo "  [dry-run] systemctl --user mask --now $unit"
+                else
+                    echo "  -> Masking $unit (GNOME's SSH agent)"
+                    systemctl --user mask --now "$unit" >/dev/null 2>&1 \
+                        || __warn "could not mask $unit."
+                fi
             fi
         done
         echo "  -> Log out and back in for SSH_AUTH_SOCK to reach graphical apps."
@@ -365,7 +437,7 @@ else
         echo "gpg not found. Skipping GPG import."
     elif [ -f "$PUB_KEY" ]; then
         echo "Importing public GPG key from $PUB_KEY..."
-        gpg --import "$PUB_KEY"
+        __run gpg --import "$PUB_KEY"
 
         # This extracts the fingerprint and sets it to ultimate trust.
         FINGERPRINT=$(gpg --with-colons --import-options show-only --import "$PUB_KEY" \
@@ -375,7 +447,11 @@ else
             echo "Setting ultimate trust for $FINGERPRINT..."
             # --import-ownertrust is the scriptable route; the interactive
             # --edit-key trust dance exits non-zero and trips set -e
-            echo "$FINGERPRINT:6:" | gpg --import-ownertrust
+            if [ "$DRY_RUN" -eq 1 ]; then
+                echo "  [dry-run] set ultimate trust for $FINGERPRINT"
+            else
+                echo "$FINGERPRINT:6:" | gpg --import-ownertrust
+            fi
         fi
     else
         echo "No public.asc found in dotfiles. Skipping GPG import."
@@ -390,9 +466,9 @@ if [ "$IS_HOME_INSTALL" -eq 0 ] || [ "$IN_CONTAINER" -eq 1 ]; then
 elif ! command -v opencode >/dev/null 2>&1; then
     echo "Installing OpenCode..."
     case "$PKG_MGR" in
-        brew)             brew install anomalyco/tap/opencode || echo "Warning: OpenCode install failed." >&2 ;;
-        yay|paru|pacman)  __pkg_raw "$PKG_MGR" opencode || echo "Warning: OpenCode install failed." >&2 ;;
-        *)                curl -fsSL https://opencode.ai/install | bash || echo "Warning: OpenCode install failed." >&2 ;;
+        brew)             __run brew install anomalyco/tap/opencode || __warn "OpenCode install failed." ;;
+        yay|paru|pacman)  __pkg_raw "$PKG_MGR" opencode || __warn "OpenCode install failed." ;;
+        *)                __run sh -c 'curl -fsSL https://opencode.ai/install | bash' || __warn "OpenCode install failed." ;;
     esac
 fi
 
@@ -409,8 +485,8 @@ if [ "$IS_HOME_INSTALL" -eq 0 ] || [ "$IN_CONTAINER" -eq 1 ]; then
 elif ! command -v ghostty >/dev/null 2>&1; then
     echo "Installing Ghostty..."
     case "$PKG_MGR" in
-        brew)             brew install --cask ghostty || echo "Warning: Ghostty install failed." >&2 ;;
-        yay|paru|pacman)  __pkg_raw "$PKG_MGR" ghostty || echo "Warning: Ghostty install failed." >&2 ;;
+        brew)             __run brew install --cask ghostty || __warn "Ghostty install failed." ;;
+        yay|paru|pacman)  __pkg_raw "$PKG_MGR" ghostty || __warn "Ghostty install failed." ;;
         dnf)              echo "Ghostty is not in Fedora's base repos — enable a COPR manually (skipping)." ;;
         *)                echo "No Ghostty package for this platform — install manually (skipping)." ;;
     esac
@@ -420,11 +496,15 @@ fi
 # setup first (see dotfiles/.config/ghostty/quick-terminal.conf).
 GHOSTTY_TARGET_DIR="$TARGET_DIR/.config/ghostty"
 if [[ "$OSTYPE" == darwin* ]] && [ -d "$GHOSTTY_TARGET_DIR" ] && [ ! -e "$GHOSTTY_TARGET_DIR/config.local" ]; then
-    echo "Enabling Ghostty quick terminal (macOS)..."
-    cat <<'EOF' > "$GHOSTTY_TARGET_DIR/config.local"
+    if [ "$DRY_RUN" -eq 1 ]; then
+        echo "  [dry-run] write $GHOSTTY_TARGET_DIR/config.local (quick terminal)"
+    else
+        echo "Enabling Ghostty quick terminal (macOS)..."
+        cat <<'EOF' > "$GHOSTTY_TARGET_DIR/config.local"
 # Machine-local Ghostty overrides — not tracked by the dotfiles repo.
 config-file = quick-terminal.conf
 EOF
+    fi
 fi
 
 # -----------------------------
@@ -438,15 +518,15 @@ UNIT_SRC_DIR="$DOTFILES_DIR/.config/systemd/user"
 if [ "$IS_HOME_INSTALL" -eq 1 ] && [ "$IN_CONTAINER" -eq 0 ] && [ -d "$UNIT_SRC_DIR" ] \
    && command -v systemctl >/dev/null 2>&1 && [ -d "/run/user/$(id -u)" ]; then
     echo "Reloading systemd user units..."
-    systemctl --user daemon-reload || echo "Warning: daemon-reload failed." >&2
+    __run systemctl --user daemon-reload || __warn "daemon-reload failed."
 
     for unit_path in "$UNIT_SRC_DIR"/*.service "$UNIT_SRC_DIR"/*.timer "$UNIT_SRC_DIR"/*.socket; do
         [ -e "$unit_path" ] || continue
         grep -q '^\[Install\]' "$unit_path" || continue
         unit="$(basename "$unit_path")"
         echo "  -> Enabling $unit"
-        systemctl --user enable --now "$unit" \
-            || echo "Warning: could not enable $unit." >&2
+        __run systemctl --user enable --now "$unit" \
+            || __warn "could not enable $unit."
     done
 fi
 
@@ -464,6 +544,8 @@ if [ "$IS_HOME_INSTALL" -eq 1 ] && [ "$IN_CONTAINER" -eq 0 ] \
    && command -v gnome-shell >/dev/null 2>&1 && command -v gnome-extensions >/dev/null 2>&1; then
     if gnome-extensions list 2>/dev/null | grep -qx "$QUAKE_UUID"; then
         echo "Quake Terminal extension already installed."
+    elif [ "$DRY_RUN" -eq 1 ]; then
+        echo "  [dry-run] fetch and install the Quake Terminal extension ($QUAKE_UUID)"
     else
         echo "Installing the Quake Terminal GNOME extension..."
         SHELL_VERSION="$(gnome-shell --version | awk '{print $3}' | cut -d. -f1)"
@@ -481,7 +563,7 @@ except Exception:
 PY
 )"
         if [ -z "$DOWNLOAD_PATH" ]; then
-            echo "Warning: no Quake Terminal build for GNOME $SHELL_VERSION — install it from extensions.gnome.org by hand." >&2
+            __warn "no Quake Terminal build for GNOME $SHELL_VERSION — install it from extensions.gnome.org by hand."
         else
             TMP_DIR="$(mktemp -d)"
             if curl -fsSL "https://extensions.gnome.org$DOWNLOAD_PATH" -o "$TMP_DIR/quake.zip" \
@@ -491,7 +573,7 @@ PY
                 gnome-extensions enable "$QUAKE_UUID" >/dev/null 2>&1 || true
                 echo "  -> Installed. Log out and back in, then set the hotkey in its preferences."
             else
-                echo "Warning: could not install the Quake Terminal extension." >&2
+                __warn "could not install the Quake Terminal extension."
             fi
             rm -rf "$TMP_DIR"
         fi
@@ -506,8 +588,8 @@ fi
 if [ "$IS_HOME_INSTALL" -eq 1 ] && [ "$IN_CONTAINER" -eq 0 ] \
    && command -v gsettings >/dev/null 2>&1 && command -v gnome-shell >/dev/null 2>&1; then
     echo "Applying GNOME settings..."
-    python3 "$SOURCE_BIN_DIR/gnome-settings" apply \
-        || echo "Warning: GNOME settings failed." >&2
+    __run python3 "$SOURCE_BIN_DIR/gnome-settings" apply \
+        || __warn "GNOME settings failed."
 fi
 
 # -----------------------------
@@ -516,7 +598,9 @@ fi
 # Installs the git hook to prevent committing unencrypted secrets
 HOOK_PATH="$SCRIPT_DIR/.git/hooks/pre-commit"
 
-if [ -d "$SCRIPT_DIR/.git" ]; then
+if [ -d "$SCRIPT_DIR/.git" ] && [ "$DRY_RUN" -eq 1 ]; then
+    echo "  [dry-run] write the secrets pre-commit hook at $HOOK_PATH"
+elif [ -d "$SCRIPT_DIR/.git" ]; then
     echo "Installing secrets pre-commit hook at $HOOK_PATH..."
     # Ensure hooks directory exists
     mkdir -p "$(dirname "$HOOK_PATH")"
@@ -541,4 +625,21 @@ else
     echo "Skipping hook installation (.git directory not found)."
 fi
 
-echo "Dotfiles installation complete."
+
+# -----------------------------
+# Summary
+# -----------------------------
+# A warning in the middle of a long package run scrolls past unread, so
+# repeat them all at the end where they are the last thing on screen.
+if [ "$DRY_RUN" -eq 1 ]; then
+    echo
+    echo "Dry run complete — nothing changed."
+else
+    echo "Dotfiles installation complete."
+fi
+
+if [ "$WARNING_COUNT" -gt 0 ]; then
+    echo
+    echo "$WARNING_COUNT step(s) need attention:"
+    printf '%s' "$WARNING_LIST"
+fi

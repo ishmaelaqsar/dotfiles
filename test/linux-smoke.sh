@@ -47,6 +47,24 @@ if [ "$MODE" = "quick" ]; then
     fi
 fi
 
+say "install.sh --dry-run (must plan everything and change nothing)"
+./install.sh --dry-run > /tmp/dry.log 2>&1 || flunk "--dry-run exited non-zero"
+grep -q '\[dry-run\]' /tmp/dry.log && pass "--dry-run printed a plan" || flunk "--dry-run printed no plan"
+[ ! -L "$HOME/.bashrc" ] && pass "--dry-run created no symlinks" || flunk "--dry-run linked .bashrc"
+[ -z "$(git config --global user.email 2>/dev/null)" ] && pass "--dry-run set no git config" || flunk "--dry-run wrote git config"
+command -v eza >/dev/null 2>&1 && flunk "--dry-run installed packages" || pass "--dry-run installed nothing"
+
+# The desktop flags override the headless detection, so the plan must differ.
+# Redirect to a file rather than piping: grep -q closes the pipe on its first
+# match, install.sh dies of SIGPIPE, and pipefail reports the whole pipeline
+# as failed even though the match succeeded.
+./install.sh --dry-run --desktop > /tmp/dry-desktop.log 2>&1
+grep -q "wl-clipboard" /tmp/dry-desktop.log \
+    && pass "--desktop plans the clipboard package" || flunk "--desktop did not plan wl-clipboard"
+./install.sh --dry-run --no-desktop > /tmp/dry-nodesktop.log 2>&1
+grep -q "wl-clipboard" /tmp/dry-nodesktop.log \
+    && flunk "--no-desktop still planned wl-clipboard" || pass "--no-desktop skips the clipboard package"
+
 say "install.sh (home install, container detection overridden)"
 ./install.sh || flunk "install.sh exited non-zero"
 

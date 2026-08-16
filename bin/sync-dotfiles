@@ -3,6 +3,7 @@
 Sync dotfiles from the repository into the target directory.
 Creates symlinks for files and ensures directories exist.
 Optional --backup: rename existing files with .bak before linking.
+Optional --dry-run: list what would be linked, and change nothing.
 """
 
 import os
@@ -11,11 +12,14 @@ from pathlib import Path
 
 # Parse arguments
 backup_flag = False
+dry_run = False
 target_arg = None
 
 for arg in sys.argv[1:]:
     if arg in ("--backup", "-b"):
         backup_flag = True
+    elif arg in ("--dry-run", "-n"):
+        dry_run = True
     else:
         target_arg = arg
 
@@ -26,14 +30,19 @@ if not dotfiles_dir.is_dir():
     print(f"Error: dotfiles directory not found: {dotfiles_dir}")
     sys.exit(1)
 
-target_dir.mkdir(parents=True, exist_ok=True)
+if not dry_run:
+    target_dir.mkdir(parents=True, exist_ok=True)
 print(f"Syncing dotfiles to {target_dir}...")
 
 for src in dotfiles_dir.rglob("*"):
     rel_path = src.relative_to(dotfiles_dir)
     dest = target_dir / rel_path
 
-    if src.is_dir():
+    if dry_run:
+        if src.is_file():
+            state = "relink" if dest.is_symlink() else "link"
+            print(f"  [dry-run] {state} {rel_path}")
+    elif src.is_dir():
         dest.mkdir(parents=True, exist_ok=True)
     else:
         if dest.exists() or dest.is_symlink():
@@ -47,4 +56,4 @@ for src in dotfiles_dir.rglob("*"):
         dest.symlink_to(src)
         print(f"  -> Linking {rel_path}")
 
-print("Dotfiles sync complete.")
+print("Dotfiles sync planned." if dry_run else "Dotfiles sync complete.")

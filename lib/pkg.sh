@@ -2,6 +2,27 @@
 # Shared package-manager plumbing for install.sh and setup-*.sh.
 # Usage: source this, then PKG_MGR="$(__detect_pkg_mgr)".
 
+# Run a command, or print it when a dry run is in progress. install.sh
+# --dry-run exports DOTFILES_DRY_RUN=1, so these helpers plan the work instead
+# of changing the machine.
+__run() {
+    if [ "${DOTFILES_DRY_RUN:-0}" = "1" ]; then
+        printf '  [dry-run] %s\n' "$*"
+        return 0
+    fi
+    "$@"
+}
+
+# Report a problem, and keep it for the summary install.sh prints at the end.
+# A warning in the middle of a long package run scrolls past unread.
+WARNING_LIST=""
+WARNING_COUNT=0
+__warn() {
+    echo "Warning: $*" >&2
+    WARNING_LIST="${WARNING_LIST}  - $*"$'\n'
+    WARNING_COUNT=$((WARNING_COUNT + 1))
+}
+
 # Prefer the native manager over linuxbrew, and an AUR helper over pacman on
 # Arch. yay/paru must not run under sudo (they escalate themselves), hence
 # per-manager sudo.
@@ -60,22 +81,22 @@ __pkg_install() {
         __pkg_raw "$mgr" "$pkg" || failed="$failed $tool"
     done
     if [ -n "$failed" ]; then
-        echo "Warning: could not install:$failed — install manually." >&2
+        __warn "could not install:$failed — install manually."
     fi
 }
 
 # Run privileged: direct when already root (containers, root bootstraps)
 __pkg_sudo() {
-    if [ "$(id -u)" -eq 0 ]; then "$@"; else sudo "$@"; fi
+    if [ "$(id -u)" -eq 0 ]; then __run "$@"; else __run sudo "$@"; fi
 }
 
 # Install raw package names with no mapping or presence check
 __pkg_raw() {
     local mgr=$1; shift
     case "$mgr" in
-        brew)     brew install "$@" ;;
+        brew)     __run brew install "$@" ;;
         apt)      __pkg_sudo apt-get install -y "$@" ;;
-        yay|paru) "$mgr" -S --needed --noconfirm "$@" ;;
+        yay|paru) __run "$mgr" -S --needed --noconfirm "$@" ;;
         pacman)   __pkg_sudo pacman -S --needed --noconfirm "$@" ;;
         dnf)      __pkg_sudo dnf install -y "$@" ;;
         *)        echo "No supported package manager found." >&2; return 1 ;;
@@ -97,6 +118,10 @@ __bootstrap_aur_helper() {
     if [ "$(id -u)" -eq 0 ]; then
         echo "Note: skipping AUR helper bootstrap — makepkg refuses to run as root."
         return 1
+    fi
+    if [ "${DOTFILES_DRY_RUN:-0}" = "1" ]; then
+        echo "  [dry-run] build yay-bin from the AUR (pacman base-devel git, then makepkg -si)"
+        return 0
     fi
 
     echo "Bootstrapping yay (AUR helper)..."
