@@ -1,4 +1,4 @@
-# 📓 Logseq Self-Hosted Hub
+# 📓 Forgejo Self-Hosted Git Server
 **Hardware:** Raspberry Pi Zero 2W (512MB RAM)  
 **OS:** Raspberry Pi OS Lite (64-bit)  
 **Security:** AppArmor (Enforced) + fail2ban (Active) + Caddy (DNS-01 TLS)  
@@ -96,7 +96,7 @@ TRUSTED_PROXIES = 127.0.0.1
 ENABLED = true
 PROTOCOL = sendmail
 SENDMAIL_PATH = /usr/bin/msmtp -a dev
-FROM = "Logseq Hub" <<dev-alias>@<your-domain>.dev>
+FROM = "Forgejo Hub" <<dev-alias>@<your-domain>.dev>
 ```
 
 `TRUSTED_PROXIES` gives Forgejo the real client IP from Caddy. Do **not** add
@@ -109,7 +109,7 @@ is on.
 ### 3. Service Setup: `sudo nano /etc/systemd/system/forgejo.service`
 ```ini
 [Unit]
-Description=Forgejo (Logseq Hub)
+Description=Forgejo Git Server
 After=network.target
 
 [Service]
@@ -194,8 +194,8 @@ echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudf
 sudo apt-get update && sudo apt-get install -y cloudflared
 
 cloudflared tunnel login
-cloudflared tunnel create logseq-tunnel
-cloudflared tunnel route dns logseq-tunnel git.<your-domain>.dev
+cloudflared tunnel create forgejo-tunnel
+cloudflared tunnel route dns forgejo-tunnel git.<your-domain>.dev
 ```
 
 ### 2. Config: `sudo nano /etc/cloudflared/config.yml`
@@ -234,7 +234,7 @@ bantime = 1h
 ---
 
 ## 💾 Phase 7: Backups & Automation
-### 1. Rclone Backup Script: `nano ~/sync_notes.sh`
+### 1. Rclone Backup Script: `nano ~/backup-forgejo.sh`
 ```bash
 #!/bin/bash
 set -euo pipefail
@@ -260,7 +260,7 @@ fi
 ### 2. Automation (`crontab -e`)
 ```bash
 # Daily Backup at 3 AM
-0 3 * * * /bin/bash /home/<your-username>/sync_notes.sh
+0 3 * * * /bin/bash /home/<your-username>/backup-forgejo.sh
 # Weekly Update & Reboot. apt-get needs the noninteractive settings, or an
 # unattended upgrade blocks on a config-file prompt and never reboots.
 0 4 * * 0 sudo DEBIAN_FRONTEND=noninteractive apt-get update -y && sudo DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::=--force-confold upgrade && /sbin/reboot
