@@ -75,7 +75,12 @@ sudo mkdir -p /var/lib/forgejo/{custom,data,log} /etc/forgejo
 sudo chown -R git:git /var/lib/forgejo/
 sudo chown root:git /etc/forgejo && sudo chmod 770 /etc/forgejo
 
-wget https://codeberg.org/forgejo/forgejo/releases/download/v14.0.1/forgejo-14.0.1-linux-arm64
+BASE=https://codeberg.org/forgejo/forgejo/releases/download/v14.0.1
+wget "$BASE/forgejo-14.0.1-linux-arm64" "$BASE/forgejo-14.0.1-linux-arm64.sha256"
+
+# Verify before you install. This binary runs as a service.
+sha256sum -c forgejo-14.0.1-linux-arm64.sha256 || { echo "CHECKSUM FAILED"; exit 1; }
+
 sudo mv forgejo-14.0.1-linux-arm64 /usr/local/bin/forgejo
 sudo chmod +x /usr/local/bin/forgejo
 ```
@@ -86,7 +91,6 @@ sudo chmod +x /usr/local/bin/forgejo
 DOMAIN = git.<your-domain>.dev
 ROOT_URL = https://git.<your-domain>.dev/
 TRUSTED_PROXIES = 127.0.0.1
-REVERSE_PROXY_AUTHENTICATION_USER = X-Forwarded-For
 
 [mailer]
 ENABLED = true
@@ -94,6 +98,13 @@ PROTOCOL = sendmail
 SENDMAIL_PATH = /usr/bin/msmtp -a dev
 FROM = "Logseq Hub" <<dev-alias>@<your-domain>.dev>
 ```
+
+`TRUSTED_PROXIES` gives Forgejo the real client IP from Caddy. Do **not** add
+`REVERSE_PROXY_AUTHENTICATION_USER` here. That key names the header which
+carries an authenticated **username** (its default is `X-WEBAUTH-USER`), not
+the client IP. Point it at `X-Forwarded-For` and a client-supplied header
+becomes a login name as soon as `[service] ENABLE_REVERSE_PROXY_AUTHENTICATION`
+is on.
 
 ### 3. Service Setup: `sudo nano /etc/systemd/system/forgejo.service`
 ```ini
@@ -124,6 +135,11 @@ curl -JL "https://caddyserver.com/api/download?os=linux&arch=arm64&p=github.com/
 chmod +x caddy
 sudo mv caddy /usr/local/bin/caddy
 sudo setcap CAP_NET_BIND_SERVICE=+eip /usr/local/bin/caddy
+
+# The API builds this binary on demand, so there is no published checksum to
+# check against. Confirm what you installed instead:
+caddy version
+caddy list-modules | grep cloudflare
 ```
 
 ### 2. Caddyfile Setup: `nano ~/Caddyfile`
@@ -169,8 +185,13 @@ WantedBy=multi-user.target
 ## 🌐 Phase 5: Global Access (Cloudflare Tunnel)
 ### 1. Install & Authenticate
 ```bash
-curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64.deb -o cloudflared.deb
-sudo dpkg -i cloudflared.deb
+# Install from Cloudflare's signed apt repository. A bare .deb from the
+# releases page carries no signature, and apt also keeps this one updated.
+curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg \
+    | sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
+echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main" \
+    | sudo tee /etc/apt/sources.list.d/cloudflared.list
+sudo apt-get update && sudo apt-get install -y cloudflared
 
 cloudflared tunnel login
 cloudflared tunnel create logseq-tunnel
