@@ -237,21 +237,41 @@ bantime = 1h
 ### 1. Rclone Backup Script: `nano ~/sync_notes.sh`
 ```bash
 #!/bin/bash
+set -euo pipefail
+
+# Always bring Forgejo back, even if rclone hangs or the script is killed.
+# Without this trap, one bad run leaves the server down until you notice.
+trap 'sudo systemctl start forgejo' EXIT
+
+notify() {
+    printf 'Subject: %s\n\n%s\n' "$1" "$2" | msmtp -a dev <user>@<your-domain>.dev
+}
+
 sudo systemctl stop forgejo
-if rclone sync /var/lib/forgejo/ gdrive:Forgejo_Backup --progress; then
-    echo "Subject: Backup Success" | msmtp <user>@<your-domain>.dev
+
+# No --progress: cron has no tty, so it only fills the mail with noise.
+if rclone sync /var/lib/forgejo/ gdrive:Forgejo_Backup; then
+    notify "Backup Success" "rclone sync completed."
 else
-    echo "Subject: BACKUP FAILED" | msmtp -a dev <user>@<your-domain>.dev
+    notify "BACKUP FAILED" "rclone sync failed. Check the rclone log."
 fi
-sudo systemctl start forgejo
 ```
 
 ### 2. Automation (`crontab -e`)
 ```bash
 # Daily Backup at 3 AM
 0 3 * * * /bin/bash /home/<your-username>/sync_notes.sh
-# Weekly Update & Reboot
-0 4 * * 0 sudo apt update && sudo apt upgrade -y && /sbin/reboot
+# Weekly Update & Reboot. apt-get needs the noninteractive settings, or an
+# unattended upgrade blocks on a config-file prompt and never reboots.
+0 4 * * 0 sudo DEBIAN_FRONTEND=noninteractive apt-get update -y && sudo DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::=--force-confold upgrade && /sbin/reboot
+```
+
+### 3. Sudo Rights for Cron
+Both jobs run from a user crontab and call `sudo`, where no password prompt is
+possible. Grant the exact commands with
+`sudo visudo -f /etc/sudoers.d/forgejo-backup`:
+```text
+<your-username> ALL=(root) NOPASSWD: /usr/bin/systemctl start forgejo, /usr/bin/systemctl stop forgejo
 ```
 
 ---
