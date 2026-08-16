@@ -1,17 +1,23 @@
+# Redacted template for /etc/msmtprc — substitute the placeholders by hand.
+# msmtp does NOT expand shell variables in this file, so a "$VAR" here is sent
+# as that literal string.
+
 # Default settings
 defaults
 auth           on
 tls            on
 tls_trust_file /etc/ssl/certs/ca-certificates.crt
-logfile        /home/pi/msmtp.log
+logfile        /var/log/msmtp.log
 
 # Gmail account
 account        gmail
 host           smtp.gmail.com
 port           587
 from           ishmael-dev@aqsar.dev
-user           $GMAIL_ADDRESS
-password       $GMAIL_APP_PASSWORD
+user           <your-gmail-address>@gmail.com
+# Keep the app password out of this file. passwordeval runs a command and reads
+# the password from its stdout.
+passwordeval   "gpg -q -d /root/.msmtp-pass.gpg"
 
 # Set this account as default
 account default : gmail
