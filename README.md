@@ -99,9 +99,12 @@ sudo apt install -y gnupg gnupg-agent scdaemon pcscd
 
 **Arch**
 ```bash
-sudo pacman -S --needed gnupg pcsc-tools
-sudo systemctl enable --now pcscd.service
+sudo pacman -S --needed gnupg pcsclite ccid pcsc-tools
+sudo systemctl enable --now pcscd.socket
 ```
+`install.sh` does both steps for you: it installs `pcsclite` and `ccid` (via
+`yay` if present, else `pacman`), then enables `pcscd.socket`. The commands above
+are the manual equivalent.
 
 **macOS**
 ```bash

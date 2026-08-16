@@ -81,6 +81,19 @@ elif [ "$IS_HOME_INSTALL" -eq 1 ] && [ "$PKG_MGR" != "none" ]; then
     command -v fd >/dev/null 2>&1 || command -v fdfind >/dev/null 2>&1 \
         || __pkg_install "$PKG_MGR" fd
     __pkg_install "$PKG_MGR" bash-completion pinentry
+    # Smartcard stack for the YubiKey. dotfiles/.gnupg/scdaemon.conf sets
+    # disable-ccid, so the card goes through PC/SC. macOS has PC/SC built in.
+    # Linux needs the pcscd daemon plus the ccid USB reader driver.
+    if [[ "$OSTYPE" != darwin* ]]; then
+        __pkg_install "$PKG_MGR" pcscd ccid
+        # pcscd is socket-activated. Without the socket, gpg --card-status
+        # fails with "selecting card failed: Service is not running".
+        if command -v systemctl >/dev/null 2>&1; then
+            echo "  -> Enabling pcscd.socket"
+            __pkg_sudo systemctl enable --now pcscd.socket \
+                || echo "Warning: could not enable pcscd.socket — enable it manually." >&2
+        fi
+    fi
 elif [ "$IS_HOME_INSTALL" -eq 0 ]; then
     echo "[probe] Skipping package installation."
 else

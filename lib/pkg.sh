@@ -29,6 +29,12 @@ __pkg_name() {
         brew:pinentry)        echo "pinentry-mac" ;;
         apt:pinentry)         echo "pinentry-gnome3" ;;
         *:pinentry)           echo "pinentry" ;;
+        apt:pcscd)            echo "pcscd" ;;
+        dnf:pcscd)            echo "pcsc-lite" ;;
+        *:pcscd)              echo "pcsclite" ;;
+        apt:ccid)             echo "libccid" ;;
+        dnf:ccid)             echo "pcsc-lite-ccid" ;;
+        *:ccid)               echo "ccid" ;;
         dnf:gnupg)            echo "gnupg2" ;;
         apt:go|dnf:go)        echo "golang" ;;
         apt:clangd)           echo "clangd" ;;
