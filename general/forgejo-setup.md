@@ -266,34 +266,78 @@ sudo chmod 600 /root/.config/rclone/rclone.conf
 sudo rclone lsd gdrive:        # must list your folders
 ```
 
-### 2. Backup Script: `sudo nano /usr/local/bin/backup-forgejo.sh`
+### 2. Add a Dead-Man's Switch
+Mail tells you when a job **fails**. It cannot tell you when a job never runs
+at all. A dead-man's switch inverts the logic: silence becomes the alarm.
+
+Create a check at healthchecks.io. Set the period to 1 day and the grace time
+to 1 hour. Keep the URL out of the script, because the script goes in a public
+repository:
+```bash
+sudo tee /etc/backup-forgejo.env >/dev/null <<'EOF'
+HC_URL=https://hc-ping.com/<your-uuid>
+EOF
+sudo chmod 600 /etc/backup-forgejo.env
+```
+A self-hosted healthchecks instance works the same way. But put the watchdog on
+a different host. A watchdog on the host that it watches is worth much less.
+
+### 3. Backup Script: `sudo nano /usr/local/bin/backup-forgejo.sh`
 ```bash
 #!/bin/bash
 set -euo pipefail
 
-# Always bring Forgejo back, even if rclone hangs or the script is killed.
-# Without this trap, one bad run leaves the server down until you notice.
-trap 'systemctl start forgejo' EXIT
+# shellcheck source=/dev/null
+[ -r /etc/backup-forgejo.env ] && . /etc/backup-forgejo.env
+HC_URL="${HC_URL:-}"
+
+ARCHIVE="gdrive:Forgejo_Archive/$(date +%F)"
+
+ping_hc() {   # $1 = "" | /start | /fail
+    [ -n "$HC_URL" ] || return 0
+    # "|| true": a network fault must never fail the backup itself.
+    curl -fsS -m 10 --retry 3 -o /dev/null "${HC_URL}$1" || true
+}
 
 notify() {
     printf 'Subject: %s\n\n%s\n' "$1" "$2" | msmtp -a dev <user>@<your-domain>.dev
 }
 
+# Always bring Forgejo back, even if rclone hangs or the script is killed.
+# Without this trap, one bad run leaves the server down until you notice.
+trap 'systemctl start forgejo' EXIT
+
+ping_hc /start
 systemctl stop forgejo
 
+# --backup-dir keeps the superseded versions. Without it, rclone mirrors a
+# deletion, and one bad night destroys the last good copy on the remote.
 # Exclude the volatile state. Forgejo rebuilds all of it at startup, and it
 # changes at each restart. If you include it, the host and the remote never
 # agree. A clean shutdown also moves the SQLite WAL into forgejo.db, so the
 # -wal and -shm files are not necessary.
 # No --progress: cron has no tty, so it only fills the mail with noise.
-if rclone sync /var/lib/forgejo/ gdrive:Forgejo_Backup \
-        --exclude '/data/queues/**' \
-        --exclude '/data/indexers/**' \
-        --exclude '/data/sessions/**' \
-        --exclude '*.db-shm' --exclude '*.db-wal'; then
+rc=0
+rclone sync /var/lib/forgejo/ gdrive:Forgejo_Backup \
+    --backup-dir "$ARCHIVE" \
+    --exclude '/data/queues/**' \
+    --exclude '/data/indexers/**' \
+    --exclude '/data/sessions/**' \
+    --exclude '*.db-shm' --exclude '*.db-wal' || rc=$?
+
+# Start Forgejo before the slow prune. The trap covers an early exit.
+systemctl start forgejo
+
+# Keep 90 days of superseded versions, then reclaim the space.
+rclone delete --min-age 90d gdrive:Forgejo_Archive || true
+rclone rmdirs --leave-root gdrive:Forgejo_Archive || true
+
+if [ "$rc" -eq 0 ]; then
     notify "Backup Success" "rclone sync completed."
+    ping_hc
 else
-    notify "BACKUP FAILED" "rclone sync failed on $(hostname)."
+    notify "BACKUP FAILED" "rclone sync failed on $(hostname) with code $rc."
+    ping_hc /fail
 fi
 ```
 ```bash
@@ -301,8 +345,10 @@ sudo chown root:root /usr/local/bin/backup-forgejo.sh
 sudo chmod 700 /usr/local/bin/backup-forgejo.sh
 sudo /usr/local/bin/backup-forgejo.sh      # test it before you schedule it
 ```
+`Forgejo_Archive` must be a **sibling** of `Forgejo_Backup`. rclone refuses a
+backup directory inside the destination.
 
-### 3. Automation (`sudo crontab -e`)
+### 4. Automation (`sudo crontab -e`)
 Use **root's** crontab, not your own:
 ```bash
 # Daily Backup at 3 AM
@@ -315,7 +361,7 @@ Raspberry Pi OS already grants the first user `NOPASSWD: ALL` in
 `/etc/sudoers.d/010_<your-username>-nopasswd`. Confirm with `sudo cat
 /etc/sudoers.d/010_*`. Do not add a second sudoers file; root cron needs none.
 
-### 4. Verify the Backup
+### 5. Verify the Backup
 Always check the backup. An unchecked backup is only an assumption. `rclone
 check` compares the two sides. It reports the differences, and it changes
 nothing:
@@ -347,6 +393,12 @@ Follow **Phases 1-4** on a new SD card. **Do not run the web installer.**
 ```bash
 sudo systemctl stop forgejo
 sudo rclone copy gdrive:Forgejo_Backup /var/lib/forgejo/ --progress
+```
+`Forgejo_Backup` holds the current mirror. To recover a file that a later run
+overwrote or deleted, look in the dated folders under `Forgejo_Archive`:
+```bash
+rclone lsd gdrive:Forgejo_Archive                       # list the dates
+rclone copy gdrive:Forgejo_Archive/<date>/<path> ./     # take one file back
 ```
 
 ### 3. Permissions & Restart
