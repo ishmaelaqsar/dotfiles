@@ -2,14 +2,16 @@
 # Shared package-manager plumbing for install.sh and setup-*.sh.
 # Usage: source this, then PKG_MGR="$(__detect_pkg_mgr)".
 
-# Prefer the native manager over linuxbrew, and yay over pacman on Arch.
-# yay must not run under sudo (it escalates itself), hence per-manager sudo.
+# Prefer the native manager over linuxbrew, and an AUR helper over pacman on
+# Arch. yay/paru must not run under sudo (they escalate themselves), hence
+# per-manager sudo.
 __detect_pkg_mgr() {
     if [[ "$OSTYPE" == darwin* ]] && command -v brew >/dev/null 2>&1; then
         echo brew; return
     fi
     if command -v apt-get >/dev/null 2>&1; then echo apt
     elif command -v yay >/dev/null 2>&1; then echo yay
+    elif command -v paru >/dev/null 2>&1; then echo paru
     elif command -v pacman >/dev/null 2>&1; then echo pacman
     elif command -v dnf >/dev/null 2>&1; then echo dnf
     elif command -v brew >/dev/null 2>&1; then echo brew
@@ -36,9 +38,11 @@ __pkg_name() {
         dnf:ccid)             echo "pcsc-lite-ccid" ;;
         *:ccid)               echo "ccid" ;;
         dnf:gnupg)            echo "gnupg2" ;;
+        *:wl-copy)            echo "wl-clipboard" ;;
+        *:paccache)           echo "pacman-contrib" ;;
         apt:go|dnf:go)        echo "golang" ;;
         apt:clangd)           echo "clangd" ;;
-        pacman:clangd|yay:clangd) echo "clang" ;;
+        pacman:clangd|yay:clangd|paru:clangd) echo "clang" ;;
         dnf:clangd)           echo "clang-tools-extra" ;;
         *)                    echo "$tool" ;;
     esac
@@ -69,11 +73,42 @@ __pkg_sudo() {
 __pkg_raw() {
     local mgr=$1; shift
     case "$mgr" in
-        brew)   brew install "$@" ;;
-        apt)    __pkg_sudo apt-get install -y "$@" ;;
-        yay)    yay -S --needed --noconfirm "$@" ;;
-        pacman) __pkg_sudo pacman -S --needed --noconfirm "$@" ;;
-        dnf)    __pkg_sudo dnf install -y "$@" ;;
-        *)      echo "No supported package manager found." >&2; return 1 ;;
+        brew)     brew install "$@" ;;
+        apt)      __pkg_sudo apt-get install -y "$@" ;;
+        yay|paru) "$mgr" -S --needed --noconfirm "$@" ;;
+        pacman)   __pkg_sudo pacman -S --needed --noconfirm "$@" ;;
+        dnf)      __pkg_sudo dnf install -y "$@" ;;
+        *)        echo "No supported package manager found." >&2; return 1 ;;
     esac
+}
+
+# True when this manager can reach the AUR
+__is_aur_helper() {
+    [ "$1" = "yay" ] || [ "$1" = "paru" ]
+}
+
+# Bootstrap an AUR helper on Arch. The AUR holds packages the official repos do
+# not (jdtls), and no repo packages a helper — so build yay-bin by hand once.
+# makepkg refuses to run as root, hence the uid check. Best-effort: a failure
+# here must not sink the install, it only means pacman-only packages.
+__bootstrap_aur_helper() {
+    command -v yay >/dev/null 2>&1 && return 0
+    command -v paru >/dev/null 2>&1 && return 0
+    if [ "$(id -u)" -eq 0 ]; then
+        echo "Note: skipping AUR helper bootstrap — makepkg refuses to run as root."
+        return 1
+    fi
+
+    echo "Bootstrapping yay (AUR helper)..."
+    __pkg_sudo pacman -S --needed --noconfirm base-devel git || return 1
+
+    local tmp
+    tmp="$(mktemp -d)"
+    if git clone --depth 1 https://aur.archlinux.org/yay-bin.git "$tmp/yay-bin" \
+        && ( cd "$tmp/yay-bin" && makepkg -si --noconfirm ); then
+        rm -rf "$tmp"
+        return 0
+    fi
+    rm -rf "$tmp"
+    return 1
 }

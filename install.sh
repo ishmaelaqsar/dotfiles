@@ -39,6 +39,13 @@ if [ -z "${DOTFILES_FORCE_HOST:-}" ]; then
     fi
 fi
 
+# Desktop box or headless? Gates desktop-only packages and GNOME settings, so
+# a server or a container does not pull in a clipboard tool it cannot use.
+IS_GRAPHICAL=0
+if [ -n "${WAYLAND_DISPLAY:-}" ] || [ -n "${DISPLAY:-}" ] || command -v gnome-shell >/dev/null 2>&1; then
+    IS_GRAPHICAL=1
+fi
+
 # -----------------------------
 # Absolute path to this script
 # -----------------------------
@@ -68,6 +75,16 @@ fi
 source "$SCRIPT_DIR/lib/pkg.sh"
 PKG_MGR="$(__detect_pkg_mgr)"
 
+# Arch with no AUR helper: build one, then detect again so the rest of the run
+# (and setup-java.sh's jdtls) can reach the AUR.
+if [ "$PKG_MGR" = "pacman" ] && [ "$IS_HOME_INSTALL" -eq 1 ] && [ "$IN_CONTAINER" -eq 0 ]; then
+    if __bootstrap_aur_helper; then
+        PKG_MGR="$(__detect_pkg_mgr)"
+    else
+        echo "Warning: no AUR helper — AUR-only packages will be skipped." >&2
+    fi
+fi
+
 if [ "$IN_CONTAINER" -eq 1 ]; then
     echo "[container] Skipping package installation."
 elif [ "$IS_HOME_INSTALL" -eq 1 ] && [ "$PKG_MGR" != "none" ]; then
@@ -92,6 +109,26 @@ elif [ "$IS_HOME_INSTALL" -eq 1 ] && [ "$PKG_MGR" != "none" ]; then
             echo "  -> Enabling pcscd.socket"
             __pkg_sudo systemctl enable --now pcscd.socket \
                 || echo "Warning: could not enable pcscd.socket — enable it manually." >&2
+        fi
+
+        # Wayland clipboard, on a desktop box only. .aliases maps
+        # pbcopy/pbpaste onto it.
+        if [ "$IS_GRAPHICAL" -eq 1 ]; then
+            __pkg_install "$PKG_MGR" wl-copy
+        fi
+    fi
+
+    # Arch upkeep. checkupdates lists updates without touching the sync
+    # database, pacdiff finds the .pacnew files an upgrade leaves behind, and
+    # paccache trims the package cache. .aliases wraps all three.
+    if [ "$PKG_MGR" = "pacman" ] || __is_aur_helper "$PKG_MGR"; then
+        __pkg_install "$PKG_MGR" paccache
+        # paccache.timer ships with pacman-contrib and trims the cache weekly.
+        # Without it /var/cache/pacman/pkg grows without limit.
+        if command -v paccache >/dev/null 2>&1 && command -v systemctl >/dev/null 2>&1; then
+            echo "  -> Enabling paccache.timer"
+            __pkg_sudo systemctl enable --now paccache.timer \
+                || echo "Warning: could not enable paccache.timer — enable it manually." >&2
         fi
     fi
 elif [ "$IS_HOME_INSTALL" -eq 0 ]; then
@@ -192,6 +229,20 @@ elif command -v git &> /dev/null; then
     git config --global core.excludesfile "$HOME/.gitignore_global"
     git config --global core.attributesfile "$HOME/.gitattributes"
 
+    # HTTPS remotes: keep the token in the GNOME keyring, not in a cleartext
+    # ~/.git-credentials. Arch ships the helper inside git itself; other
+    # distros put it elsewhere, or not at all — hence the search.
+    if [[ "$OSTYPE" != darwin* ]]; then
+        for helper in /usr/lib/git-core/git-credential-libsecret \
+                      /usr/libexec/git-core/git-credential-libsecret; do
+            if [ -x "$helper" ]; then
+                echo "  -> Using $helper for HTTPS credentials"
+                git config --global credential.helper "$helper"
+                break
+            fi
+        done
+    fi
+
     echo "Git configuration complete."
 else
     echo "Git not found. Skipping git configuration."
@@ -274,6 +325,35 @@ else
         gpg-connect-agent reloadagent /bye
     fi
 
+    # ---------------------------------------------------------------
+    # systemd user session: make the SSH-agent handover deterministic
+    # ---------------------------------------------------------------
+    # .bashrc points SSH_AUTH_SOCK at gpg-agent, but that covers login shells
+    # only. Graphical apps inherit the session environment instead, where:
+    #   * the gpg-agent SSH socket may not be listening yet, and
+    #   * GNOME starts its own SSH agent (gcr-ssh-agent, or gnome-keyring's)
+    #     that claims the variable and never asks the YubiKey.
+    # ~/.config/environment.d/10-gpg-ssh.conf sets the variable session-wide;
+    # these two steps make sure the right agent is behind it.
+    if command -v systemctl >/dev/null 2>&1 && [ -d "/run/user/$(id -u)" ]; then
+        echo "  -> Enabling gpg-agent-ssh.socket"
+        systemctl --user enable gpg-agent-ssh.socket 2>/dev/null \
+            || echo "Warning: could not enable gpg-agent-ssh.socket." >&2
+        # Starting it now fails when the agent this script just reloaded
+        # already holds the socket file. The enable above is what matters —
+        # systemd takes the socket at the next login.
+        systemctl --user start gpg-agent-ssh.socket >/dev/null 2>&1 || true
+
+        for unit in gcr-ssh-agent.socket gcr-ssh-agent.service gnome-keyring-ssh.service; do
+            if systemctl --user cat "$unit" >/dev/null 2>&1; then
+                echo "  -> Masking $unit (GNOME's SSH agent)"
+                systemctl --user mask --now "$unit" >/dev/null 2>&1 \
+                    || echo "Warning: could not mask $unit." >&2
+            fi
+        done
+        echo "  -> Log out and back in for SSH_AUTH_SOCK to reach graphical apps."
+    fi
+
     # -----------------------------
     # Import Public Key (Bootstrapping)
     # -----------------------------
@@ -310,10 +390,9 @@ if [ "$IS_HOME_INSTALL" -eq 0 ] || [ "$IN_CONTAINER" -eq 1 ]; then
 elif ! command -v opencode >/dev/null 2>&1; then
     echo "Installing OpenCode..."
     case "$PKG_MGR" in
-        brew)   brew install anomalyco/tap/opencode || echo "Warning: OpenCode install failed." >&2 ;;
-        yay)    yay -S --needed --noconfirm opencode || echo "Warning: OpenCode install failed." >&2 ;;
-        pacman) sudo pacman -S --needed --noconfirm opencode || echo "Warning: OpenCode install failed." >&2 ;;
-        *)      curl -fsSL https://opencode.ai/install | bash || echo "Warning: OpenCode install failed." >&2 ;;
+        brew)             brew install anomalyco/tap/opencode || echo "Warning: OpenCode install failed." >&2 ;;
+        yay|paru|pacman)  __pkg_raw "$PKG_MGR" opencode || echo "Warning: OpenCode install failed." >&2 ;;
+        *)                curl -fsSL https://opencode.ai/install | bash || echo "Warning: OpenCode install failed." >&2 ;;
     esac
 fi
 
@@ -330,11 +409,10 @@ if [ "$IS_HOME_INSTALL" -eq 0 ] || [ "$IN_CONTAINER" -eq 1 ]; then
 elif ! command -v ghostty >/dev/null 2>&1; then
     echo "Installing Ghostty..."
     case "$PKG_MGR" in
-        brew)   brew install --cask ghostty || echo "Warning: Ghostty install failed." >&2 ;;
-        yay)    yay -S --needed --noconfirm ghostty || echo "Warning: Ghostty install failed." >&2 ;;
-        pacman) sudo pacman -S --needed --noconfirm ghostty || echo "Warning: Ghostty install failed." >&2 ;;
-        dnf)    echo "Ghostty is not in Fedora's base repos — enable a COPR manually (skipping)." ;;
-        *)      echo "No Ghostty package for this platform — install manually (skipping)." ;;
+        brew)             brew install --cask ghostty || echo "Warning: Ghostty install failed." >&2 ;;
+        yay|paru|pacman)  __pkg_raw "$PKG_MGR" ghostty || echo "Warning: Ghostty install failed." >&2 ;;
+        dnf)              echo "Ghostty is not in Fedora's base repos — enable a COPR manually (skipping)." ;;
+        *)                echo "No Ghostty package for this platform — install manually (skipping)." ;;
     esac
 fi
 
@@ -347,6 +425,41 @@ if [[ "$OSTYPE" == darwin* ]] && [ -d "$GHOSTTY_TARGET_DIR" ] && [ ! -e "$GHOSTT
 # Machine-local Ghostty overrides — not tracked by the dotfiles repo.
 config-file = quick-terminal.conf
 EOF
+fi
+
+# -----------------------------
+# systemd user units (Linux)
+# -----------------------------
+# The Linux counterpart of a macOS LaunchAgent. sync-dotfiles already
+# symlinked dotfiles/.config/systemd/user/* into place; systemd still has to
+# be told they exist, and units with an [Install] section get enabled.
+UNIT_SRC_DIR="$DOTFILES_DIR/.config/systemd/user"
+
+if [ "$IS_HOME_INSTALL" -eq 1 ] && [ "$IN_CONTAINER" -eq 0 ] && [ -d "$UNIT_SRC_DIR" ] \
+   && command -v systemctl >/dev/null 2>&1 && [ -d "/run/user/$(id -u)" ]; then
+    echo "Reloading systemd user units..."
+    systemctl --user daemon-reload || echo "Warning: daemon-reload failed." >&2
+
+    for unit_path in "$UNIT_SRC_DIR"/*.service "$UNIT_SRC_DIR"/*.timer "$UNIT_SRC_DIR"/*.socket; do
+        [ -e "$unit_path" ] || continue
+        grep -q '^\[Install\]' "$unit_path" || continue
+        unit="$(basename "$unit_path")"
+        echo "  -> Enabling $unit"
+        systemctl --user enable --now "$unit" \
+            || echo "Warning: could not enable $unit." >&2
+    done
+fi
+
+# -----------------------------
+# GNOME desktop settings
+# -----------------------------
+# gsettings is GNOME's `defaults write`. bin/gnome-settings holds the key
+# allowlist and saves the previous values, so cleanup.sh can undo this.
+if [ "$IS_HOME_INSTALL" -eq 1 ] && [ "$IN_CONTAINER" -eq 0 ] \
+   && command -v gsettings >/dev/null 2>&1 && command -v gnome-shell >/dev/null 2>&1; then
+    echo "Applying GNOME settings..."
+    python3 "$SOURCE_BIN_DIR/gnome-settings" apply \
+        || echo "Warning: GNOME settings failed." >&2
 fi
 
 # -----------------------------

@@ -21,7 +21,7 @@ if [[ "$OSTYPE" == darwin* ]]; then
 else
     case "$PKG_MGR" in
         apt)        __pkg_raw apt build-essential gdb lldb clangd cmake valgrind ;;
-        yay|pacman) __pkg_raw "$PKG_MGR" base-devel gdb lldb clang cmake valgrind ;;
+        yay|paru|pacman) __pkg_raw "$PKG_MGR" base-devel gdb lldb clang cmake valgrind ;;
         dnf)        __pkg_raw dnf gcc gcc-c++ make gdb lldb clang-tools-extra cmake valgrind ;;
         *)          echo "No supported package manager found." >&2; exit 1 ;;
     esac

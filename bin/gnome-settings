@@ -1,0 +1,181 @@
+#!/usr/bin/env python3
+"""
+gnome-settings — apply, dump, or restore the GNOME desktop settings this repo
+manages. gsettings is GNOME's counterpart to `defaults write` on macOS.
+
+Only the keys in SETTINGS are touched. A full `dconf dump /` is not tracked on
+purpose: it is machine-specific and unreadable in a diff.
+
+The previous value of every managed key is written to
+~/.local/state/dotfiles/gnome-settings.json before the key changes, so
+`restore` (and cleanup.sh) can put the desktop back.
+
+Usage: gnome-settings apply | dump | restore
+"""
+
+import json
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+STATE_FILE = (
+    Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state"))
+    / "dotfiles"
+    / "gnome-settings.json"
+)
+
+# Relocatable schema for the one custom keybinding we own. The trailing slash
+# is part of the path, and gsettings rejects the path without it.
+KB_PATH = "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/dotfiles-terminal/"
+KB_SCHEMA = f"org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:{KB_PATH}"
+MEDIA_KEYS = "org.gnome.settings-daemon.plugins.media-keys"
+
+# (schema, key, value). Values are GVariant text, exactly as `gsettings set`
+# takes them — so a string carries its own quotes.
+SETTINGS = [
+    # GTK4 and libadwaita apps read the key theme here, not from
+    # ~/.config/gtk-3.0/settings.ini. Both are needed to cover GTK2/3 and GTK4.
+    ("org.gnome.desktop.interface", "gtk-key-theme", "'Emacs'"),
+    ("org.gnome.desktop.interface", "color-scheme", "'prefer-dark'"),
+    ("org.gnome.desktop.interface", "monospace-font-name", "'0xProto Nerd Font Mono 12'"),
+    # Caps Lock as a second Control.
+    ("org.gnome.desktop.input-sources", "xkb-options", "['ctrl:nocaps']"),
+    ("org.gnome.desktop.peripherals.keyboard", "delay", "250"),
+    ("org.gnome.desktop.peripherals.keyboard", "repeat-interval", "25"),
+    ("org.gnome.settings-daemon.plugins.color", "night-light-enabled", "true"),
+    # Fractional scaling on Wayland.
+    ("org.gnome.mutter", "experimental-features", "['scale-monitor-framebuffer']"),
+    # Nautilus "Open in Terminal", and anything else that asks the desktop for
+    # a terminal.
+    ("org.gnome.desktop.default-applications.terminal", "exec", "'ghostty'"),
+    ("org.gnome.desktop.default-applications.terminal", "exec-arg", "'-e'"),
+    # GNOME has no quick terminal (Mutter has no layer shell), so bind a
+    # normal Ghostty window to the same key instead.
+    (KB_SCHEMA, "name", "'Ghostty'"),
+    (KB_SCHEMA, "command", "'ghostty'"),
+    (KB_SCHEMA, "binding", "'<Super>grave'"),
+]
+
+
+def gsettings(*args):
+    """Run gsettings. Returns (ok, stripped stdout)."""
+    result = subprocess.run(
+        ["gsettings", *args], capture_output=True, text=True, check=False
+    )
+    return result.returncode == 0, result.stdout.strip()
+
+
+def get(schema, key):
+    """Current value, or None when the schema is not installed."""
+    ok, value = gsettings("get", schema, key)
+    return value if ok else None
+
+
+def default_of(schema, key):
+    """The schema default, read by resetting the key and reading it back."""
+    gsettings("reset", schema, key)
+    return get(schema, key)
+
+
+def parse_list(variant):
+    """Parse a GVariant string array: "['a', 'b']" -> ['a', 'b']."""
+    inner = variant.strip()
+    if inner.startswith("@as"):
+        inner = inner[3:].strip()
+    inner = inner.strip("[]").strip()
+    if not inner:
+        return []
+    return [item.strip().strip("'") for item in inner.split(",")]
+
+
+def format_list(items):
+    return "[" + ", ".join(f"'{item}'" for item in items) + "]"
+
+
+def load_state():
+    if STATE_FILE.exists():
+        return json.loads(STATE_FILE.read_text())
+    return {}
+
+
+def save_state(state):
+    STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    STATE_FILE.write_text(json.dumps(state, indent=2) + "\n")
+
+
+def apply():
+    state = load_state()
+
+    def remember(schema, key, current):
+        # setdefault, so a re-run never records our own value over the
+        # pre-dotfiles one, and a key added later still gets recorded.
+        state.setdefault(f"{schema} {key}", current)
+
+    for schema, key, value in SETTINGS:
+        current = get(schema, key)
+        if current is None:
+            print(f"  skip {schema} {key} (schema not installed)")
+            continue
+        remember(schema, key, current)
+        if current == value:
+            continue
+        ok, _ = gsettings("set", schema, key, value)
+        print(f"  {'set ' if ok else 'FAIL'} {schema} {key} = {value}")
+
+    # Register the keybinding path. GNOME reads a custom binding only when its
+    # path is listed here.
+    bindings = get(MEDIA_KEYS, "custom-keybindings")
+    if bindings is not None:
+        remember(MEDIA_KEYS, "custom-keybindings", bindings)
+        if KB_PATH not in bindings:
+            merged = parse_list(bindings) + [KB_PATH]
+            gsettings("set", MEDIA_KEYS, "custom-keybindings", format_list(merged))
+            print(f"  set  {MEDIA_KEYS} custom-keybindings += {KB_PATH}")
+
+    save_state(state)
+    print(f"Applied. Previous values saved in {STATE_FILE}")
+
+
+def dump():
+    for schema, key, _ in SETTINGS:
+        print(f"{schema} {key} = {get(schema, key)}")
+    print(f"{MEDIA_KEYS} custom-keybindings = {get(MEDIA_KEYS, 'custom-keybindings')}")
+
+
+def restore():
+    state = load_state()
+    if not state:
+        print("Nothing to restore — no saved state.")
+        return
+
+    for name, old in state.items():
+        schema, key = name.rsplit(" ", 1)
+        # Reset first, so a key the desktop never set stays unset instead of
+        # becoming an explicit user value that only equals the default.
+        current = default_of(schema, key)
+        if current is None:
+            print(f"  skip {schema} {key} (schema not installed)")
+            continue
+        if current != old:
+            gsettings("set", schema, key, old)
+        print(f"  restored {schema} {key} = {old}")
+
+    STATE_FILE.unlink()
+    print("Restored.")
+
+
+def main():
+    if len(sys.argv) != 2 or sys.argv[1] not in ("apply", "dump", "restore"):
+        print(__doc__.strip())
+        return 2
+    if shutil.which("gsettings") is None:
+        print("gsettings not found — not a GNOME machine. Nothing to do.")
+        return 0
+    {"apply": apply, "dump": dump, "restore": restore}[sys.argv[1]]()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

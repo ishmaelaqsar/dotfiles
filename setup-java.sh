@@ -39,7 +39,8 @@ set -u
 # jdtls (LSP): packaged for brew and the AUR only
 if ! command -v jdtls >/dev/null 2>&1; then
     case "$PKG_MGR" in
-        brew|yay) __pkg_raw "$PKG_MGR" jdtls || echo "Warning: jdtls install failed." >&2 ;;
+        brew|yay|paru) __pkg_raw "$PKG_MGR" jdtls || echo "Warning: jdtls install failed." >&2 ;;
+        pacman)   echo "Warning: jdtls is AUR-only and this box has no AUR helper. Run install.sh to bootstrap yay, then re-run this script." >&2 ;;
         *)        echo "Note: no jdtls package for $PKG_MGR — install manually or let the editor manage it." ;;
     esac
 fi

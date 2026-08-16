@@ -48,6 +48,33 @@ __rm_if_ours() {
     fi
 }
 
+# GNOME desktop settings — put the saved pre-dotfiles values back
+if command -v gsettings >/dev/null 2>&1; then
+    echo "Restoring GNOME settings..."
+    python3 "$SCRIPT_DIR/bin/gnome-settings" restore || true
+fi
+
+# systemd user units — disable ours while the unit files still exist, and undo
+# the SSH-agent handover install.sh set up
+if command -v systemctl >/dev/null 2>&1 && [ -d "/run/user/$(id -u)" ]; then
+    echo "Disabling systemd user units..."
+    UNIT_SRC_DIR="$SCRIPT_DIR/dotfiles/.config/systemd/user"
+    for unit_path in "$UNIT_SRC_DIR"/*.service "$UNIT_SRC_DIR"/*.timer "$UNIT_SRC_DIR"/*.socket; do
+        [ -e "$unit_path" ] || continue
+        grep -q '^\[Install\]' "$unit_path" || continue
+        systemctl --user disable --now "$(basename "$unit_path")" >/dev/null 2>&1 || true
+    done
+
+    systemctl --user disable --now gpg-agent-ssh.socket >/dev/null 2>&1 || true
+    for unit in gcr-ssh-agent.socket gcr-ssh-agent.service gnome-keyring-ssh.service; do
+        if [ "$(systemctl --user is-enabled "$unit" 2>/dev/null)" = "masked" ]; then
+            echo "  -> Unmasking $unit"
+            systemctl --user unmask "$unit" >/dev/null 2>&1 || true
+        fi
+    done
+    systemctl --user daemon-reload >/dev/null 2>&1 || true
+fi
+
 echo "Removing symlinks into $SELF_DIR..."
 while IFS= read -r -d '' src; do
     __rm_if_ours "$HOME/${src#"$SCRIPT_DIR/dotfiles/"}"
@@ -100,6 +127,13 @@ if command -v git >/dev/null 2>&1; then
     __git_unset_if user.email "ishmael-dev@aqsar.dev"
     __git_unset_if core.excludesfile "$HOME/.gitignore_global"
     __git_unset_if core.attributesfile "$HOME/.gitattributes"
+    # The path varies by distro, so match on the helper name
+    case "$(git config --global --get credential.helper 2>/dev/null)" in
+        */git-credential-libsecret)
+            git config --global --unset credential.helper
+            removed=$((removed + 1))
+            ;;
+    esac
 fi
 
 if [ "$ALL" -eq 1 ]; then
@@ -116,6 +150,8 @@ echo
 echo "Done: $removed item(s) removed."
 echo "System packages are not uninstalled. Installed by these scripts (remove manually if wanted):"
 echo "  install.sh:    eza fd/fdfind ripgrep fzf git-delta zellij bash-completion gnupg pinentry opencode ghostty"
+echo "                 wl-clipboard (desktop), pacman-contrib + yay (Arch)"
+echo "  System units left enabled (disable by hand): pcscd.socket, paccache.timer"
 echo "  setup-c.sh:    build-essential/base-devel gdb lldb clangd cmake valgrind"
 echo "  setup-go.sh:   go"
 echo "  setup-sbcl.sh: sbcl"

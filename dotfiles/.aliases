@@ -24,6 +24,19 @@ if command -v eza >/dev/null; then
     alias llt='eza --icons --group-directories-first -lars modified'
 fi
 
+# Wayland clipboard under the macOS names, so the muscle memory carries over.
+if ! command -v pbcopy >/dev/null && command -v wl-copy >/dev/null; then
+    alias pbcopy='wl-copy'
+    alias pbpaste='wl-paste --no-newline'
+fi
+
+# Arch upkeep (pacman-contrib). An upgrade leaves .pacnew files behind and
+# never says so, and the package cache grows without limit.
+command -v checkupdates >/dev/null && alias pacup='checkupdates'
+command -v pacdiff >/dev/null && alias pacnew='sudo DIFFPROG=vimdiff pacdiff'
+command -v paccache >/dev/null && alias paccleanup='sudo paccache -rk2'
+command -v pacman >/dev/null && alias pacorphans='pacman -Qtdq'
+
 # Quickly reload bash configuration
 alias reload='source ~/.bashrc && echo "Bash config reloaded."'
 

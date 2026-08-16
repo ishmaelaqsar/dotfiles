@@ -28,12 +28,14 @@ git clone https://github.com/ishmaelaqsar/dotfiles.git ~/.dotfiles
 ```
 
 The `install.sh` script will:
-1. **Install packages** via the detected manager (brew / apt / yay / pacman / dnf): `eza`, `fd`, `ripgrep`, `fzf`, `git-delta`, `zellij` (Arch/brew only — Debian and Fedora lack a package), plus [OpenCode](https://opencode.ai) and [Ghostty](https://ghostty.org) (best-effort).
+1. **Install packages** via the detected manager (brew / apt / yay / paru / pacman / dnf): `eza`, `fd`, `ripgrep`, `fzf`, `git-delta`, `zellij` (Arch/brew only — Debian and Fedora lack a package), plus [OpenCode](https://opencode.ai) and [Ghostty](https://ghostty.org) (best-effort). On Arch it first bootstraps **yay** if no AUR helper is present.
 2. Symlink configuration files (`.bashrc`, `.vimrc`, etc.) to your home directory.
 3. Symlink scripts from `bin/` to `$HOME/bin`.
 4. Install the vendored **0xProto Nerd Font** from `general/0xProto/`.
 5. **Configure GPG Agent** for SSH support and YubiKey usage (detects OS and pinentry).
 6. **Install Git Hooks** to prevent committing unencrypted secrets.
+7. On Linux: enable the systemd user units in `dotfiles/.config/systemd/user/`, and apply the
+   GNOME settings (see [Linux desktop](#linux-desktop-gnome--arch)).
 
 Flags and safety:
 
@@ -155,6 +157,65 @@ The vault lives at `$OBSIDIAN_VAULT` (default `~/vault`). Shell-side companions 
 
 Config in `dotfiles/.config/ghostty/`. The Quake-style quick terminal is **opt-in per machine**
 via the untracked `config.local` (the installer enables it on macOS; Linux needs compositor
-setup — see `quick-terminal.conf`).
+setup — see `quick-terminal.conf`). GNOME cannot host it at all, so `bin/gnome-settings` binds
+Super+` to a normal Ghostty window there instead.
+
+---
+
+## Linux desktop (GNOME + Arch)
+
+### GNOME settings
+
+`gsettings` is GNOME's counterpart to `defaults write` on macOS. `bin/gnome-settings` manages a
+small **allowlist** of keys — a full `dconf dump /` is deliberately not tracked, because it is
+machine-specific and unreadable in a diff.
+
+| Command | Effect |
+| :--- | :--- |
+| `gnome-settings apply` | Set the managed keys. `install.sh` runs this when GNOME is detected. |
+| `gnome-settings dump` | Print the current value of every managed key. |
+| `gnome-settings restore` | Put the pre-dotfiles values back. `cleanup.sh` runs this. |
+
+Managed today: Emacs key theme (GTK4 needs the gsettings key — `settings.ini` covers GTK2/3
+only), dark colour scheme, 0xProto as the monospace font, Caps Lock as Control, key-repeat
+rates, Night Light, fractional scaling, Ghostty as the desktop terminal, and Super+` bound to
+Ghostty. The previous values go to `~/.local/state/dotfiles/gnome-settings.json` on first apply.
+
+### SSH agent: gpg-agent, not GNOME's
+
+`.bashrc` points `SSH_AUTH_SOCK` at gpg-agent, but that covers **login shells only**. Graphical
+apps (VS Code and GNOME apps) read the systemd user environment, where GNOME's own agent would
+otherwise claim the variable and never ask the YubiKey. Three parts fix it:
+
+* `dotfiles/.config/environment.d/10-gpg-ssh.conf` sets `SSH_AUTH_SOCK` session-wide.
+* `install.sh` enables `gpg-agent-ssh.socket`, so the agent is listening before any app asks.
+* `install.sh` masks `gcr-ssh-agent` / `gnome-keyring-ssh` (whichever this GNOME version ships).
+
+**Log out and back in** after the first install — the session environment is read at login.
+
+HTTPS git remotes use `git-credential-libsecret` (the GNOME keyring) instead of a cleartext
+`~/.git-credentials`, when the helper is present.
+
+### systemd user units
+
+The Linux counterpart of a macOS LaunchAgent. Drop a `*.service`, `*.timer`, or `*.socket` file
+in `dotfiles/.config/systemd/user/`; `install.sh` reloads systemd and enables every unit with an
+`[Install]` section, and `cleanup.sh` disables them again.
+
+### Arch upkeep
+
+`install.sh` installs `pacman-contrib` and enables `paccache.timer` (weekly cache trim). The
+aliases wrap the rest:
+
+| Alias | Command | Why |
+| :--- | :--- | :--- |
+| `pacup` | `checkupdates` | List updates without touching the sync database. |
+| `pacnew` | `pacdiff` | Merge the `.pacnew` files an upgrade leaves behind silently. |
+| `paccleanup` | `paccache -rk2` | Trim the package cache by hand. |
+| `pacorphans` | `pacman -Qtdq` | List orphaned dependencies. |
+
+`dotfiles/.makepkg.conf` builds AUR packages with all cores and skips package compression.
+Nothing packages an AUR helper, so `install.sh` builds `yay-bin` once on a fresh Arch box —
+without it, AUR-only packages (`jdtls`) are skipped.
 
 ---

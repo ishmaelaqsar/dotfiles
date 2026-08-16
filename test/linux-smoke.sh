@@ -58,6 +58,16 @@ elif command -v pacman >/dev/null 2>&1; then flunk "zellij missing (packaged on 
 else echo "note: zellij not packaged here — best-effort, skipped"
 fi
 { command -v fd || command -v fdfind; } >/dev/null 2>&1 && pass "fd/fdfind" || flunk "fd/fdfind missing"
+# Arch upkeep tools. wl-clipboard is desktop-only and a container is headless,
+# so check the package name instead of the binary.
+if command -v pacman >/dev/null 2>&1; then
+    check paccache
+    pacman -Si wl-clipboard >/dev/null 2>&1 && pass "pacman knows 'wl-clipboard'" || flunk "no 'wl-clipboard' package in pacman repos"
+    [ -L "$HOME/.makepkg.conf" ] && pass ".makepkg.conf symlinked" || flunk ".makepkg.conf not a symlink"
+fi
+[ -L "$HOME/.config/environment.d/10-gpg-ssh.conf" ] && pass "environment.d gpg-ssh symlinked" || flunk "environment.d gpg-ssh missing"
+[ -L "$HOME/.config/fontconfig/fonts.conf" ] && pass "fontconfig symlinked" || flunk "fontconfig missing"
+python3 ./bin/gnome-settings dump >/dev/null 2>&1 && pass "gnome-settings runs without GNOME" || flunk "gnome-settings failed on a non-GNOME box"
 [ -f "$HOME/.local/share/fonts/0xProtoNerdFont-Regular.ttf" ] && pass "fonts installed" || flunk "fonts missing"
 [ -L "$HOME/.bashrc" ] && pass ".bashrc symlinked" || flunk ".bashrc not a symlink"
 [ "$(git config --global user.email)" = "ishmael-dev@aqsar.dev" ] && pass "git identity set" || flunk "git identity wrong"
@@ -112,6 +122,7 @@ say "cleanup.sh -a"
 # under pipefail that masquerades as a cleanup failure
 printf 'y\n' | ./cleanup.sh -a || flunk "cleanup.sh exited non-zero"
 [ ! -L "$HOME/.bashrc" ] && pass ".bashrc symlink removed" || flunk ".bashrc symlink survived cleanup"
+[ ! -L "$HOME/.config/environment.d/10-gpg-ssh.conf" ] && pass "environment.d gpg-ssh removed" || flunk "environment.d gpg-ssh survived cleanup"
 [ ! -f "$HOME/.local/share/fonts/0xProtoNerdFont-Regular.ttf" ] && pass "fonts removed" || flunk "fonts survived cleanup"
 [ ! -d "$HOME/quicklisp" ] && pass "quicklisp removed" || flunk "quicklisp survived cleanup"
 
