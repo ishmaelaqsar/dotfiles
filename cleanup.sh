@@ -54,6 +54,15 @@ if command -v gsettings >/dev/null 2>&1; then
     python3 "$SCRIPT_DIR/bin/gnome-settings" restore || true
 fi
 
+# GNOME Shell extension installed by install.sh
+QUAKE_UUID="quake-terminal@diegodario88.github.io"
+if command -v gnome-extensions >/dev/null 2>&1 \
+   && gnome-extensions list 2>/dev/null | grep -qx "$QUAKE_UUID"; then
+    echo "Removing the Quake Terminal GNOME extension..."
+    gnome-extensions uninstall "$QUAKE_UUID" >/dev/null 2>&1 || true
+    removed=$((removed + 1))
+fi
+
 # systemd user units — disable ours while the unit files still exist, and undo
 # the SSH-agent handover install.sh set up
 if command -v systemctl >/dev/null 2>&1 && [ -d "/run/user/$(id -u)" ]; then

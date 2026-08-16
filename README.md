@@ -158,7 +158,7 @@ The vault lives at `$OBSIDIAN_VAULT` (default `~/vault`). Shell-side companions 
 Config in `dotfiles/.config/ghostty/`. The Quake-style quick terminal is **opt-in per machine**
 via the untracked `config.local` (the installer enables it on macOS; Linux needs compositor
 setup — see `quick-terminal.conf`). GNOME cannot host it at all, so `bin/gnome-settings` binds
-Super+` to a normal Ghostty window there instead.
+Super+Return to a normal Ghostty window there instead.
 
 ---
 
@@ -178,8 +178,48 @@ machine-specific and unreadable in a diff.
 
 Managed today: Emacs key theme (GTK4 needs the gsettings key — `settings.ini` covers GTK2/3
 only), dark colour scheme, 0xProto as the monospace font, Caps Lock as Control, key-repeat
-rates, Night Light, fractional scaling, Ghostty as the desktop terminal, and Super+` bound to
-Ghostty. The previous values go to `~/.local/state/dotfiles/gnome-settings.json` on first apply.
+rates, Night Light, fractional scaling, Ghostty as the desktop terminal, and the window keys
+below. The previous values go to `~/.local/state/dotfiles/gnome-settings.json` on first apply.
+
+### Window and workspace keys
+
+Super stays a window-manager key on Linux, the way i3 and Hyprland use it. Terminal shortcuts
+are **not** unified with macOS: `Ctrl+C` cannot be the copy key in a terminal, so Linux keeps
+`ctrl+shift+…` and macOS keeps `cmd+…`.
+
+| Key | Action |
+| :--- | :--- |
+| `Super+Return` | Ghostty — the i3/sway/Hyprland idiom for "terminal". |
+| `Super+1…4` | Jump to that workspace. |
+| `Super+Shift+1…4` | Move the focused window to that workspace. |
+| `Super+Alt+Left/Right` | Previous / next workspace (a GNOME default, kept as is). |
+
+Two GNOME defaults are displaced to make this work. `Super+N` normally switches to the Nth
+**application** in the dash, so those bindings are cleared. Workspaces become **static**, four of
+them (`WORKSPACES` in `bin/gnome-settings`), because a dynamic count has nothing to jump to when
+the desktop is quiet. `gnome-settings restore` puts both back.
+
+### Drop-down terminal
+
+Ghostty's own quick terminal needs `wlr-layer-shell`, which Mutter does not implement, and on
+Wayland nothing outside the shell can raise or hide another app's window. A GNOME Shell extension
+is therefore the only route. `install.sh` installs
+[Quake Terminal](https://extensions.gnome.org/extension/6307/quake-terminal/)
+(`quake-terminal@diegodario88.github.io`), which drops down the **Ghostty** window that is already
+there — so one terminal config still covers macOS and Linux.
+
+It pulls the build that matches this machine's shell version from the extensions.gnome.org API,
+with `gnome-extensions`, which ships inside gnome-shell. No extra tooling. `cleanup.sh` removes it.
+
+After the first install: **log out and back in** (a new extension is not loaded until the shell
+restarts), then set the hotkey in the extension's preferences. `F12` is the Guake convention and
+collides with nothing. If you prefer ``Super+` ``, clear GNOME's `switch-group` binding first —
+Mutter grabs that key before any app sees it.
+
+The extension's own settings are **not** tracked in `gnome-settings` yet, because its schema keys
+have to be read on a machine that has it installed. To track them, run
+`gsettings list-recursively org.gnome.shell.extensions.quake-terminal` after setting the hotkey,
+and add the keys to `SETTINGS` in `bin/gnome-settings`.
 
 ### SSH agent: gpg-agent, not GNOME's
 

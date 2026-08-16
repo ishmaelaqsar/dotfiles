@@ -32,6 +32,9 @@ KB_PATH = "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/dotf
 KB_SCHEMA = f"org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:{KB_PATH}"
 MEDIA_KEYS = "org.gnome.settings-daemon.plugins.media-keys"
 
+# How many static workspaces to keep, and therefore how many Super+N jumps.
+WORKSPACES = 4
+
 # (schema, key, value). Values are GVariant text, exactly as `gsettings set`
 # takes them — so a string carries its own quotes.
 SETTINGS = [
@@ -52,11 +55,27 @@ SETTINGS = [
     ("org.gnome.desktop.default-applications.terminal", "exec", "'ghostty'"),
     ("org.gnome.desktop.default-applications.terminal", "exec-arg", "'-e'"),
     # GNOME has no quick terminal (Mutter has no layer shell), so bind a
-    # normal Ghostty window to the same key instead.
+    # normal Ghostty window. Super+Return is the i3/sway/Hyprland idiom for
+    # "terminal", and GNOME leaves the key free.
     (KB_SCHEMA, "name", "'Ghostty'"),
     (KB_SCHEMA, "command", "'ghostty'"),
-    (KB_SCHEMA, "binding", "'<Super>grave'"),
+    (KB_SCHEMA, "binding", "'<Super>Return'"),
+    # Numbered workspaces need a fixed count. GNOME's dynamic workspaces grow
+    # and shrink, so "jump to 4" has nothing to jump to on a quiet desktop.
+    ("org.gnome.mutter", "dynamic-workspaces", "false"),
+    ("org.gnome.desktop.wm.preferences", "num-workspaces", str(WORKSPACES)),
 ]
+
+# Super+N jumps to a workspace and Super+Shift+N moves the window there — the
+# i3 layout. GNOME ships Super+N as "switch to application N" in the dash, so
+# that binding has to go first, or the shell grabs the key before Mutter.
+# Left/right switching is already Super+Alt+Left/Right and Super+PageUp/Down.
+for n in range(1, WORKSPACES + 1):
+    SETTINGS += [
+        ("org.gnome.shell.keybindings", f"switch-to-application-{n}", "[]"),
+        ("org.gnome.desktop.wm.keybindings", f"switch-to-workspace-{n}", f"['<Super>{n}']"),
+        ("org.gnome.desktop.wm.keybindings", f"move-to-workspace-{n}", f"['<Super><Shift>{n}']"),
+    ]
 
 
 def gsettings(*args):

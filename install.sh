@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # =============================================================================
-# Personal dotfiles installer — macOS, Debian, Arch (omarchy), Fedora.
+# Personal dotfiles installer — macOS, Debian, Arch (GNOME), Fedora.
 #
 # Usage: ./install.sh [-f] [target-dir]
 #
@@ -448,6 +448,54 @@ if [ "$IS_HOME_INSTALL" -eq 1 ] && [ "$IN_CONTAINER" -eq 0 ] && [ -d "$UNIT_SRC_
         systemctl --user enable --now "$unit" \
             || echo "Warning: could not enable $unit." >&2
     done
+fi
+
+# -----------------------------
+# GNOME Shell extensions
+# -----------------------------
+# Ghostty's own quick terminal needs wlr-layer-shell, which Mutter does not
+# implement. Quake Terminal does the same job from inside the shell: it drops
+# down the Ghostty window that is already there, so one terminal config still
+# covers macOS and Linux. `gnome-extensions` ships with gnome-shell, so no
+# extra tooling is needed — only the right build for this shell version.
+QUAKE_UUID="quake-terminal@diegodario88.github.io"
+
+if [ "$IS_HOME_INSTALL" -eq 1 ] && [ "$IN_CONTAINER" -eq 0 ] \
+   && command -v gnome-shell >/dev/null 2>&1 && command -v gnome-extensions >/dev/null 2>&1; then
+    if gnome-extensions list 2>/dev/null | grep -qx "$QUAKE_UUID"; then
+        echo "Quake Terminal extension already installed."
+    else
+        echo "Installing the Quake Terminal GNOME extension..."
+        SHELL_VERSION="$(gnome-shell --version | awk '{print $3}' | cut -d. -f1)"
+        DOWNLOAD_PATH="$(python3 - "$QUAKE_UUID" "$SHELL_VERSION" <<'PY' || true
+import json, sys, urllib.parse, urllib.request
+
+query = urllib.parse.urlencode({"uuid": sys.argv[1], "shell_version": sys.argv[2]})
+try:
+    with urllib.request.urlopen(
+        f"https://extensions.gnome.org/extension-info/?{query}", timeout=20
+    ) as response:
+        print(json.load(response)["download_url"])
+except Exception:
+    sys.exit(1)
+PY
+)"
+        if [ -z "$DOWNLOAD_PATH" ]; then
+            echo "Warning: no Quake Terminal build for GNOME $SHELL_VERSION — install it from extensions.gnome.org by hand." >&2
+        else
+            TMP_DIR="$(mktemp -d)"
+            if curl -fsSL "https://extensions.gnome.org$DOWNLOAD_PATH" -o "$TMP_DIR/quake.zip" \
+                && gnome-extensions install --force "$TMP_DIR/quake.zip"; then
+                # A new extension is not loaded until the shell restarts, so
+                # enabling it now fails on Wayland. It takes effect at login.
+                gnome-extensions enable "$QUAKE_UUID" >/dev/null 2>&1 || true
+                echo "  -> Installed. Log out and back in, then set the hotkey in its preferences."
+            else
+                echo "Warning: could not install the Quake Terminal extension." >&2
+            fi
+            rm -rf "$TMP_DIR"
+        fi
+    fi
 fi
 
 # -----------------------------
