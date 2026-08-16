@@ -21,7 +21,7 @@
 
 ### 2. SD Card Longevity (Log2Ram)
 ```bash
-curl -L [https://github.com/azlux/log2ram/archive/master.tar.gz](https://github.com/azlux/log2ram/archive/master.tar.gz) | tar zx
+curl -L https://github.com/azlux/log2ram/archive/master.tar.gz | tar zx
 cd log2ram-master && sudo ./install.sh
 sudo reboot
 ```
@@ -75,7 +75,7 @@ sudo mkdir -p /var/lib/forgejo/{custom,data,log} /etc/forgejo
 sudo chown -R git:git /var/lib/forgejo/
 sudo chown root:git /etc/forgejo && sudo chmod 770 /etc/forgejo
 
-wget [https://codeberg.org/forgejo/forgejo/releases/download/v14.0.1/forgejo-14.0.1-linux-arm64](https://codeberg.org/forgejo/forgejo/releases/download/v14.0.1/forgejo-14.0.1-linux-arm64)
+wget https://codeberg.org/forgejo/forgejo/releases/download/v14.0.1/forgejo-14.0.1-linux-arm64
 sudo mv forgejo-14.0.1-linux-arm64 /usr/local/bin/forgejo
 sudo chmod +x /usr/local/bin/forgejo
 ```
@@ -120,7 +120,7 @@ WantedBy=multi-user.target
 ## 🔐 Phase 4: Local HTTPS Gateway (Caddy)
 ### 1. Install Custom Caddy (DNS-01)
 ```bash
-curl -JL "[https://caddyserver.com/api/download?os=linux&arch=arm64&p=github.com/caddy-dns/cloudflare](https://caddyserver.com/api/download?os=linux&arch=arm64&p=github.com/caddy-dns/cloudflare)" -o caddy
+curl -JL "https://caddyserver.com/api/download?os=linux&arch=arm64&p=github.com/caddy-dns/cloudflare" -o caddy
 chmod +x caddy
 sudo mv caddy /usr/local/bin/caddy
 sudo setcap CAP_NET_BIND_SERVICE=+eip /usr/local/bin/caddy
@@ -169,7 +169,7 @@ WantedBy=multi-user.target
 ## 🌐 Phase 5: Global Access (Cloudflare Tunnel)
 ### 1. Install & Authenticate
 ```bash
-curl -L [https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64.deb](https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64.deb) -o cloudflared.deb
+curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64.deb -o cloudflared.deb
 sudo dpkg -i cloudflared.deb
 
 cloudflared tunnel login

@@ -13,7 +13,7 @@ sudo apt update && sudo apt upgrade -y
 sudo apt install -y curl git-core
 
 # 1. Install Log2Ram
-curl -L [https://github.com/azlux/log2ram/archive/master.tar.gz](https://github.com/azlux/log2ram/archive/master.tar.gz) | tar zx
+curl -L https://github.com/azlux/log2ram/archive/master.tar.gz | tar zx
 cd log2ram-master && sudo ./install.sh
 cd ..
 
@@ -55,7 +55,7 @@ Install Docker and prepare the persistence folders.
 
 ```bash
 # Install Docker
-curl -fsSL [https://get.docker.com](https://get.docker.com) -o get-docker.sh && sudo sh get-docker.sh
+curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh
 sudo usermod -aG docker $USER
 newgrp docker 
 
@@ -142,7 +142,7 @@ services:
       context: .
       dockerfile_inline: |
         FROM caddy:builder AS builder
-        RUN xcaddy build --with [github.com/caddy-dns/cloudflare](https://github.com/caddy-dns/cloudflare)
+        RUN xcaddy build --with github.com/caddy-dns/cloudflare
         FROM caddy:latest
         COPY --from=builder /usr/bin/caddy /usr/bin/caddy
     container_name: caddy
