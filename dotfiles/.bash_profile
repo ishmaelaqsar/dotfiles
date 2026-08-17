@@ -47,10 +47,8 @@ export VM_USER="ishmael"
 # Second brain vault — defaults to ~/vault (.helpers); override per machine:
 # export OBSIDIAN_VAULT="$HOME/some/other/vault"
 
-# Local workspace
-if [[ ! -d ~/workspace ]]; then
-    mkdir ~/workspace
-fi
+# Local workspace. install.sh creates the directory: a login shell reads its
+# configuration, and does not build the home directory.
 export WORKSPACE="$HOME/workspace"
 
 # ------------------------------------------------------------

@@ -154,8 +154,15 @@ if [ "$ALL" -eq 1 ]; then
     echo "Removing language toolchains..."
     rm -rf "$HOME/.sdkman" "$HOME/quicklisp" "$HOME/.local/share/uv"
     rm -f "$HOME/.local/bin/uv" "$HOME/.local/bin/uvx"
-    # uv tool shims are symlinks into ~/.local/share/uv — now dangling
-    find "$HOME/.local/bin" -maxdepth 1 -type l ! -exec test -e {} \; -delete 2>/dev/null || true
+    # uv tool shims are symlinks into ~/.local/share/uv, and the line above
+    # left them dangling. Match on the target: deleting every dangling link in
+    # ~/.local/bin would take the ones other tools own as well.
+    for shim in "$HOME/.local/bin"/*; do
+        [ -L "$shim" ] || continue
+        case "$(readlink "$shim")" in
+            *"/.local/share/uv/"*) rm -f "$shim" ;;
+        esac
+    done
     echo "Note: ~/go left alone (may contain your code) — remove gopls/dlv from ~/go/bin yourself."
     echo "Note: ~/.sbclrc may still reference quicklisp — edit it if you kept SBCL."
 fi

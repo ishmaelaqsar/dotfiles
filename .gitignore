@@ -1,2 +1,6 @@
 # Machine-local Ghostty overrides — written by install.sh, never tracked.
 dotfiles/.config/ghostty/config.local
+
+# Python byte-code cache, next to the scripts in bin/ and lib/
+__pycache__/
+*.pyc

@@ -511,6 +511,11 @@ def cmd_ssh(args):
         print(f"\n❌ Cannot find IP for {name}. Ensure it is running and agent is installed.", file=sys.stderr)
         sys.exit(1)
 
+    # argparse keeps the `--` separator in a REMAINDER, and it is not part of
+    # the command. `vm ssh -- -l root uname` needs it, because a remainder that
+    # starts with a flag goes to the parent parser instead.
+    extra = args.extra[1:] if args.extra and args.extra[0] == "--" else args.extra
+
     # A local machine changes its key often, so ignore the key, and keep it
     # out of known_hosts.
     ssh_cmd = [
@@ -519,7 +524,7 @@ def cmd_ssh(args):
         "-o", "UserKnownHostsFile=/dev/null",
         "-o", "LogLevel=ERROR",
         f"{user}@{ip}"
-    ] + args.extra
+    ] + extra
 
     if args.dry_run:
         print(f"🛑 [DRY-RUN] Would exec: {' '.join(ssh_cmd)}")
@@ -556,7 +561,8 @@ def cmd_deploy(args):
         print(f"❌ Deployment script not found: {script}", file=sys.stderr)
         sys.exit(1)
 
-    cmd = [os.path.abspath(script), user, ip] + args.extra
+    extra = args.extra[1:] if args.extra and args.extra[0] == "--" else args.extra
+    cmd = [os.path.abspath(script), user, ip] + extra
 
     if args.dry_run:
         print(f"🛑 [DRY-RUN] Would run script: {' '.join(cmd)}")

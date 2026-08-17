@@ -97,6 +97,19 @@ if command -v pacman >/dev/null 2>&1; then
     [ -L "$HOME/.makepkg.conf" ] && pass ".makepkg.conf symlinked" || flunk ".makepkg.conf not a symlink"
 fi
 [ -L "$HOME/.config/environment.d/10-gpg-ssh.conf" ] && pass "environment.d gpg-ssh symlinked" || flunk "environment.d gpg-ssh missing"
+# environment.d expands $VAR only. A systemd specifier such as %t would reach
+# the session as literal characters, and every graphical app would then get a
+# socket path that does not exist. Read the assignment alone: the comments in
+# that file name the specifier to explain why it is not used.
+SOCK_LINE="$(grep '^SSH_AUTH_SOCK=' "$HOME/.config/environment.d/10-gpg-ssh.conf")"
+case "$SOCK_LINE" in
+    *'${XDG_RUNTIME_DIR}'*) pass "environment.d uses a variable, not a specifier" ;;
+    *%*) flunk "environment.d holds a specifier: SSH_AUTH_SOCK stays literal" ;;
+    *) flunk "environment.d SSH_AUTH_SOCK is unexpected: $SOCK_LINE" ;;
+esac
+# Debian ships fd as fdfind, so the fuzzy-find helpers call __fd
+bash -lic '__fd --version' >/dev/null 2>&1 \
+    && pass "__fd resolves on this distro" || flunk "__fd does not resolve"
 [ -L "$HOME/.config/fontconfig/fonts.conf" ] && pass "fontconfig symlinked" || flunk "fontconfig missing"
 python3 ./bin/gnome-settings dump >/dev/null 2>&1 && pass "gnome-settings runs without GNOME" || flunk "gnome-settings failed on a non-GNOME box"
 [ -f "$HOME/.local/share/fonts/0xProtoNerdFont-Regular.ttf" ] && pass "fonts installed" || flunk "fonts missing"

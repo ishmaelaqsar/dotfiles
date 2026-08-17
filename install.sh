@@ -375,6 +375,14 @@ if [ -L "$STALE_SYNC_LINK" ] && [ "$(readlink "$STALE_SYNC_LINK")" = "$SOURCE_BI
 fi
 
 # -----------------------------
+# Workspace directory
+# -----------------------------
+# .bash_profile exports WORKSPACE, and the fuzzy-find helpers search it. The
+# directory is created here, because a login shell must not build the home
+# directory as a side effect of reading its configuration.
+__run mkdir -p "$TARGET_DIR/workspace"
+
+# -----------------------------
 # Sync custom scripts
 # -----------------------------
 echo "Syncing custom scripts to $TARGET_BIN_DIR..."

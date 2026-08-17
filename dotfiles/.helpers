@@ -2,20 +2,21 @@
 # Helper Functions
 # ============================================================
 
-# Check for internet connectivity
+# Check for internet connectivity. The last host is a name, so it also proves
+# that DNS answers.
 __has_internet() {
-    ping -c 1 -W 1 1.1.1.1 >/dev/null 2>&1 || \
-    ping -c 1 -W 1 8.8.8.8 >/dev/null 2>&1 || \
-    ping -c 1 -W 1 cpan.org >/dev/null 2>&1
+    # Linux ping takes -W <seconds>. macOS ping takes -t <seconds>, and reads
+    # -W as milliseconds, so -W 1 there times out after 1 ms.
+    local wait="-W"
+    [[ "$OSTYPE" == darwin* ]] && wait="-t"
+    ping -c 1 "$wait" 1 1.1.1.1 >/dev/null 2>&1 || \
+    ping -c 1 "$wait" 1 8.8.8.8 >/dev/null 2>&1 || \
+    ping -c 1 "$wait" 1 cpan.org >/dev/null 2>&1
 }
 
 # Detect git project root (fallback: current dir)
 __get_project_root() {
-    if git rev-parse --show-toplevel >/dev/null 2>&1; then
-        git rev-parse --show-toplevel
-    else
-        pwd
-    fi
+    git rev-parse --show-toplevel 2>/dev/null || pwd
 }
 
 # Usage: encrypt <file_or_folder> [recipient_email]
@@ -28,8 +29,11 @@ encrypt() {
     local recipient
     local output
 
-    # Check if data is being piped in via stdin (e.g., echo "hi" | encrypt)
-    if [[ -p /dev/stdin ]] || [[ ! -t 0 ]]; then
+    # Data on stdin, as in `echo hi | encrypt`. `! -t 0` is true in every
+    # script and every agent shell, so also require that no argument names a
+    # file. Otherwise `encrypt notes.txt` in a script reads the file name as the
+    # recipient.
+    if [[ ! -t 0 && ( -z "$1" || ! -e "$1" ) ]]; then
         recipient="${1:-${IDENTITY:-$KEYID}}"
         output="encrypted.$(date +%s).enc"
 
@@ -195,6 +199,7 @@ __are_secrets_loaded() {
 
     # If keys are passed as arguments, only check those
     if [[ $# -gt 0 ]]; then
+        local key
         for key in "$@"; do
             # If any requested key is empty in the environment, return false
             if [[ -z "${!key}" ]]; then
@@ -204,11 +209,13 @@ __are_secrets_loaded() {
         return 0
     fi
 
-    # Check all keys in the file
-    while IFS= read -r line; do
+    # Check all keys in the file. The `|| [[ -n ... ]]` reads a last line that
+    # carries no newline.
+    local line key
+    while IFS= read -r line || [[ -n "$line" ]]; do
         [[ -z "$line" || "$line" == \#* ]] && continue
         if [[ "$line" =~ ^([A-Za-z0-9_]+)= ]]; then
-            local key="${BASH_REMATCH[1]}"
+            key="${BASH_REMATCH[1]}"
             if [[ -z "${!key}" ]]; then
                 return 1
             fi
@@ -218,21 +225,40 @@ __are_secrets_loaded() {
     return 0
 }
 
-# Usage: add_secret API_KEY "super_secret_value"
-# This runs the python tool, updates the file, AND exports to current shell
-function add_secret() {
-    if [ -z "$1" ] || [ -z "$2" ]; then
-        echo "Usage: add_secret <KEY> <VALUE>"
+# Usage: add_secret API_KEY
+#        add_secret API_KEY "super_secret_value"
+#
+# Encrypts the value into .secrets, and exports it to the current shell.
+# Without the value the shell asks for it, and reads it without an echo. Prefer
+# that form: a value on the command line lands in ~/.bash_history, and `ps`
+# shows it while the command runs.
+add_secret() {
+    local key="$1" value="$2"
+
+    if [ -z "$key" ]; then
+        echo "Usage: add_secret <KEY> [VALUE]" >&2
+        echo "Leave out VALUE, and the shell asks for it." >&2
         return 1
     fi
 
-    # We eval the output of the python script to set the env var immediately
-    eval "$(manage-secrets encrypt "$1" "$2")"
+    if [ -z "$value" ]; then
+        read -rsp "Value for $key: " value
+        echo
+        if [ -z "$value" ]; then
+            echo "Nothing entered." >&2
+            return 1
+        fi
+    fi
+
+    # The value goes in on stdin, so it stays out of the argument list. eval
+    # applies the `export` line the tool prints.
+    eval "$(printf '%s' "$value" | manage-secrets encrypt "$key")"
 }
 
-# Usage: load_secrets
-# This prompts for YubiKey PIN (once per session/day) and exports all vars
-function load_secrets() {
+# Usage: load_secrets [KEY...]
+# Asks the YubiKey for the PIN, then exports every secret, or only the named
+# ones.
+load_secrets() {
     echo "Loading secrets from YubiKey..."
     # Pass all arguments (e.g., specific keys) down to the python script
     eval "$(manage-secrets decrypt "$@")"

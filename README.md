@@ -256,18 +256,24 @@ source ~/.helpers
 
 | Action | Command | Effect |
 | :--- | :--- | :--- |
-| **Add a secret** | `add_secret KEY VALUE` | Encrypt `VALUE` into `.secrets`, and export `KEY` to the current shell. |
+| **Add a secret** | `add_secret KEY` | Ask for the value without an echo, encrypt it into `.secrets`, and export `KEY` to the current shell. |
+| **Add a secret in one line** | `add_secret KEY VALUE` | The same, but the value lands in `~/.bash_history`, and `ps` shows it while the command runs. Prefer the form above. |
 | **Load the secrets** | `load_secrets` | Decrypt every secret into an environment variable. It asks for the YubiKey PIN once a day. |
 | **Verify** | `bin/manage-secrets verify` | Prove that no cleartext secret is in the commit. `git commit` runs it. |
 
 ### Example
 ```bash
-# Store a new key. The YubiKey asks for a touch or a PIN.
-add_secret OPENAI_API_KEY "sk-..."
+# Store a new key. The shell asks for the value, and does not echo it.
+# The YubiKey asks for a touch or a PIN.
+add_secret OPENAI_API_KEY
 
 # Load the keys at the start of a session.
 load_secrets
 ```
+
+`.bashrc` sets `HISTCONTROL=ignoreboth`, so a command that starts with a space
+stays out of the history file. `HISTIGNORE` also drops any `add_secret` line that
+carries a value.
 
 ---
 

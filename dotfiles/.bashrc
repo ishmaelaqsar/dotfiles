@@ -15,6 +15,22 @@ else
 fi
 
 # ============================================================
+# History
+# ============================================================
+
+# ignoreboth is ignorespace plus ignoredups. A command that starts with a space
+# stays out of the file, which matters for anything that carries a secret.
+export HISTCONTROL=ignoreboth
+export HISTSIZE=10000
+export HISTFILESIZE=20000
+
+# Keep a value out of the file even when the leading space is forgotten.
+export HISTIGNORE='add_secret *:manage-secrets encrypt *:* --password *:* --token *'
+
+# Append instead of overwrite, so two shells do not lose each other's history.
+shopt -s histappend
+
+# ============================================================
 # Environment & Basic Setup
 # ============================================================
 
@@ -28,9 +44,9 @@ if [[ -f ~/.helpers ]]; then
     . ~/.helpers
 fi
 
-# Local workspace
-if [[ -d ~/workspace ]]; then
-    export WORKSPACE="$HOME/workspace"
+# Local workspace. .bash_profile exports WORKSPACE, and install.sh creates the
+# directory, so this only adds the shortcut.
+if [[ -d "${WORKSPACE:-}" ]]; then
     alias ws='cd "$WORKSPACE"'
 fi
 
@@ -47,8 +63,14 @@ if command -v gpgconf >/dev/null; then
     export SSH_AUTH_SOCK=$(gpgconf --list-dirs agent-ssh-socket)
 fi
 
-# Ensures the agent knows about the current TTY immediately on shell startup.
-gpg-connect-agent updatestartuptty /bye >/dev/null 2>&1
+# Tell a running agent which terminal to draw the PIN prompt on. The test
+# matters: this call starts the agent when none runs, and the start probes the
+# card reader, which blocks a new shell for several seconds when no card is in.
+# A cold agent does not need the call anyway — the first gpg command starts it
+# with GPG_TTY already exported above.
+if [[ -S "$(gpgconf --list-dirs agent-socket 2>/dev/null)" ]]; then
+    gpg-connect-agent updatestartuptty /bye >/dev/null 2>&1
+fi
 
 # ============================================================
 # Shell Completion Setup
