@@ -7,6 +7,10 @@
 - **Secrets stay encrypted.** `.secrets` holds GPG blobs only; use `add_secret`, never paste
   cleartext. The pre-commit hook (`bin/manage-secrets verify`) enforces this.
 - **Test installer changes with a probe run** — `./install.sh /tmp/probe` — never a plain
-  `./install.sh` mid-session. A probe must leave the machine untouched.
+  `./install.sh` mid-session. A probe must leave the machine untouched. Then
+  `./install.sh --check /tmp/probe` must pass.
+- **To add or rename a package, edit `lib/packages.conf`** — one row per tool, selected by tag.
+  `lib/pkg.sh` is the driver and needs no change. Keep the row's first command name the one that
+  lands on `PATH`, or mark it `~` when none does.
 - `dotfiles/.config/ghostty/config.local` is machine-local and untracked by design.
 - Don't commit or push on your own initiative.

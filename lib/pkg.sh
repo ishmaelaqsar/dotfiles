@@ -1,6 +1,10 @@
 # shellcheck shell=bash
 # Shared package-manager plumbing for install.sh and setup-*.sh.
 # Usage: source this, then PKG_MGR="$(__detect_pkg_mgr)".
+#
+# What to install lives in packages.conf, not here. This file is the driver.
+
+PKG_MANIFEST="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/packages.conf"
 
 # Run a command, or print it when a dry run is in progress. install.sh
 # --dry-run exports DOTFILES_DRY_RUN=1, so these helpers plan the work instead
@@ -40,33 +44,93 @@ __detect_pkg_mgr() {
     fi
 }
 
+# -----------------------------
+# The package table
+# -----------------------------
+
+# Strip the whitespace around a field
+__trim() {
+    local text
+    read -r text <<< "$1" || true
+    printf '%s' "$text"
+}
+
+# Print every row of packages.conf as: commands|tags|overrides
+__pkg_rows() {
+    local line commands tags overrides
+    while IFS= read -r line || [ -n "$line" ]; do
+        line="${line%%#*}"
+        [ -z "${line//[[:space:]]/}" ] && continue
+        IFS='|' read -r commands tags overrides <<< "$line"
+        printf '%s|%s|%s\n' \
+            "$(__trim "$commands")" "$(__trim "${tags:-}")" "$(__trim "${overrides:-}")"
+    done < "$PKG_MANIFEST"
+}
+
+# Print the row a tool belongs to as commands|tags|overrides, else nothing
+__pkg_row() {
+    local tool=$1 commands tags overrides cmd
+    while IFS='|' read -r commands tags overrides; do
+        for cmd in ${commands//,/ }; do
+            if [ "${cmd#\~}" = "$tool" ]; then
+                printf '%s|%s|%s' "$commands" "$tags" "$overrides"
+                return
+            fi
+        done
+    done < <(__pkg_rows)
+}
+
+# Print the commands field of the row a tool belongs to, else the tool itself
+__pkg_commands() {
+    local commands tags overrides
+    IFS='|' read -r commands tags overrides <<< "$(__pkg_row "$1")"
+    printf '%s' "${commands:-$1}"
+}
+
+# The identity of a commands field: the first name, without the ~ marker
+__pkg_primary() {
+    local first=${1%%,*}
+    printf '%s' "${first#\~}"
+}
+
+# Is this row's tool on the machine?
+#   0 present   1 absent   2 unverifiable (~ prefix — no command answers to it)
+__pkg_present() {
+    local commands=$1 cmd
+    case "$commands" in \~*) return 2 ;; esac
+    for cmd in ${commands//,/ }; do
+        command -v "$cmd" >/dev/null 2>&1 && return 0
+    done
+    return 1
+}
+
+# Print the commands field of every row whose tags are all in the active set
+__pkg_select() {
+    local active=" $* "
+    local commands tags overrides tag wanted
+    while IFS='|' read -r commands tags overrides; do
+        wanted=1
+        for tag in $tags; do
+            [[ "$active" == *" $tag "* ]] || { wanted=0; break; }
+        done
+        # An `if`, not an `&&` list: a non-matching last row would otherwise
+        # leave the loop with a non-zero status, and set -e would abort here.
+        if [ "$wanted" -eq 1 ]; then printf '%s\n' "$commands"; fi
+    done < <(__pkg_rows)
+}
+
 # Map a tool name to this manager's package name
 __pkg_name() {
     local mgr=$1 tool=$2
-    case "$mgr:$tool" in
-        brew:fd)              echo "fd" ;;
-        apt:fd|dnf:fd)        echo "fd-find" ;;
-        *:fd)                 echo "fd" ;;
-        brew:bash-completion) echo "bash-completion@2" ;;
-        *:bash-completion)    echo "bash-completion" ;;
-        brew:pinentry)        echo "pinentry-mac" ;;
-        apt:pinentry)         echo "pinentry-gnome3" ;;
-        *:pinentry)           echo "pinentry" ;;
-        apt:pcscd)            echo "pcscd" ;;
-        dnf:pcscd)            echo "pcsc-lite" ;;
-        *:pcscd)              echo "pcsclite" ;;
-        apt:ccid)             echo "libccid" ;;
-        dnf:ccid)             echo "pcsc-lite-ccid" ;;
-        *:ccid)               echo "ccid" ;;
-        dnf:gnupg)            echo "gnupg2" ;;
-        *:wl-copy)            echo "wl-clipboard" ;;
-        *:paccache)           echo "pacman-contrib" ;;
-        apt:go|dnf:go)        echo "golang" ;;
-        apt:clangd)           echo "clangd" ;;
-        pacman:clangd|yay:clangd|paru:clangd) echo "clang" ;;
-        dnf:clangd)           echo "clang-tools-extra" ;;
-        *)                    echo "$tool" ;;
-    esac
+    local commands tags overrides token
+    IFS='|' read -r commands tags overrides <<< "$(__pkg_row "$tool")"
+    for token in $overrides; do
+        [ "${token%%=*}" = "$mgr" ] && { printf '%s' "${token#*=}"; return; }
+    done
+    for token in $overrides; do
+        [ "${token%%=*}" = "*" ] && { printf '%s' "${token#*=}"; return; }
+    done
+    __pkg_primary "${commands:-$tool}"
 }
 
 # Install tools by command name, skipping ones already present.
@@ -75,13 +139,25 @@ __pkg_install() {
     local mgr=$1; shift
     local tool pkg failed=""
     for tool in "$@"; do
-        command -v "$tool" >/dev/null 2>&1 && continue
+        __pkg_present "$(__pkg_commands "$tool")" && continue
         pkg="$(__pkg_name "$mgr" "$tool")"
         echo "  -> Installing $pkg ($mgr)"
         __pkg_raw "$mgr" "$pkg" || failed="$failed $tool"
     done
     if [ -n "$failed" ]; then
         __warn "could not install:$failed — install manually."
+    fi
+}
+
+# Install every row of packages.conf whose tags are all active
+__pkg_install_tagged() {
+    local mgr=$1; shift
+    local commands tools=()
+    while IFS= read -r commands; do
+        tools+=("$(__pkg_primary "$commands")")
+    done < <(__pkg_select "$@")
+    if [ ${#tools[@]} -gt 0 ]; then
+        __pkg_install "$mgr" "${tools[@]}"
     fi
 }
 
@@ -101,11 +177,6 @@ __pkg_raw() {
         dnf)      __pkg_sudo dnf install -y "$@" ;;
         *)        echo "No supported package manager found." >&2; return 1 ;;
     esac
-}
-
-# True when this manager can reach the AUR
-__is_aur_helper() {
-    [ "$1" = "yay" ] || [ "$1" = "paru" ]
 }
 
 # Bootstrap an AUR helper on Arch. The AUR holds packages the official repos do

@@ -65,8 +65,21 @@ grep -q "wl-clipboard" /tmp/dry-desktop.log \
 grep -q "wl-clipboard" /tmp/dry-nodesktop.log \
     && flunk "--no-desktop still planned wl-clipboard" || pass "--no-desktop skips the clipboard package"
 
+# Nothing is installed yet, so the doctor must not report a healthy box.
+./install.sh --check > /tmp/check-before.log 2>&1 \
+    && flunk "--check passed before anything was installed" \
+    || pass "--check fails on a bare box"
+
 say "install.sh (home install, container detection overridden)"
 ./install.sh || flunk "install.sh exited non-zero"
+
+say "install.sh --check (must pass right after an install)"
+if ./install.sh --check > /tmp/check.log 2>&1; then
+    pass "--check passed after install"
+else
+    flunk "--check failed after install"
+    cat /tmp/check.log
+fi
 
 for t in eza rg fzf delta starship; do check "$t"; done
 # zellij is only packaged for pacman/brew; elsewhere install.sh warns and
@@ -88,6 +101,9 @@ fi
 python3 ./bin/gnome-settings dump >/dev/null 2>&1 && pass "gnome-settings runs without GNOME" || flunk "gnome-settings failed on a non-GNOME box"
 [ -f "$HOME/.local/share/fonts/0xProtoNerdFont-Regular.ttf" ] && pass "fonts installed" || flunk "fonts missing"
 [ -L "$HOME/.bashrc" ] && pass ".bashrc symlinked" || flunk ".bashrc not a symlink"
+# Python's byte-code cache sits next to the scripts in bin/, and must not follow
+# them into ~/bin
+[ ! -e "$HOME/bin/__pycache__" ] && pass "no __pycache__ in ~/bin" || flunk "__pycache__ linked into ~/bin"
 [ "$(git config --global user.email)" = "ishmael-dev@aqsar.dev" ] && pass "git identity set" || flunk "git identity wrong"
 bash -lic 'type ll' >/dev/null 2>&1 && pass "aliases load in interactive shell" || flunk "aliases failed to load"
 
@@ -145,6 +161,9 @@ printf 'y\n' | ./cleanup.sh -a || flunk "cleanup.sh exited non-zero"
 [ ! -d "$HOME/quicklisp" ] && pass "quicklisp removed" || flunk "quicklisp survived cleanup"
 
 [ -z "$(git config --global user.email 2>/dev/null)" ] && pass "git identity unset" || flunk "git identity survived cleanup"
+./install.sh --check >/dev/null 2>&1 \
+    && flunk "--check still passes after cleanup" \
+    || pass "--check reports the removed install"
 if [ "$MODE" = "full" ]; then
     [ ! -d "$HOME/.sdkman" ] && pass "sdkman removed" || flunk "sdkman survived cleanup"
 fi

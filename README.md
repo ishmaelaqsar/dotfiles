@@ -28,7 +28,7 @@ git clone https://github.com/ishmaelaqsar/dotfiles.git ~/.dotfiles
 ```
 
 The `install.sh` script will:
-1. **Install packages** via the detected manager (brew / apt / yay / paru / pacman / dnf): `eza`, `fd`, `ripgrep`, `fzf`, `git-delta`, `zellij` (Arch/brew only — Debian and Fedora lack a package), plus [OpenCode](https://opencode.ai) and [Ghostty](https://ghostty.org) (best-effort). On Arch it first bootstraps **yay** if no AUR helper is present.
+1. **Install packages** via the detected manager (brew / apt / yay / paru / pacman / dnf): `eza`, `fd`, `ripgrep`, `fzf`, `git-delta`, `zellij` (Arch/brew only — Debian and Fedora lack a package), plus [OpenCode](https://opencode.ai) and [Ghostty](https://ghostty.org) (best-effort). The list itself is data — see [The package table](#the-package-table). On Arch it first bootstraps **yay** if no AUR helper is present.
 2. Symlink configuration files (`.bashrc`, `.vimrc`, etc.) to your home directory.
 3. Symlink scripts from `bin/` to `$HOME/bin`.
 4. Install the vendored **0xProto Nerd Font** from `general/0xProto/`.
@@ -42,6 +42,7 @@ Flags and safety:
 | Flag | Effect |
 | :--- | :--- |
 | `-n`, `--dry-run` | Print every change and make none. Reads the whole plan — packages, symlinks, git config, systemd units, GNOME keys — before anything happens. |
+| `-c`, `--check` | Report what is missing or has drifted, then exit. See [Check an existing install](#check-an-existing-install). |
 | `--desktop` | Run the desktop steps (GNOME settings, `wl-clipboard`) whatever the session looks like. Needed when installing over ssh, where `DISPLAY` is unset. |
 | `--no-desktop` | Skip them, for a server that happens to have X libraries. |
 | `-f` | Install even when a different dotfiles checkout owns `~/.dotfiles`. |
@@ -54,6 +55,53 @@ Flags and safety:
 
 Without a flag the desktop steps follow the session: a Wayland or X display, or `gnome-shell`
 on `PATH`, means desktop.
+
+`install.sh` needs a working `python3` for `bin/sync-dotfiles`, and stops with a clear message
+when there is none. On a fresh macOS box `/usr/bin/python3` is only a stub, so run
+`xcode-select --install` first.
+
+### Check an existing install
+
+`./install.sh --check` answers "is this machine still correctly installed?" It reads the machine,
+changes nothing, and exits non-zero when something needs a repair:
+
+```bash
+./install.sh --check          # this machine
+./install.sh --check /some/dir # a probe target
+```
+
+It reports:
+
+| Checked | Treated as |
+| :--- | :--- |
+| Every file in `dotfiles/` is a symlink pointing back at this repo | **Failure** — missing, replaced by a real file, broken, or linked elsewhere |
+| Every script in `bin/` is linked into `$HOME/bin` | **Failure** |
+| The 0xProto font family is installed | **Failure** |
+| `~/.gnupg/gpg-agent.conf` was written by `install.sh` | **Failure** |
+| Global git identity | **Failure** — skipped on a probe target |
+| The commands from the package table are on `PATH` | **Warning** — packages are best-effort, and some have no package on a given platform |
+
+Run `./install.sh` to repair whatever it reports.
+
+### The package table
+
+What to install lives in `lib/packages.conf`, not in the scripts. One row per tool:
+
+```
+commands | tags | per-manager package overrides
+```
+
+* **commands** — the command names that satisfy the row, comma separated. The first is the
+  identity and the default package name. A `~` prefix means no command answers to it (a shell
+  script, a daemon in `sbin`, a USB driver), so `--check` reports it as unverifiable rather than
+  missing.
+* **tags** — `install.sh` installs a row when **all** of its tags are active. `base` is always
+  active; `linux` off macOS; `desktop` on a graphical box; `arch` where `pacman` exists.
+  `toolchain` is never active — those rows only map a name for a `setup-*.sh` script.
+* **overrides** — `mgr=pkg` pairs. An exact manager wins, then `*=pkg`, then the first command
+  name.
+
+`lib/pkg.sh` is the driver that reads the table. To add a tool, add a row — no script changes.
 
 ### Language toolchains (opt-in, run manually)
 
@@ -68,7 +116,8 @@ LSP server, debugger — are separate scripts, run only on machines that need th
 | `setup-java.sh` | sdkman → Temurin LTS, maven, gradle | jdtls (brew/AUR) | JDWP/jdb (in the JDK) |
 | `setup-sbcl.sh` | SBCL + Quicklisp | none — CL uses Swank/Slynk via the editor | SBCL built-in |
 
-Shared package-manager logic lives in `lib/pkg.sh`; shell init written by these scripts goes to
+These scripts share the package-manager logic in `lib/pkg.sh` and the name mappings in
+[`lib/packages.conf`](#the-package-table) (the `toolchain` rows); shell init they write goes to
 `~/.bashrc.d/` (marked, so cleanup can find it), never into tracked dotfiles.
 
 ### Cleanup

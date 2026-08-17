@@ -4,6 +4,8 @@ Sync dotfiles from the repository into the target directory.
 Creates symlinks for files and ensures directories exist.
 Optional --backup: rename existing files with .bak before linking.
 Optional --dry-run: list what would be linked, and change nothing.
+Optional --check: report the files that are missing or have drifted, and
+change nothing. Exits 1 when the target does not match the repository.
 """
 
 import os
@@ -13,6 +15,7 @@ from pathlib import Path
 # Parse arguments
 backup_flag = False
 dry_run = False
+check = False
 target_arg = None
 
 for arg in sys.argv[1:]:
@@ -20,6 +23,8 @@ for arg in sys.argv[1:]:
         backup_flag = True
     elif arg in ("--dry-run", "-n"):
         dry_run = True
+    elif arg in ("--check", "-c"):
+        check = True
     else:
         target_arg = arg
 
@@ -29,6 +34,34 @@ dotfiles_dir = Path(__file__).resolve().parent.parent / "dotfiles"
 if not dotfiles_dir.is_dir():
     print(f"Error: dotfiles directory not found: {dotfiles_dir}")
     sys.exit(1)
+
+if check:
+    # Report drift only. Every repository file must be a symlink in the target
+    # that points back at it; anything else means the install is incomplete,
+    # or something replaced a link with a real file.
+    problems = []
+    linked = 0
+
+    for src in sorted(dotfiles_dir.rglob("*")):
+        if not src.is_file():
+            continue
+        rel_path = src.relative_to(dotfiles_dir)
+        dest = target_dir / rel_path
+
+        if not dest.is_symlink():
+            state = "a real file, not a symlink" if dest.exists() else "missing"
+            problems.append((rel_path, state))
+        elif not dest.exists():
+            problems.append((rel_path, f"broken link to {os.readlink(dest)}"))
+        elif dest.resolve() != src.resolve():
+            problems.append((rel_path, f"links to {os.readlink(dest)}"))
+        else:
+            linked += 1
+
+    for rel_path, state in problems:
+        print(f"  FAIL: {rel_path} — {state}")
+    print(f"  {linked} file(s) linked, {len(problems)} problem(s)")
+    sys.exit(1 if problems else 0)
 
 if not dry_run:
     target_dir.mkdir(parents=True, exist_ok=True)
