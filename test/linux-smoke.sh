@@ -105,7 +105,34 @@ python3 ./bin/gnome-settings dump >/dev/null 2>&1 && pass "gnome-settings runs w
 # them into ~/bin
 [ ! -e "$HOME/bin/__pycache__" ] && pass "no __pycache__ in ~/bin" || flunk "__pycache__ linked into ~/bin"
 [ "$(git config --global user.email)" = "ishmael-dev@aqsar.dev" ] && pass "git identity set" || flunk "git identity wrong"
+# delta is wired in only when the package landed, so gate the assertion the
+# same way install.sh does
+if command -v delta >/dev/null 2>&1; then
+    [ "$(git config --global core.pager)" = "delta" ] && pass "delta is the diff pager" || flunk "core.pager is not delta"
+    [ "$(git config --global interactive.diffFilter)" = "delta --color-only" ] \
+        && pass "delta filters interactive diffs" || flunk "interactive.diffFilter not set"
+    # git skips the pager when stdout is not a tty, so feed delta a real diff
+    # by hand. Two steps, not a pipeline: `git diff --no-index` exits 1 when the
+    # files differ, and pipefail would report that as the whole test failing.
+    printf 'one\n' > /tmp/delta-a
+    printf 'two\n' > /tmp/delta-b
+    git diff --no-index /tmp/delta-a /tmp/delta-b > /tmp/delta-in.diff 2>/dev/null
+    delta < /tmp/delta-in.diff >/dev/null 2>&1 \
+        && pass "delta renders a real diff" || flunk "delta failed on a real diff"
+else
+    echo "note: delta absent — pager wiring skipped, as install.sh does"
+fi
+# lazygit is packaged for apt, pacman and brew, but is not in Fedora's base repos
+if command -v lazygit >/dev/null 2>&1; then pass "lazygit on PATH"
+elif command -v dnf >/dev/null 2>&1; then echo "note: lazygit needs a COPR on Fedora — best-effort, skipped"
+else flunk "lazygit missing (packaged for apt and pacman)"
+fi
 bash -lic 'type ll' >/dev/null 2>&1 && pass "aliases load in interactive shell" || flunk "aliases failed to load"
+# lazygit reads a different directory per platform, so the path is exported
+[ -n "$(bash -lic 'echo "$LG_CONFIG_FILE"' 2>/dev/null)" ] \
+    && pass "LG_CONFIG_FILE exported" || flunk "LG_CONFIG_FILE not exported"
+[ -L "$HOME/.config/lazygit/config.yml" ] \
+    && pass "lazygit config symlinked" || flunk "lazygit config missing"
 
 say "setup-c.sh"
 ./setup-c.sh || flunk "setup-c.sh exited non-zero"
@@ -161,6 +188,8 @@ printf 'y\n' | ./cleanup.sh -a || flunk "cleanup.sh exited non-zero"
 [ ! -d "$HOME/quicklisp" ] && pass "quicklisp removed" || flunk "quicklisp survived cleanup"
 
 [ -z "$(git config --global user.email 2>/dev/null)" ] && pass "git identity unset" || flunk "git identity survived cleanup"
+[ -z "$(git config --global core.pager 2>/dev/null)" ] \
+    && pass "delta pager wiring unset" || flunk "core.pager survived cleanup"
 ./install.sh --check >/dev/null 2>&1 \
     && flunk "--check still passes after cleanup" \
     || pass "--check reports the removed install"

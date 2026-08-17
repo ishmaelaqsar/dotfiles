@@ -2,111 +2,125 @@
 
 **Author:** Ishmael Aqsar
 
-Configuration files, maintenance scripts, and GPG-backed secret management for my development environment.
-
-These dotfiles are designed to work seamlessly on **macOS**, **Linux**, and inside **VS Code Dev Containers**.
+Configuration files, maintenance scripts, and GPG-encrypted secrets for my development
+environment. They work on **macOS**, **Linux**, and inside **VS Code Dev Containers**.
 
 ---
 
 ## Bootstrap
 
-### Option A: Automated (VS Code Dev Containers)
-These dotfiles are optimized for VS Code. To have them install automatically in every container:
+### Option A: VS Code Dev Containers
 
-1. Open VS Code Settings (`Cmd+,` or `Ctrl+,`).
-2. Search for **"Dotfiles"**.
-3. Set **Repository** to: `your-github-username/dotfiles`
-4. Set **Install Command** to: `install.sh`
-5. Set **Target Path** to: `~/.dotfiles`
+VS Code can install the dotfiles in every container. Open Settings (`Cmd+,` or `Ctrl+,`), search
+for **Dotfiles**, and set three fields:
 
-### Option B: Manual Installation (macOS / Linux)
-To install on a fresh machine manually:
+1. **Repository** — `your-github-username/dotfiles`
+2. **Install Command** — `install.sh`
+3. **Target Path** — `~/.dotfiles`
+
+### Option B: macOS and Linux
+
+Install on a fresh machine:
 
 ```bash
 git clone https://github.com/ishmaelaqsar/dotfiles.git ~/.dotfiles
 ~/.dotfiles/install.sh
 ```
 
-The `install.sh` script will:
-1. **Install packages** via the detected manager (brew / apt / yay / paru / pacman / dnf): `eza`, `fd`, `ripgrep`, `fzf`, `git-delta`, `zellij` (Arch/brew only — Debian and Fedora lack a package), plus [OpenCode](https://opencode.ai) and [Ghostty](https://ghostty.org) (best-effort). The list itself is data — see [The package table](#the-package-table). On Arch it first bootstraps **yay** if no AUR helper is present.
-2. Symlink configuration files (`.bashrc`, `.vimrc`, etc.) to your home directory.
-3. Symlink scripts from `bin/` to `$HOME/bin`.
-4. Install the vendored **0xProto Nerd Font** from `general/0xProto/`.
-5. **Configure GPG Agent** for SSH support and YubiKey usage (detects OS and pinentry).
-6. **Install Git Hooks** to prevent committing unencrypted secrets.
-7. On Linux: enable the systemd user units in `dotfiles/.config/systemd/user/`, and apply the
-   GNOME settings (see [Linux desktop](#linux-desktop-gnome--arch)).
+`install.sh` does these steps:
 
-Flags and safety:
+1. **Install the packages** with the manager it finds (brew, apt, yay, paru, pacman or dnf):
+   `eza`, `fd`, `ripgrep`, `fzf`, `git-delta`, `lazygit`, `zellij` and more. The list is data —
+   see [The package table](#the-package-table). Some packages are best-effort: `zellij` has a
+   package on Arch and brew only, and `lazygit` is not in Fedora's base repos. It also installs
+   [OpenCode](https://opencode.ai) and [Ghostty](https://ghostty.org), which can fail without
+   stopping the run. On Arch it builds **yay** first when no AUR helper exists.
+2. **Link the config files** (`.bashrc`, `.vimrc`, and the rest) into your home directory.
+3. **Link the scripts** in `bin/` into `$HOME/bin`.
+4. **Install the 0xProto Nerd Font** from `general/0xProto/`.
+5. **Configure global git**: the identity, the global ignore and attributes files, and **delta**
+   as the diff pager. It sets the pager keys only when `delta` is on `PATH`, because a `core.pager`
+   that is absent breaks every `git diff`. On Linux it also picks the libsecret credential helper
+   when one exists.
+6. **Configure the GPG agent** for SSH and the YubiKey. It detects the OS and the pinentry
+   program.
+7. **Install the git hook** that keeps cleartext secrets out of a commit.
+8. On Linux, enable the systemd user units in `dotfiles/.config/systemd/user/`, and apply the
+   GNOME settings. See [Linux desktop](#linux-desktop-gnome--arch).
+
+Flags:
 
 | Flag | Effect |
 | :--- | :--- |
-| `-n`, `--dry-run` | Print every change and make none. Reads the whole plan — packages, symlinks, git config, systemd units, GNOME keys — before anything happens. |
+| `-n`, `--dry-run` | Print every change, and make none. Read the whole plan first: packages, symlinks, git config, systemd units and GNOME keys. |
 | `-c`, `--check` | Report what is missing or has drifted, then exit. See [Check an existing install](#check-an-existing-install). |
-| `--desktop` | Run the desktop steps (GNOME settings, `wl-clipboard`) whatever the session looks like. Needed when installing over ssh, where `DISPLAY` is unset. |
-| `--no-desktop` | Skip them, for a server that happens to have X libraries. |
+| `--desktop` | Run the desktop steps whatever the session looks like (GNOME settings, `wl-clipboard`). Use it over ssh, where `DISPLAY` is not set. |
+| `--no-desktop` | Skip those steps, for a server that has X libraries. |
 | `-f` | Install even when a different dotfiles checkout owns `~/.dotfiles`. |
-| `-h`, `--help` | Usage. |
+| `-h`, `--help` | Print the usage text. |
 
-* `./install.sh /some/dir` — **probe run**: file layout only; skips packages, git config, and all GPG keyring/agent changes. Use to test changes safely.
-* It **refuses to run** if a different dotfiles checkout already owns `~/.dotfiles`; `-f` overrides. A `--dry-run` is allowed through, since it changes nothing.
-* Warnings are repeated as a numbered summary at the end, so a failure in the middle of a long package run does not scroll past unread.
-* After install, run `opencode auth login` once to connect a model provider.
+Without a flag, the session decides: a Wayland or X display, or `gnome-shell` on `PATH`, means a
+desktop.
 
-Without a flag the desktop steps follow the session: a Wayland or X display, or `gnome-shell`
-on `PATH`, means desktop.
+Safety:
 
-`install.sh` needs a working `python3` for `bin/sync-dotfiles`, and stops with a clear message
-when there is none. On a fresh macOS box `/usr/bin/python3` is only a stub, so run
-`xcode-select --install` first.
+* `./install.sh /some/dir` is a **probe run**. It writes the file layout only. It skips the
+  packages, the git config, and every GPG keyring change. Use it to test a change.
+* The script **refuses to run** when a different dotfiles checkout owns `~/.dotfiles`. `-f`
+  overrides the guard. A dry run passes the guard, because it changes nothing.
+* It repeats every warning as a numbered summary at the end. A failure in the middle of a long
+  package run then does not scroll past unread.
+* It needs a working `python3` for `bin/sync-dotfiles`, and stops with a clear message when there
+  is none. On a fresh macOS machine `/usr/bin/python3` is only a stub, so run
+  `xcode-select --install` first.
+* After the install, run `opencode auth login` once to connect a model provider.
 
 ### Check an existing install
 
-`./install.sh --check` answers "is this machine still correctly installed?" It reads the machine,
-changes nothing, and exits non-zero when something needs a repair:
+`./install.sh --check` answers one question: is this machine still correctly installed? It reads
+the machine, changes nothing, and exits non-zero when a repair is necessary.
 
 ```bash
-./install.sh --check          # this machine
+./install.sh --check           # this machine
 ./install.sh --check /some/dir # a probe target
 ```
 
-It reports:
-
-| Checked | Treated as |
+| Checked | Result |
 | :--- | :--- |
-| Every file in `dotfiles/` is a symlink pointing back at this repo | **Failure** — missing, replaced by a real file, broken, or linked elsewhere |
+| Every file in `dotfiles/` is a symlink back to this repo | **Failure** — missing, a real file, broken, or linked elsewhere |
 | Every script in `bin/` is linked into `$HOME/bin` | **Failure** |
 | The 0xProto font family is installed | **Failure** |
-| `~/.gnupg/gpg-agent.conf` was written by `install.sh` | **Failure** |
-| Global git identity | **Failure** — skipped on a probe target |
-| The commands from the package table are on `PATH` | **Warning** — packages are best-effort, and some have no package on a given platform |
+| `install.sh` wrote `~/.gnupg/gpg-agent.conf` | **Failure** |
+| The global git identity, and the delta pager keys when `delta` is installed | **Failure** — skipped on a probe target |
+| The commands in the package table are on `PATH` | **Warning** — packages are best-effort, and some have no package on a platform |
 
-Run `./install.sh` to repair whatever it reports.
+Run `./install.sh` to repair what it reports.
 
 ### The package table
 
-What to install lives in `lib/packages.conf`, not in the scripts. One row per tool:
+`lib/packages.conf` holds what to install. The scripts hold no list. One row per tool:
 
 ```
 commands | tags | per-manager package overrides
 ```
 
-* **commands** — the command names that satisfy the row, comma separated. The first is the
-  identity and the default package name. A `~` prefix means no command answers to it (a shell
-  script, a daemon in `sbin`, a USB driver), so `--check` reports it as unverifiable rather than
-  missing.
+* **commands** — the command names that satisfy the row, separated by commas. The first name is
+  the identity, and the default package name. A `~` prefix means that no command answers to the
+  row: a shell script, a daemon in `sbin`, or a USB driver. `--check` then reports the row as
+  unverifiable, not missing.
 * **tags** — `install.sh` installs a row when **all** of its tags are active. `base` is always
-  active; `linux` off macOS; `desktop` on a graphical box; `arch` where `pacman` exists.
-  `toolchain` is never active — those rows only map a name for a `setup-*.sh` script.
-* **overrides** — `mgr=pkg` pairs. An exact manager wins, then `*=pkg`, then the first command
-  name.
+  active. `linux` is active off macOS, `desktop` on a graphical machine, and `arch` where `pacman`
+  exists. `toolchain` is never active; those rows only map a name for a `setup-*.sh` script.
+* **overrides** — `mgr=pkg` pairs. An exact manager wins first, then `*=pkg`, then the first
+  command name.
 
-`lib/pkg.sh` is the driver that reads the table. To add a tool, add a row — no script changes.
+`lib/pkg.sh` reads the table. To add a tool, add a row. No script changes.
 
-### Language toolchains (opt-in, run manually)
+### Language toolchains
 
-`install.sh` stops at shell/terminal tooling. Per-language dev environments — compiler/runtime,
-LSP server, debugger — are separate scripts, run only on machines that need them (idempotent):
+`install.sh` stops at the shell and terminal tools. Each language environment is a separate
+script: the compiler or runtime, the LSP server, and the debugger. Run them by hand, only on a
+machine that needs them. They are idempotent.
 
 | Script | Toolchain | LSP | Debugger |
 | :--- | :--- | :--- | :--- |
@@ -116,45 +130,49 @@ LSP server, debugger — are separate scripts, run only on machines that need th
 | `setup-java.sh` | sdkman → Temurin LTS, maven, gradle | jdtls (brew/AUR) | JDWP/jdb (in the JDK) |
 | `setup-sbcl.sh` | SBCL + Quicklisp | none — CL uses Swank/Slynk via the editor | SBCL built-in |
 
-These scripts share the package-manager logic in `lib/pkg.sh` and the name mappings in
-[`lib/packages.conf`](#the-package-table) (the `toolchain` rows); shell init they write goes to
-`~/.bashrc.d/` (marked, so cleanup can find it), never into tracked dotfiles.
+These scripts share the package-manager logic in `lib/pkg.sh`, and the name mappings in
+[`lib/packages.conf`](#the-package-table) — the `toolchain` rows. They write shell init to
+`~/.bashrc.d/` with a marker, so cleanup can find it. They never write a tracked dotfile.
 
 ### Cleanup
 
-`./cleanup.sh` undoes an install: removes this repo's symlinks, managed `~/.bashrc.d` files,
-fonts, and generated config; unsets the git config it set. `-a` also removes toolchains
-(sdkman, quicklisp, uv — never `~/go`). It refuses on a machine owned by a different dotfiles
-checkout, and never uninstalls system packages (it prints the list instead).
+`./cleanup.sh` undoes an install. It removes this repo's symlinks, the managed `~/.bashrc.d`
+files, the fonts, and the generated config. It unsets the git config it set. `-a` also removes the
+toolchains — sdkman, quicklisp and uv, but never `~/go`. It refuses to run on a machine that a
+different dotfiles checkout owns. It never uninstalls a system package; it prints the list
+instead.
 
 ---
 
-## Editor Configuration
+## Editor
 
-* **Visual Editor:** VS Code (`code --wait`).
-    * Used for git commits, merges, and complex editing when available.
-* **Terminal Editor:** Vi / Vim.
-    * Used for quick edits in the terminal.
-    * Includes a minimal `.vimrc` for syntax highlighting and standard behavior.
+* **Visual editor** — VS Code (`code --wait`). Git uses it for a commit or a merge. Use it for a
+  large edit.
+* **Terminal editor** — vi. Use it for a quick edit. The minimal `.vimrc` gives syntax
+  highlighting and standard behaviour.
 
-These are defaults set in `.bash_profile`. To switch editors on one machine, drop a file in
-`~/.bashrc.d/` (sourced last) exporting `EDITOR`, `VISUAL`, and `GIT_EDITOR` — e.g.
-`export EDITOR=emacs VISUAL=emacs GIT_EDITOR=emacs`.
+`.bash_profile` sets both. To change the editor on one machine, drop a file in `~/.bashrc.d/`,
+which is sourced last, and export the three variables:
+
+```bash
+export EDITOR=emacs VISUAL=emacs GIT_EDITOR=emacs
+```
 
 ---
 
-## Secret Management
+## Secrets
 
-This repository uses a custom GPG + YubiKey workflow to store sensitive environment variables (API keys, tokens) securely in git.
+This repository keeps sensitive environment variables in git: API keys and tokens. GPG and a
+YubiKey encrypt them.
 
 ### Prerequisites
-* A **YubiKey** with your PGP private keys loaded.
-* Your public key exported to `dotfiles/public.asc` (auto-imported during install).
 
-### YubiKey Required Packages
-The following packages are required to interface with the YubiKey:
+* A **YubiKey** that holds your PGP private keys.
+* Your public key in `dotfiles/public.asc`. The install imports it.
 
-**Debian/Ubuntu**
+### Packages for the YubiKey
+
+**Debian and Ubuntu**
 ```bash
 sudo apt update
 sudo apt install -y gnupg gnupg-agent scdaemon pcscd
@@ -165,9 +183,10 @@ sudo apt install -y gnupg gnupg-agent scdaemon pcscd
 sudo pacman -S --needed gnupg pcsclite ccid pcsc-tools
 sudo systemctl enable --now pcscd.socket
 ```
-`install.sh` does both steps for you: it installs `pcsclite` and `ccid` (via
-`yay` if present, else `pacman`), then enables `pcscd.socket`. The commands above
-are the manual equivalent.
+
+`install.sh` does both Arch steps for you. It installs `pcsclite` and `ccid`, with `yay` when
+present and `pacman` otherwise, then enables `pcscd.socket`. The commands above are the manual
+equivalent.
 
 **macOS**
 ```bash
@@ -180,46 +199,74 @@ gpg -k
 ```
 
 ### Workflow
-Add the helpers to your shell (already done if you source `.bashrc`):
+
+The helpers load with `.bashrc`. To load them by hand:
 
 ```bash
 source ~/.helpers
 ```
 
-| Action | Command | Description |
+| Action | Command | Effect |
 | :--- | :--- | :--- |
-| **Add Secret** | `add_secret KEY VALUE` | Encrypts `VALUE` into `.secrets` and exports `KEY` to current shell. |
-| **Load Secrets** | `load_secrets` | Decrypts all secrets into environment variables (prompts for YubiKey PIN once/day). |
-| **Verify** | `bin/manage-secrets verify` | Runs automatically on `git commit` to ensure no cleartext secrets are committed. |
+| **Add a secret** | `add_secret KEY VALUE` | Encrypt `VALUE` into `.secrets`, and export `KEY` to the current shell. |
+| **Load the secrets** | `load_secrets` | Decrypt every secret into an environment variable. It asks for the YubiKey PIN once a day. |
+| **Verify** | `bin/manage-secrets verify` | Prove that no cleartext secret is in the commit. `git commit` runs it. |
 
 ### Example
 ```bash
-# Store a new key (requires YubiKey touch/PIN)
+# Store a new key. The YubiKey asks for a touch or a PIN.
 add_secret OPENAI_API_KEY "sk-..."
 
-# Load keys at start of session
+# Load the keys at the start of a session.
 load_secrets
 ```
 
 ---
 
-## Terminal Agent & Second Brain
+## Terminal agent and second brain
 
-[OpenCode](https://opencode.ai) is the terminal agent. Global config ships from
-`dotfiles/.config/opencode/`: behavioural rules in `AGENTS.md`, and commands for the
-Obsidian-vault "second brain" — `/brief`, `/daily`, `/kb`, `/project`, `/remind`, `/report`.
+[OpenCode](https://opencode.ai) is the terminal agent. Its global config ships from
+`dotfiles/.config/opencode/`: the behavioural rules in `AGENTS.md`, and the commands for the
+Obsidian vault — `/brief`, `/daily`, `/kb`, `/project`, `/remind` and `/report`.
 
-The vault lives at `$OBSIDIAN_VAULT` (default `~/vault`). Shell-side companions in `.helpers`:
-`jot <text>` appends to today's daily note (no LLM), `sb` opens the agent over the vault.
+The vault lives at `$OBSIDIAN_VAULT`, and defaults to `~/vault`. Two helpers in `.helpers` work
+from the shell: `jot <text>` appends to today's daily note without an LLM, and `sb` opens the
+agent over the vault.
 
 ---
 
 ## Ghostty
 
-Config in `dotfiles/.config/ghostty/`. The Quake-style quick terminal is **opt-in per machine**
-via the untracked `config.local` (the installer enables it on macOS; Linux needs compositor
-setup — see `quick-terminal.conf`). GNOME cannot host it at all, so `bin/gnome-settings` binds
-Super+Return to a normal Ghostty window there instead.
+The config is in `dotfiles/.config/ghostty/`. The Quake-style quick terminal is **opt-in per
+machine**, through the untracked `config.local`. The installer enables it on macOS. Linux needs
+compositor setup first — see `quick-terminal.conf`. GNOME cannot host it at all, so
+`bin/gnome-settings` binds Super+Return to a normal Ghostty window there.
+
+---
+
+## lazygit
+
+The config is in `dotfiles/.config/lazygit/config.yml`. `lg` is the alias.
+
+lazygit runs its own `git diff` and **ignores `core.pager`**, so the config names `delta` a second
+time. Three flags matter:
+
+* `--paging=never` stops delta from starting a pager inside lazygit's panel.
+* `--no-gitconfig` makes delta ignore the machine's `[delta]` keys. A machine that sets
+  side-by-side globally is unreadable in a panel this narrow, and delta cannot turn the option off
+  for one call.
+* `--dark` matches the terminal theme.
+
+The config sets no editor and no theme, on purpose. lazygit reads `EDITOR` and `VISUAL` from
+`.bash_profile`, and it draws with the colours of the terminal, so the Ghostty theme already
+applies.
+
+`Ctrl-G` in the Local Branches tab runs `git-gone` from `.helpers`, which deletes every local
+branch whose upstream is gone. It runs through `bash -lc`, because `git-gone` is a shell function.
+
+lazygit reads `~/.config/lazygit/` on Linux, but `~/Library/Application Support/lazygit/` on
+macOS. `.bash_profile` therefore exports `LG_CONFIG_FILE`, so one file serves both. Run
+`lazygit --print-config-dir` when a machine seems to ignore the config.
 
 ---
 
@@ -227,85 +274,92 @@ Super+Return to a normal Ghostty window there instead.
 
 ### GNOME settings
 
-`gsettings` is GNOME's counterpart to `defaults write` on macOS. `bin/gnome-settings` manages a
-small **allowlist** of keys — a full `dconf dump /` is deliberately not tracked, because it is
-machine-specific and unreadable in a diff.
+`gsettings` is the GNOME counterpart of `defaults write` on macOS. `bin/gnome-settings` manages a
+small **allowlist** of keys. A full `dconf dump /` is not tracked on purpose: it is
+machine-specific, and unreadable in a diff.
 
 | Command | Effect |
 | :--- | :--- |
-| `gnome-settings apply` | Set the managed keys. `install.sh` runs this when GNOME is detected. |
+| `gnome-settings apply` | Set the managed keys. `install.sh` runs this when it detects GNOME. |
 | `gnome-settings dump` | Print the current value of every managed key. |
 | `gnome-settings restore` | Put the pre-dotfiles values back. `cleanup.sh` runs this. |
 
-Managed today: Emacs key theme (GTK4 needs the gsettings key — `settings.ini` covers GTK2/3
-only), dark colour scheme, 0xProto as the monospace font, Caps Lock as Control, key-repeat
-rates, Night Light, fractional scaling, Ghostty as the desktop terminal, and the window keys
-below. The previous values go to `~/.local/state/dotfiles/gnome-settings.json` on first apply.
+It manages these keys today:
+
+* The Emacs key theme. GTK4 needs the gsettings key, because `settings.ini` covers GTK2 and GTK3
+  only.
+* The dark colour scheme, and 0xProto as the monospace font.
+* Caps Lock as Control, and the key-repeat rates.
+* Night Light, and fractional scaling.
+* Ghostty as the desktop terminal, and the window keys below.
+
+The first apply writes the previous values to `~/.local/state/dotfiles/gnome-settings.json`.
 
 ### Window and workspace keys
 
-Super stays a window-manager key on Linux, the way i3 and Hyprland use it. Terminal shortcuts
-are **not** unified with macOS: `Ctrl+C` cannot be the copy key in a terminal, so Linux keeps
-`ctrl+shift+…` and macOS keeps `cmd+…`.
+Super stays a window-manager key on Linux, as i3 and Hyprland use it. The terminal shortcuts do
+**not** match macOS: `Ctrl+C` cannot be the copy key in a terminal. Linux keeps `ctrl+shift+…`,
+and macOS keeps `cmd+…`.
 
 | Key | Action |
 | :--- | :--- |
 | `Super+Return` | Ghostty — the i3/sway/Hyprland idiom for "terminal". |
 | `Super+1…4` | Jump to that workspace. |
 | `Super+Shift+1…4` | Move the focused window to that workspace. |
-| `Super+Alt+Left/Right` | Previous / next workspace (a GNOME default, kept as is). |
+| `Super+Alt+Left/Right` | Previous or next workspace (a GNOME default, kept as is). |
 
-Two GNOME defaults are displaced to make this work. `Super+N` normally switches to the Nth
-**application** in the dash, so those bindings are cleared. Workspaces become **static**, four of
-them (`WORKSPACES` in `bin/gnome-settings`), because a dynamic count has nothing to jump to when
-the desktop is quiet. `gnome-settings restore` puts both back.
+This displaces two GNOME defaults. `Super+N` normally switches to the Nth **application** in the
+dash, so `gnome-settings` clears those bindings. The workspaces become **static**, and there are
+four of them (`WORKSPACES` in `bin/gnome-settings`), because a dynamic count has nothing to jump
+to when the desktop is quiet. `gnome-settings restore` puts both back.
 
 ### Drop-down terminal
 
-Ghostty's own quick terminal needs `wlr-layer-shell`, which Mutter does not implement, and on
-Wayland nothing outside the shell can raise or hide another app's window. A GNOME Shell extension
-is therefore the only route. `install.sh` installs
+Ghostty's own quick terminal needs `wlr-layer-shell`, which Mutter does not implement. On Wayland,
+nothing outside the shell can raise or hide the window of another app. A GNOME Shell extension is
+therefore the only route. `install.sh` installs
 [Quake Terminal](https://extensions.gnome.org/extension/6307/quake-terminal/)
-(`quake-terminal@diegodario88.github.io`), which drops down the **Ghostty** window that is already
-there — so one terminal config still covers macOS and Linux.
+(`quake-terminal@diegodario88.github.io`). It drops down the **Ghostty** window that is already
+there, so one terminal config still covers macOS and Linux.
 
-It pulls the build that matches this machine's shell version from the extensions.gnome.org API,
-with `gnome-extensions`, which ships inside gnome-shell. No extra tooling. `cleanup.sh` removes it.
+`install.sh` asks the extensions.gnome.org API for the build that matches the shell version of
+this machine. It installs the build with `gnome-extensions`, which ships inside gnome-shell. No
+extra tool is necessary. `cleanup.sh` removes the extension.
 
-After the first install: **log out and back in** (a new extension is not loaded until the shell
-restarts), then set the hotkey in the extension's preferences. `F12` is the Guake convention and
-collides with nothing. If you prefer ``Super+` ``, clear GNOME's `switch-group` binding first —
+After the first install, **log out and back in**: the shell loads a new extension at start only.
+Then set the hotkey in the preferences of the extension. `F12` is the Guake convention, and it
+collides with nothing. For ``Super+` ``, clear the GNOME `switch-group` binding first, because
 Mutter grabs that key before any app sees it.
 
-The extension's own settings are **not** tracked in `gnome-settings` yet, because its schema keys
-have to be read on a machine that has it installed. To track them, run
-`gsettings list-recursively org.gnome.shell.extensions.quake-terminal` after setting the hotkey,
-and add the keys to `SETTINGS` in `bin/gnome-settings`.
+`gnome-settings` does not track the settings of the extension yet, because its schema keys have to
+be read on a machine that has the extension. To track them, set the hotkey, run
+`gsettings list-recursively org.gnome.shell.extensions.quake-terminal`, and add the keys to
+`SETTINGS` in `bin/gnome-settings`.
 
-### SSH agent: gpg-agent, not GNOME's
+### SSH agent: gpg-agent, not the GNOME agent
 
 `.bashrc` points `SSH_AUTH_SOCK` at gpg-agent, but that covers **login shells only**. Graphical
-apps (VS Code and GNOME apps) read the systemd user environment, where GNOME's own agent would
-otherwise claim the variable and never ask the YubiKey. Three parts fix it:
+apps — VS Code and the GNOME apps — read the systemd user environment. There, the GNOME agent
+would claim the variable, and never ask the YubiKey. Three parts fix it:
 
-* `dotfiles/.config/environment.d/10-gpg-ssh.conf` sets `SSH_AUTH_SOCK` session-wide.
-* `install.sh` enables `gpg-agent-ssh.socket`, so the agent is listening before any app asks.
-* `install.sh` masks `gcr-ssh-agent` / `gnome-keyring-ssh` (whichever this GNOME version ships).
+* `dotfiles/.config/environment.d/10-gpg-ssh.conf` sets `SSH_AUTH_SOCK` for the whole session.
+* `install.sh` enables `gpg-agent-ssh.socket`, so the agent listens before an app asks.
+* `install.sh` masks `gcr-ssh-agent` or `gnome-keyring-ssh`, whichever this GNOME version ships.
 
-**Log out and back in** after the first install — the session environment is read at login.
+**Log out and back in** after the first install. The session reads its environment at login.
 
-HTTPS git remotes use `git-credential-libsecret` (the GNOME keyring) instead of a cleartext
-`~/.git-credentials`, when the helper is present.
+HTTPS git remotes use `git-credential-libsecret`, the GNOME keyring, when the helper is present.
+They do not use a cleartext `~/.git-credentials`.
 
 ### systemd user units
 
-The Linux counterpart of a macOS LaunchAgent. Drop a `*.service`, `*.timer`, or `*.socket` file
-in `dotfiles/.config/systemd/user/`; `install.sh` reloads systemd and enables every unit with an
-`[Install]` section, and `cleanup.sh` disables them again.
+These are the Linux counterpart of a macOS LaunchAgent. Drop a `*.service`, `*.timer` or
+`*.socket` file in `dotfiles/.config/systemd/user/`. `install.sh` reloads systemd, and enables
+every unit that has an `[Install]` section. `cleanup.sh` disables them again.
 
 ### Arch upkeep
 
-`install.sh` installs `pacman-contrib` and enables `paccache.timer` (weekly cache trim). The
+`install.sh` installs `pacman-contrib`, and enables `paccache.timer` for a weekly cache trim. The
 aliases wrap the rest:
 
 | Alias | Command | Why |
@@ -315,8 +369,8 @@ aliases wrap the rest:
 | `paccleanup` | `paccache -rk2` | Trim the package cache by hand. |
 | `pacorphans` | `pacman -Qtdq` | List orphaned dependencies. |
 
-`dotfiles/.makepkg.conf` builds AUR packages with all cores and skips package compression.
-Nothing packages an AUR helper, so `install.sh` builds `yay-bin` once on a fresh Arch box —
-without it, AUR-only packages (`jdtls`) are skipped.
+`dotfiles/.makepkg.conf` builds AUR packages with every core, and skips package compression.
+Nothing packages an AUR helper, so `install.sh` builds `yay-bin` once on a fresh Arch machine.
+Without it, the AUR-only packages (`jdtls`) are skipped.
 
 ---

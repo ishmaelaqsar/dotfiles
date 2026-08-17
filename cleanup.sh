@@ -136,6 +136,11 @@ if command -v git >/dev/null 2>&1; then
     __git_unset_if user.email "ishmael-dev@aqsar.dev"
     __git_unset_if core.excludesfile "$HOME/.gitignore_global"
     __git_unset_if core.attributesfile "$HOME/.gitattributes"
+    # The delta wiring. Leaving core.pager behind would break `git diff` on a
+    # machine where the package is later removed.
+    __git_unset_if core.pager "delta"
+    __git_unset_if interactive.diffFilter "delta --color-only"
+    __git_unset_if delta.navigate "true"
     # The path varies by distro, so match on the helper name
     case "$(git config --global --get credential.helper 2>/dev/null)" in
         */git-credential-libsecret)
@@ -158,7 +163,7 @@ fi
 echo
 echo "Done: $removed item(s) removed."
 echo "System packages are not uninstalled. Installed by these scripts (remove manually if wanted):"
-echo "  install.sh:    eza fd/fdfind ripgrep fzf git-delta zellij bash-completion gnupg pinentry opencode ghostty"
+echo "  install.sh:    eza fd/fdfind ripgrep fzf git-delta lazygit zellij bash-completion gnupg pinentry opencode ghostty"
 echo "                 wl-clipboard (desktop), pacman-contrib + yay (Arch)"
 echo "  System units left enabled (disable by hand): pcscd.socket, paccache.timer"
 echo "  setup-c.sh:    build-essential/base-devel gdb lldb clangd cmake valgrind"

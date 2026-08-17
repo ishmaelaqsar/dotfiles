@@ -114,6 +114,14 @@ DOTFILES_DIR="$SCRIPT_DIR/dotfiles"
 # --check tests these, and the steps below write them. Keep one copy of each.
 GIT_USER_NAME="Ishmael Aqsar"
 GIT_USER_EMAIL="ishmael-dev@aqsar.dev"
+
+# git needs these three keys before it uses delta to render a diff. One list,
+# so the install step and --check cannot drift apart. `key=value` per line;
+# the value keeps every character after the first `=`.
+GIT_DELTA_CONFIG="core.pager=delta
+interactive.diffFilter=delta --color-only
+delta.navigate=true"
+
 TARGET_BIN_DIR="$TARGET_DIR/bin"
 GNUPG_DIR="$TARGET_DIR/.gnupg"
 AGENT_CONF="$GNUPG_DIR/gpg-agent.conf"
@@ -184,7 +192,7 @@ __check_fail() {
 }
 
 __check_install() {
-    local script_path name dest font missing commands primary state before
+    local script_path name dest font missing commands primary state before key value
 
     echo "Checking the install in $TARGET_DIR (nothing is changed)."
 
@@ -247,6 +255,17 @@ __check_install() {
         [ "$(git config --global --get user.email 2>/dev/null)" = "$GIT_USER_EMAIL" ] \
             || __check_fail "git user.email is not '$GIT_USER_EMAIL'"
         [ "$CHECK_FAILURES" -eq "$before" ] && echo "  ok: identity set"
+
+        # Only when delta is installed: without it, install.sh leaves the
+        # default pager alone on purpose.
+        if command -v delta >/dev/null 2>&1; then
+            before="$CHECK_FAILURES"
+            while IFS='=' read -r key value; do
+                [ "$(git config --global --get "$key" 2>/dev/null)" = "$value" ] \
+                    || __check_fail "git $key is not '$value'"
+            done <<< "$GIT_DELTA_CONFIG"
+            [ "$CHECK_FAILURES" -eq "$before" ] && echo "  ok: delta is the diff pager"
+        fi
     fi
 
     echo
@@ -415,6 +434,18 @@ elif command -v git &> /dev/null; then
     __run git config --global user.email "$GIT_USER_EMAIL"
     __run git config --global core.excludesfile "$HOME/.gitignore_global"
     __run git config --global core.attributesfile "$HOME/.gitattributes"
+
+    # delta renders the diffs, but only after git is told to use it. Guard on
+    # the command: the package is best-effort, and a core.pager that is not
+    # installed breaks every `git diff`.
+    if command -v delta >/dev/null 2>&1; then
+        echo "  -> Using delta as the diff pager"
+        while IFS='=' read -r key value; do
+            __run git config --global "$key" "$value"
+        done <<< "$GIT_DELTA_CONFIG"
+    else
+        echo "  -> delta not on PATH; leaving the default pager in place."
+    fi
 
     # HTTPS remotes: keep the token in the GNOME keyring, not in a cleartext
     # ~/.git-credentials. Arch ships the helper inside git itself; other

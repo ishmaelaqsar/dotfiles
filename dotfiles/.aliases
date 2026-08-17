@@ -15,6 +15,7 @@ if command -v fd >/dev/null; then
 elif command -v fdfind >/dev/null; then
     alias find='fdfind'
 fi
+command -v lazygit >/dev/null && alias lg='lazygit'
 if command -v eza >/dev/null; then
     alias ls='eza --icons --group-directories-first'
     alias l='eza --icons --group-directories-first'
