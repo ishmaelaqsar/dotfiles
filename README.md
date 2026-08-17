@@ -284,7 +284,9 @@ branch whose upstream is gone. It runs through `bash -lc`, because `git-gone` is
 
 lazygit reads `~/.config/lazygit/` on Linux, but `~/Library/Application Support/lazygit/` on
 macOS. `.bash_profile` therefore exports `LG_CONFIG_FILE`, so one file serves both. Run
-`lazygit --print-config-dir` when a machine seems to ignore the config.
+`lazygit --print-config-dir` when a machine seems to ignore the config. That command follows
+`LG_CONFIG_FILE` only when the file at the end of it exists. An answer of
+`Library/Application Support` on macOS therefore means the symlink is missing, not the export.
 
 ---
 
