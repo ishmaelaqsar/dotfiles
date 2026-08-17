@@ -423,6 +423,18 @@ jot() {
     echo "jotted → Daily Notes/$(date +%F).md"
 }
 
+# dotfiles: with no argument, enter the repository. A script cannot change the
+# directory of its caller, so that one case has to live here. Every other
+# argument goes to bin/dotfiles, which an agent or a script can call directly.
+# `command` skips this function and finds the script on PATH.
+dotfiles() {
+    if [ "$#" -eq 0 ]; then
+        cd "$(command dotfiles path)" || return 1
+    else
+        command dotfiles "$@"
+    fi
+}
+
 # sb: enter the vault and launch the terminal agent over it as a second brain.
 # Forwards any args to opencode (e.g. `sb /brief`).
 sb() {

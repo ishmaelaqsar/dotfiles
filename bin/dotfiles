@@ -1,0 +1,361 @@
+#!/usr/bin/env python3
+"""
+dotfiles — one entry point for the jobs that need more than one command.
+
+The script wraps nothing that already works on its own. install.sh, cleanup.sh
+and the setup-*.sh scripts each keep their own interface. This script holds only
+the jobs that need several steps in the right order.
+
+A shell function in .helpers calls `dotfiles path` when it gets no argument, and
+changes directory. A script cannot change the directory of its caller, so that
+one case has to live in the shell.
+"""
+
+import argparse
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent
+DOTFILES_DIR = REPO / "dotfiles"
+
+# A change to one of these needs a full install, not only a new symlink.
+INSTALL_TRIGGERS = ("install.sh", "cleanup.sh", "lib/pkg.sh", "lib/packages.conf")
+
+EXAMPLES = """
+Examples:
+  dotfiles                 # the shell function changes directory (no argument)
+  dotfiles update          # pull, link the files, then check this machine
+  dotfiles status          # the repository: branch, upstream, uncommitted edits
+  dotfiles doctor          # this machine: every check, in full
+  dotfiles sync            # link the files, and nothing else
+  dotfiles sync --check    # the symlinks only, which doctor covers as well
+  dotfiles edit ghostty    # find one config file, and open it
+  dotfiles edit            # pick a file with fzf
+  dotfiles path            # print the repository root
+
+status reports the repository, and one line on the health of the machine.
+doctor prints the whole report, and is what install.sh --check runs.
+
+Exit codes: 0 success, 1 a check failed or a step could not run.
+Uncommitted edits are normal, so they are never a failure.
+"""
+
+
+def git(*args, check=True, capture=True):
+    """Run git in the repository. Return its output when capture is true."""
+    result = subprocess.run(
+        ["git", "-C", str(REPO), *args],
+        check=False,
+        capture_output=capture,
+        text=True,
+    )
+    if check and result.returncode != 0:
+        message = (result.stderr or result.stdout or "").strip()
+        print(f"❌ git {' '.join(args)} failed. {message}", file=sys.stderr)
+        sys.exit(1)
+    return result.stdout.strip() if capture else ""
+
+
+def run_script(name, *args):
+    """Run one of the repository's own scripts. Return its exit code."""
+    # The child writes straight to the terminal. Flush first, or this script's
+    # own buffered output lands after it.
+    sys.stdout.flush()
+    return subprocess.run([str(REPO / name), *args]).returncode
+
+
+def run_script_quiet(name, *args):
+    """Run one of the repository's own scripts, and keep its output."""
+    return subprocess.run(
+        [str(REPO / name), *args], capture_output=True, text=True
+    ).returncode
+
+
+def branch_name():
+    return git("rev-parse", "--abbrev-ref", "HEAD")
+
+
+def upstream_gap():
+    """Return the commits behind and ahead of the upstream, or None."""
+    if git("rev-parse", "--abbrev-ref", "@{u}", check=False) == "":
+        return None
+    counts = git("rev-list", "--left-right", "--count", "@{u}...HEAD", check=False)
+    if not counts:
+        return None
+    behind, ahead = counts.split()
+    return int(behind), int(ahead)
+
+
+# ------------------------------------------------------------
+# Commands
+# ------------------------------------------------------------
+def cmd_path(_args):
+    print(REPO)
+
+
+def cmd_status(_args):
+    """Report the repository, and the health of the machine in one line."""
+    print(f"Repository: {REPO}")
+    print(f"Branch:     {branch_name()}")
+
+    gap = upstream_gap()
+    if gap is None:
+        print("Upstream:   none")
+    else:
+        behind, ahead = gap
+        state = []
+        if behind:
+            state.append(f"{behind} behind")
+        if ahead:
+            state.append(f"{ahead} ahead")
+        print(f"Upstream:   {', '.join(state) if state else 'current'}")
+
+    # doctor holds the detail. status only says whether it would pass, so that
+    # one glance covers the repository and the machine together.
+    healthy = run_script_quiet("install.sh", "--check") == 0
+    print(f"Machine:    {'every check passes' if healthy else 'a check failed'}")
+
+    # A dotfile edit takes effect at once, through the symlink, so it is easy to
+    # leave one uncommitted. Report it, but do not call it a failure.
+    changes = git("status", "--short")
+    print()
+    if changes:
+        print("Uncommitted changes:")
+        for line in changes.splitlines():
+            print(f"  {line}")
+    else:
+        print("No uncommitted changes.")
+
+    if gap and gap[0]:
+        print()
+        print("Run 'dotfiles update' to catch up with the upstream.")
+    if not healthy:
+        print()
+        print("Run 'dotfiles doctor' for the whole report.")
+        return 1
+    return 0
+
+
+def cmd_doctor(_args):
+    """Print the whole check for this machine."""
+    return run_script("install.sh", "--check")
+
+
+def home_owned_by_other():
+    """Return the path of a different checkout that owns the home directory."""
+    other = Path.home() / ".dotfiles"
+    if other.exists() and other.resolve() != REPO:
+        return other
+    return None
+
+
+def cmd_sync(args):
+    """Link the files. lib/sync-dotfiles does the work.
+
+    The flags mirror the engine's own. They are declared, not forwarded as a
+    remainder, because argparse gives a remainder that starts with a flag to the
+    parent parser instead.
+    """
+    engine_args = []
+    if args.dry_run:
+        engine_args.append("--dry-run")
+    if args.check:
+        engine_args.append("--check")
+    if args.backup:
+        engine_args.append("--backup")
+    if args.target:
+        engine_args.append(args.target)
+
+    # A write into the home directory of another checkout would hijack it. A
+    # check and a dry run change nothing, so let those through.
+    if not (args.check or args.dry_run) and not args.target:
+        other = home_owned_by_other()
+        if other:
+            print(f"❌ {other} owns this home directory, not this checkout.", file=sys.stderr)
+            print("   The sync would relink it to this repository. Nothing changed.", file=sys.stderr)
+            print("   Name a target directory to sync somewhere else.", file=sys.stderr)
+            return 1
+
+    return run_script("lib/sync-dotfiles", *engine_args)
+
+
+def cmd_update(_args):
+    # update links this repository into the home directory, so it must not run
+    # where another checkout owns that home. install.sh refuses for the same
+    # reason, but the sync engine has no such guard of its own.
+    other = home_owned_by_other()
+    if other:
+        print(f"❌ {other} owns this home directory, not this checkout.", file=sys.stderr)
+        print("   update would relink the home directory to this repository.", file=sys.stderr)
+        print("   Nothing changed.", file=sys.stderr)
+        return 1
+
+    if git("status", "--porcelain"):
+        print("❌ The repository has uncommitted changes.", file=sys.stderr)
+        print("   Commit or stash them, then run update again.", file=sys.stderr)
+        print("   'dotfiles status' lists them.", file=sys.stderr)
+        return 1
+
+    before = git("rev-parse", "HEAD")
+
+    # --ff-only, so a diverged branch stops here instead of building a merge.
+    print("Pulling...")
+    sys.stdout.flush()
+    if subprocess.run(["git", "-C", str(REPO), "pull", "--ff-only"]).returncode != 0:
+        print("❌ The pull failed. Resolve it by hand, then run update again.", file=sys.stderr)
+        return 1
+
+    after = git("rev-parse", "HEAD")
+    if before == after:
+        print("No new commits.")
+    else:
+        changed = git("diff", "--name-only", before, after).splitlines()
+        print(f"{len(changed)} file(s) changed.")
+
+    print()
+    print("Linking the files...")
+    if run_script("lib/sync-dotfiles") != 0:
+        print("❌ The sync failed.", file=sys.stderr)
+        return 1
+
+    # A new package or a changed installer needs a real install, which this
+    # command deliberately does not run on its own. The sync links the
+    # dotfiles/ tree only, so a script that is new to bin/ needs one too.
+    if before != after:
+        added = git("diff", "--diff-filter=A", "--name-only", before, after).splitlines()
+        def needs_install(f):
+            if f in INSTALL_TRIGGERS or f.startswith("setup-"):
+                return True
+            # A changed script keeps its symlink. Only a new one lacks it.
+            return f.startswith("bin/") and f in added
+
+        triggers = [f for f in changed if needs_install(f)]
+        if triggers:
+            print()
+            print("These files changed, so a full install is due:")
+            for f in triggers:
+                print(f"  {f}")
+            print("Run ./install.sh")
+
+    print()
+    return run_script("install.sh", "--check")
+
+
+def cmd_edit(args):
+    files = sorted(
+        str(p.relative_to(DOTFILES_DIR)) for p in DOTFILES_DIR.rglob("*") if p.is_file()
+    )
+    if not files:
+        print(f"❌ No file under {DOTFILES_DIR}.", file=sys.stderr)
+        return 1
+
+    matches = (
+        [f for f in files if args.name.lower() in f.lower()] if args.name else files
+    )
+
+    if not matches:
+        print(f"❌ No file matches '{args.name}'.", file=sys.stderr)
+        return 1
+
+    if len(matches) == 1:
+        choice = matches[0]
+    elif not sys.stdin.isatty() or shutil.which("fzf") is None:
+        # fzf needs a terminal. Without one, print the matches and stop, so an
+        # agent or a script gets a list instead of a hang.
+        reason = "fzf is not installed" if sys.stdin.isatty() else "there is no terminal"
+        print(f"{len(matches)} files match, and {reason}:", file=sys.stderr)
+        for f in matches:
+            print(f"  {f}", file=sys.stderr)
+        return 1
+    else:
+        sys.stdout.flush()
+        picked = subprocess.run(
+            ["fzf", "--height", "40%", "--reverse", "--prompt", "dotfile > "],
+            input="\n".join(matches),
+            capture_output=True,
+            text=True,
+        )
+        choice = picked.stdout.strip()
+        if not choice:
+            print("Nothing picked.")
+            return 0
+
+    target = DOTFILES_DIR / choice
+    editor = os.environ.get("VISUAL") or os.environ.get("EDITOR") or "vi"
+    print(f"→ {editor} {target}")
+    sys.stdout.flush()
+    code = subprocess.run([*editor.split(), str(target)]).returncode
+
+    # A file that is new to the repository has no symlink yet. A link that
+    # points somewhere else means another checkout owns this home directory.
+    link = Path.home() / choice
+    if not (link.is_symlink() and link.resolve() == target.resolve()):
+        print()
+        print(f"{link} does not link to this file.")
+        print("Run 'dotfiles sync' to link it.")
+    return code
+
+
+# ------------------------------------------------------------
+# Main
+# ------------------------------------------------------------
+def main():
+    parser = argparse.ArgumentParser(
+        prog="dotfiles",
+        description="Update, check and edit this dotfiles repository.",
+        epilog=EXAMPLES,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    sub = parser.add_subparsers(dest="command", metavar="<command>")
+
+    sub.add_parser("update", help="Pull, link the files, then check this machine")
+    sub.add_parser("status", help="Print the repository state, and one health line")
+    sub.add_parser("doctor", help="Print every check for this machine, in full")
+
+    p_sync = sub.add_parser("sync", help="Link the files into the home directory")
+    p_sync.add_argument(
+        "-n", "--dry-run", action="store_true", help="Print the plan. Change nothing."
+    )
+    p_sync.add_argument(
+        "-c",
+        "--check",
+        action="store_true",
+        help="Report the files that are missing or have drifted",
+    )
+    p_sync.add_argument(
+        "-b",
+        "--backup",
+        action="store_true",
+        help="Rename an existing file to <name>.bak before the link replaces it",
+    )
+    p_sync.add_argument(
+        "target", nargs="?", help="Where to link. It defaults to the home directory."
+    )
+
+    p_edit = sub.add_parser("edit", help="Open one tracked dotfile in your editor")
+    p_edit.add_argument(
+        "name", nargs="?", help="Part of the file name. Omit it to pick with fzf."
+    )
+
+    sub.add_parser("path", help="Print the repository root")
+
+    args = parser.parse_args()
+    if args.command is None:
+        parser.print_help()
+        return 0
+
+    return {
+        "update": cmd_update,
+        "status": cmd_status,
+        "doctor": cmd_doctor,
+        "sync": cmd_sync,
+        "edit": cmd_edit,
+        "path": cmd_path,
+    }[args.command](args) or 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

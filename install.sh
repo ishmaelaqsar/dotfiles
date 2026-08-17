@@ -57,7 +57,7 @@ fi
 # fresh macOS box /usr/bin/python3 is a stub that only prompts for the Xcode
 # Command Line Tools, so test that it runs rather than that it exists.
 if ! python3 -c '' >/dev/null 2>&1; then
-    echo "Error: no working python3 — install.sh needs it for bin/sync-dotfiles." >&2
+    echo "Error: no working python3 — install.sh needs it for lib/sync-dotfiles." >&2
     if [[ "$OSTYPE" == darwin* ]]; then
         echo "Run 'xcode-select --install', then try again." >&2
     else
@@ -197,7 +197,7 @@ __check_install() {
     echo "Checking the install in $TARGET_DIR (nothing is changed)."
 
     echo "Symlinked dotfiles:"
-    python3 "$SCRIPT_DIR/bin/sync-dotfiles" --check "$TARGET_DIR" \
+    python3 "$SCRIPT_DIR/lib/sync-dotfiles" --check "$TARGET_DIR" \
         || __check_fail "the dotfiles tree does not match the repo — re-run install.sh"
 
     echo "Scripts in $TARGET_BIN_DIR:"
@@ -337,31 +337,41 @@ fi
 # -----------------------------
 echo "Syncing dotfiles to $TARGET_DIR..."
 if [ "$DRY_RUN" -eq 1 ]; then
-    python3 "$SCRIPT_DIR/bin/sync-dotfiles" --dry-run "$TARGET_DIR"
-elif ! python3 "$SCRIPT_DIR/bin/sync-dotfiles" "$TARGET_DIR"; then
+    python3 "$SCRIPT_DIR/lib/sync-dotfiles" --dry-run "$TARGET_DIR"
+elif ! python3 "$SCRIPT_DIR/lib/sync-dotfiles" "$TARGET_DIR"; then
     echo "Error: sync-dotfiles failed. Aborting."
     exit 1
 fi
 
 # -----------------------------
-# Create dotfiles alias
+# Remove what an earlier install left behind
 # -----------------------------
-BASHRC_D_DIR="$TARGET_DIR/.bashrc.d"
-ALIAS_FILE="$BASHRC_D_DIR/dotfiles_alias"
+# .helpers defines a `dotfiles` shell function now, and it calls bin/dotfiles.
+# An alias expands before the shell looks for a function, so the alias file an
+# earlier install wrote would hide the function.
+ALIAS_FILE="$TARGET_DIR/.bashrc.d/dotfiles_alias"
 
-if [ "$DRY_RUN" -eq 1 ]; then
-    echo "  [dry-run] write $ALIAS_FILE"
-else
-    mkdir -p "$BASHRC_D_DIR"
+if [ -f "$ALIAS_FILE" ]; then
+    if [ "$DRY_RUN" -eq 1 ]; then
+        echo "  [dry-run] remove the old alias file $ALIAS_FILE"
+    else
+        echo "Removing the old dotfiles alias at '$ALIAS_FILE'."
+        rm "$ALIAS_FILE"
+    fi
+fi
 
-    echo "Creating dotfiles alias at '$ALIAS_FILE'."
-    cat <<EOF > "$ALIAS_FILE"
-# managed-by-dotfiles (cleanup.sh removes files carrying this marker)
-# Alias to quickly jump to dotfiles directory
-alias dotfiles='cd $SCRIPT_DIR'
-EOF
+# The sync engine moved to lib/, so bin/ holds only the commands a person runs.
+# An earlier install linked it into the target's bin/, where it is now a broken
+# link. `dotfiles sync` replaces it.
+STALE_SYNC_LINK="$TARGET_BIN_DIR/sync-dotfiles"
 
-    echo "Done. '$ALIAS_FILE' created."
+if [ -L "$STALE_SYNC_LINK" ] && [ "$(readlink "$STALE_SYNC_LINK")" = "$SOURCE_BIN_DIR/sync-dotfiles" ]; then
+    if [ "$DRY_RUN" -eq 1 ]; then
+        echo "  [dry-run] remove the stale link $STALE_SYNC_LINK"
+    else
+        echo "Removing the stale sync-dotfiles link at '$STALE_SYNC_LINK'."
+        rm "$STALE_SYNC_LINK"
+    fi
 fi
 
 # -----------------------------
@@ -666,7 +676,7 @@ fi
 # -----------------------------
 # systemd user units (Linux)
 # -----------------------------
-# The Linux counterpart of a macOS LaunchAgent. sync-dotfiles already
+# The Linux counterpart of a macOS LaunchAgent. lib/sync-dotfiles already
 # symlinked dotfiles/.config/systemd/user/* into place; systemd still has to
 # be told they exist, and units with an [Install] section get enabled.
 UNIT_SRC_DIR="$DOTFILES_DIR/.config/systemd/user"

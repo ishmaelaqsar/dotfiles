@@ -70,7 +70,7 @@ Safety:
   overrides the guard. A dry run passes the guard, because it changes nothing.
 * It repeats every warning as a numbered summary at the end. A failure in the middle of a long
   package run then does not scroll past unread.
-* It needs a working `python3` for `bin/sync-dotfiles`, and stops with a clear message when there
+* It needs a working `python3` for `lib/sync-dotfiles`, and stops with a clear message when there
   is none. On a fresh macOS machine `/usr/bin/python3` is only a stub, so run
   `xcode-select --install` first.
 * After the install, run `opencode auth login` once to connect a model provider.
@@ -83,6 +83,7 @@ the machine, changes nothing, and exits non-zero when a repair is necessary.
 ```bash
 ./install.sh --check           # this machine
 ./install.sh --check /some/dir # a probe target
+dotfiles doctor                # the same report, by its shorter name
 ```
 
 | Checked | Result |
@@ -149,9 +150,13 @@ instead.
 `install.sh` links each of these into `$HOME/bin`. Every one prints its own help with `--help`:
 the commands, the environment variables it reads, examples, and the exit codes.
 
+`bin/` holds only the commands a person runs. The engines they share live in `lib/`, and nothing
+links them into `$HOME/bin`: `lib/sync-dotfiles` writes the symlinks, and `lib/pkg.sh` reads
+`lib/packages.conf`. Reach the sync through `dotfiles sync`.
+
 | Script | Purpose | With no argument |
 | :--- | :--- | :--- |
-| `sync-dotfiles` | Link `dotfiles/` into a target directory. `--check` reports drift. | It links into `$HOME` |
+| `dotfiles` | Update, check, sync and edit the repository. See below. | It prints the help. The shell function changes directory. |
 | `manage-secrets` | Encrypt, decrypt and verify `dotfiles/.secrets`. The pre-commit hook runs `verify`. | It prints the help |
 | `venv` | Create and inspect Python virtual environments. It prefers uv. | It prints the environment path |
 | `vm` | Manage one QEMU machine through virsh and virt-install. | It prints the status of `$VM_NAME`, or the help |
@@ -159,6 +164,31 @@ the commands, the environment variables it reads, examples, and the exit codes.
 
 None of them is a TUI, and none of them reads from a terminal. Each one behaves the same way in a
 shell, in a script, in the pre-commit hook, and under an agent.
+
+### The dotfiles command
+
+`dotfiles` holds only the jobs that need several steps in the right order. It wraps nothing that
+already works on its own: `install.sh`, `cleanup.sh` and the `setup-*.sh` scripts keep their own
+interfaces.
+
+| Command | Effect |
+| :--- | :--- |
+| `dotfiles` | Enter the repository. This is the shell function in `.helpers`. |
+| `dotfiles update` | Pull, link the files, then check this machine. It names the files that need a full `./install.sh`, such as a new package or a new script in `bin/`. |
+| `dotfiles status` | The branch, the gap to the upstream, the uncommitted edits, and one line on the health of the machine. |
+| `dotfiles doctor` | Every check for this machine, in full. The same report as `./install.sh --check`. |
+| `dotfiles sync` | Link the files, and nothing else. It passes `-n`, `--check`, `--backup` and a target directory to the engine. |
+| `dotfiles edit [name]` | Find one tracked dotfile and open it in `$VISUAL` or `$EDITOR`. `fzf` picks between several matches. |
+| `dotfiles path` | Print the repository root. The shell function reads it. |
+
+Two details are deliberate:
+
+* **The `cd` lives in the shell, and nothing else does.** A script cannot change the directory of
+  its caller, so `.helpers` defines a `dotfiles` function for that one case. Every other argument
+  goes to `bin/dotfiles`, which an agent or a script can call directly. Earlier versions installed
+  an alias instead; `install.sh` removes it, because an alias would hide the function.
+* **`update` refuses to run when a different checkout owns `$HOME`.** It would otherwise relink the
+  home directory to this repository. `install.sh` refuses for the same reason.
 
 ---
 

@@ -131,6 +131,23 @@ bash -lic 'type ll' >/dev/null 2>&1 && pass "aliases load in interactive shell" 
 # lazygit reads a different directory per platform, so the path is exported
 [ -n "$(bash -lic 'echo "$LG_CONFIG_FILE"' 2>/dev/null)" ] \
     && pass "LG_CONFIG_FILE exported" || flunk "LG_CONFIG_FILE not exported"
+# `dotfiles` must be the shell function, not the alias earlier versions wrote:
+# an alias expands first and would hide the function
+[ ! -f "$HOME/.bashrc.d/dotfiles_alias" ] \
+    && pass "no stale dotfiles alias file" || flunk "the old dotfiles alias file survived"
+[ "$(bash -lic 'type -t dotfiles' 2>/dev/null | tr -d '\r')" = "function" ] \
+    && pass "dotfiles is a shell function" || flunk "dotfiles is not a function"
+[ "$(dotfiles path)" = "$HOME/dotfiles" ] \
+    && pass "dotfiles path finds the repository" || flunk "dotfiles path is wrong"
+dotfiles status >/dev/null 2>&1 \
+    && pass "dotfiles status passes after an install" || flunk "dotfiles status failed"
+dotfiles doctor >/dev/null 2>&1 \
+    && pass "dotfiles doctor passes after an install" || flunk "dotfiles doctor failed"
+dotfiles sync --check >/dev/null 2>&1 \
+    && pass "dotfiles sync --check passes" || flunk "dotfiles sync --check failed"
+# The sync engine lives in lib/ now, so nothing links it into ~/bin
+[ ! -e "$HOME/bin/sync-dotfiles" ] \
+    && pass "the sync engine is not linked into ~/bin" || flunk "~/bin/sync-dotfiles still exists"
 [ -L "$HOME/.config/lazygit/config.yml" ] \
     && pass "lazygit config symlinked" || flunk "lazygit config missing"
 
