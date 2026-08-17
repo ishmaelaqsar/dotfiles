@@ -144,6 +144,24 @@ instead.
 
 ---
 
+## Scripts in bin/
+
+`install.sh` links each of these into `$HOME/bin`. Every one prints its own help with `--help`:
+the commands, the environment variables it reads, examples, and the exit codes.
+
+| Script | Purpose | With no argument |
+| :--- | :--- | :--- |
+| `sync-dotfiles` | Link `dotfiles/` into a target directory. `--check` reports drift. | It links into `$HOME` |
+| `manage-secrets` | Encrypt, decrypt and verify `dotfiles/.secrets`. The pre-commit hook runs `verify`. | It prints the help |
+| `venv` | Create and inspect Python virtual environments. It prefers uv. | It prints the environment path |
+| `vm` | Manage one QEMU machine through virsh and virt-install. | It prints the status of `$VM_NAME`, or the help |
+| `gnome-settings` | Apply, dump or restore the managed GNOME keys. | It prints the help |
+
+None of them is a TUI, and none of them reads from a terminal. Each one behaves the same way in a
+shell, in a script, in the pre-commit hook, and under an agent.
+
+---
+
 ## Editor
 
 * **Visual editor** — VS Code (`code --wait`). Git uses it for a commit or a merge. Use it for a

@@ -1,6 +1,13 @@
 #!/usr/bin/env python3
 """
-venv — Python virtual environment helper
+venv — create and inspect Python virtual environments.
+
+The environment goes in the project root, which is the nearest parent directory
+with a .git. `init` uses uv when uv is on PATH, because it is much faster, and
+falls back to `python3 -m venv`.
+
+A script cannot change the shell of its caller, so `start` and `stop` print the
+command to run. They do not activate anything themselves.
 """
 
 import argparse
@@ -10,12 +17,26 @@ import subprocess
 import sys
 from pathlib import Path
 
+EXAMPLES = """
+Examples:
+  venv init                     # create .venv in the project root
+  venv init -p python3.12       # create it with one interpreter
+  venv init env --seed          # name the directory, and pass uv an option
+  venv start                    # print the source command to activate it
+  venv path                     # print the path, for a script to read
+  venv list ~/workspace         # every environment under a directory
+
+With no command, venv prints the path of the active or detected environment.
+
+Exit codes: 0 success, 1 no environment exists or the creation failed.
+"""
+
 
 # ------------------------------------------------------------
 # Utility helpers
 # ------------------------------------------------------------
 def project_root() -> Path:
-    """Return current project root (by finding nearest .git or cwd)."""
+    """Return the nearest parent directory with a .git, else the current one."""
     cwd = Path.cwd()
     for parent in [cwd] + list(cwd.parents):
         if (parent / ".git").exists():
@@ -24,12 +45,12 @@ def project_root() -> Path:
 
 
 def venv_path(venv_dir: str = ".venv") -> Path:
-    """Return path to the venv directory relative to project root."""
+    """Return the environment directory under the project root."""
     return project_root() / venv_dir
 
 
 def run(cmd, check=True, **kwargs):
-    """Run shell command with optional error handling."""
+    """Print a command, then run it."""
     print(f"→ {' '.join(cmd)}")
     subprocess.run(cmd, check=check, **kwargs)
 
@@ -42,55 +63,47 @@ def cmd_init(args):
     target = root / args.dir
     python_cmd = args.python or "python3"
 
-    # Check if uv is available on the system
-    has_uv = shutil.which("uv") is not None
-
-    if has_uv:
-        print(f"⚡ Creating virtual environment using 'uv' at: {target} (Python: {python_cmd})")
-        # uv syntax: uv venv <target> --python <python_cmd>
+    # uv is much faster than the stdlib module, so prefer it when it is present.
+    if shutil.which("uv") is not None:
+        print(f"uv creates the environment at {target}. Python: {python_cmd}")
         cmd = ["uv", "venv", str(target), "--python", python_cmd] + args.venv_options
     else:
-        print(f"Creating virtual environment at: {target} using {python_cmd}")
-        # Standard venv syntax
+        print(f"python creates the environment at {target}. Python: {python_cmd}")
         cmd = [python_cmd, "-m", "venv", str(target)] + args.venv_options
 
     try:
         run(cmd)
-        if has_uv:
-             # uv doesn't output much by default, so we add a clear success message
-             print("✅ Virtual environment created successfully (superfast).")
-        else:
-             print("✅ Virtual environment created successfully.")
+        print("✅ The environment is ready.")
     except subprocess.CalledProcessError:
-        print("❌ Failed to create virtual environment.", file=sys.stderr)
+        print("❌ Cannot create the environment.", file=sys.stderr)
         sys.exit(1)
 
 
 def cmd_start(args):
-    """Print activation instructions for the shell."""
+    """Print the command that activates the environment."""
     target = venv_path(args.dir)
     activate_script = target / "bin" / "activate"
     if activate_script.exists():
-        print(f"To activate this environment, run:\n\n  source {activate_script}\n")
+        print(f"To activate the environment, run:\n\n  source {activate_script}\n")
     else:
-        print(f"No virtual environment found at: {target}")
-        print("Run 'venv init' first to create one.")
+        print(f"No environment at {target}.")
+        print("Run 'venv init' first.")
         sys.exit(1)
 
 
 def cmd_stop(_args):
-    """Just a reminder—cannot deactivate from outside the shell."""
+    """Print the active environment, and the command that leaves it."""
     venv = os.environ.get("VIRTUAL_ENV")
     if venv:
-        print(f"Currently active virtualenv: {venv}")
-        print("To deactivate, run:\n\n  deactivate\n")
+        print(f"The active environment is {venv}.")
+        print("To leave it, run:\n\n  deactivate\n")
     else:
-        print("No active virtual environment detected.")
+        print("No environment is active.")
 
 
 def cmd_restart(args):
-    """Stop + start equivalent."""
-    print("Restarting virtual environment...")
+    """Print the two steps, because a script cannot change the shell."""
+    print("Leave the environment, then activate it again:")
     cmd_stop(args)
     cmd_start(args)
 
@@ -104,7 +117,7 @@ def cmd_path(_args):
         if target.exists():
             print(target)
         else:
-            print("No virtual environment detected.", file=sys.stderr)
+            print("No environment found.", file=sys.stderr)
             sys.exit(1)
 
 
@@ -114,7 +127,7 @@ def cmd_list(args):
         if args.search_dir
         else Path(os.environ.get("WORKSPACE", Path.home()))
     )
-    print(f"Searching for virtual environments under: {search_dir}")
+    print(f"Environments under {search_dir}:")
     print("-----------------------------------------------------")
 
     found = False
@@ -134,80 +147,78 @@ def cmd_list(args):
         found = True
 
     if not found:
-        print("No virtual environments found.")
-
-
-def cmd_help(_args):
-    print(
-        """
-Python Virtual Environment Helper
-=================================
-
-Usage: venv <command> [options]
-
-Commands:
-  init [-p PYTHON] [dir] [--venv-options ...]
-      Create a new virtual environment.
-
-  start [dir]
-      Show activation command for an existing environment.
-
-  stop
-      Display currently active virtual environment (if any).
-
-  restart [dir]
-      Equivalent to stop + start.
-
-  path
-      Print the path of the active or detected virtual environment.
-
-  list [search_dir]
-      List all virtual environments under search_dir (default: $WORKSPACE or ~).
-
-If no command is provided, prints the detected virtualenv path.
-"""
-    )
+        print("No environment found.")
 
 
 # ------------------------------------------------------------
 # Main
 # ------------------------------------------------------------
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="venv",
+        description="Create and inspect Python virtual environments.",
+        epilog=EXAMPLES,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    sub = parser.add_subparsers(dest="command", metavar="<command>")
+
+    p_init = sub.add_parser("init", help="Create an environment")
+    p_init.add_argument(
+        "-p", "--python", help="The interpreter to use. It defaults to python3."
+    )
+    p_init.add_argument(
+        "dir",
+        nargs="?",
+        default=".venv",
+        help="The directory, under the project root. It defaults to .venv.",
+    )
+    p_init.add_argument(
+        "venv_options",
+        nargs=argparse.REMAINDER,
+        help="Options to pass on to uv or to python -m venv",
+    )
+
+    p_start = sub.add_parser("start", help="Print the command that activates it")
+    p_start.add_argument("dir", nargs="?", default=".venv", help="The directory")
+
+    sub.add_parser("stop", help="Print the active environment, and how to leave it")
+
+    p_restart = sub.add_parser("restart", help="Print the stop and the start steps")
+    p_restart.add_argument("dir", nargs="?", default=".venv", help="The directory")
+
+    sub.add_parser("path", help="Print the path of the active or detected environment")
+
+    p_list = sub.add_parser("list", help="List the environments under a directory")
+    p_list.add_argument(
+        "search_dir",
+        nargs="?",
+        default=None,
+        help="Where to search. It defaults to $WORKSPACE, then $HOME.",
+    )
+
+    sub.add_parser("help", help="Print this text")
+    return parser
+
+
 def main():
-    parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("command", nargs="?", help="Command to run")
-    parser.add_argument("extra", nargs=argparse.REMAINDER)
-
+    parser = build_parser()
     args = parser.parse_args()
-    cmd = args.command or "path"
 
-    sub = argparse.ArgumentParser(prog=f"venv {cmd}", add_help=False)
-    if cmd == "init":
-        sub.add_argument("-p", "--python", help="Python interpreter (default python3)")
-        sub.add_argument("dir", nargs="?", default=".venv", help="Venv directory")
-        sub.add_argument("venv_options", nargs=argparse.REMAINDER)
-        args = sub.parse_args(args.extra)
-        cmd_init(args)
-    elif cmd == "start":
-        sub.add_argument("dir", nargs="?", default=".venv")
-        args = sub.parse_args(args.extra)
-        cmd_start(args)
-    elif cmd == "stop":
-        cmd_stop(args)
-    elif cmd == "restart":
-        sub.add_argument("dir", nargs="?", default=".venv")
-        args = sub.parse_args(args.extra)
-        cmd_restart(args)
-    elif cmd == "path":
+    if args.command in (None, "path"):
+        # No command prints the path, so a script can read it.
         cmd_path(args)
-    elif cmd == "list":
-        sub.add_argument("search_dir", nargs="?", default=None)
-        args = sub.parse_args(args.extra)
-        cmd_list(args)
-    elif cmd in ("help", "-h", "--help"):
-        cmd_help(args)
-    else:
-        print(f"Unknown command: {cmd}\nUse 'venv help' for usage.", file=sys.stderr)
-        sys.exit(1)
+        return
+    if args.command == "help":
+        parser.print_help()
+        return
+
+    {
+        "init": cmd_init,
+        "start": cmd_start,
+        "stop": cmd_stop,
+        "restart": cmd_restart,
+        "list": cmd_list,
+    }[args.command](args)
 
 
 if __name__ == "__main__":

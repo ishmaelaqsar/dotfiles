@@ -1,11 +1,32 @@
 #!/usr/bin/env python3
 """
-Sync dotfiles from the repository into the target directory.
-Creates symlinks for files and ensures directories exist.
-Optional --backup: rename existing files with .bak before linking.
-Optional --dry-run: list what would be linked, and change nothing.
-Optional --check: report the files that are missing or have drifted, and
-change nothing. Exits 1 when the target does not match the repository.
+sync-dotfiles — link every file in dotfiles/ into a target directory.
+
+Each file in the repository's dotfiles/ tree becomes a symlink at the same
+relative path under the target. The directories are created as real
+directories, so an untracked file can sit beside a linked one.
+
+install.sh calls this script. Run it directly to pick up a new dotfile without
+a full install.
+"""
+
+USAGE = """Usage: sync-dotfiles [-n|--dry-run] [-c|--check] [-b|--backup] [target-dir]
+
+  -n, --dry-run   Print the plan. Change nothing.
+  -c, --check     Report the files that are missing or have drifted. Change
+                  nothing. Exit 1 when the target does not match the repository.
+  -b, --backup    Rename an existing file to <name>.bak before the link
+                  replaces it. Without this flag the file is deleted.
+  -h, --help      Print this text.
+
+The target directory defaults to $HOME.
+
+Exit codes: 0 success, 1 a check failed or the dotfiles/ directory is missing.
+
+Examples:
+  sync-dotfiles                 # link into $HOME
+  sync-dotfiles --check         # is $HOME still correct?
+  sync-dotfiles -n /tmp/probe   # plan a probe run
 """
 
 import os
@@ -25,6 +46,9 @@ for arg in sys.argv[1:]:
         dry_run = True
     elif arg in ("--check", "-c"):
         check = True
+    elif arg in ("--help", "-h"):
+        print(USAGE, end="")
+        sys.exit(0)
     else:
         target_arg = arg
 
