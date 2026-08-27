@@ -43,6 +43,72 @@ Exceptions: code, identifiers, literal command or tool output, and quoted text â
 exactly. STE controls the form, not the content: still state uncertainty, caveats, and
 disagreement.
 
+## Comments and documentation
+
+Follow the [Google developer documentation style guide](https://developers.google.com/style) as
+well as STE. STE controls the shape of a sentence. The Google guide covers everything else.
+
+- **Person.** Address the reader as "you". Do not write "we", and do not write "the user" when
+  you mean the reader.
+- **Tense.** Describe present behaviour in the present tense. Do not write "will" for something
+  that happens now.
+- **Possibility.** Write "might" for possibility. Keep "may" for permission.
+- **Headings.** Use sentence case, not title case.
+- **Words to drop.** Never write "simply", "just", "easy", "obvious", or "of course". They tell
+  the reader how hard the task should feel, and they are wrong when the reader is stuck.
+- **"Please".** Leave it out of instructions.
+- **Abbreviations.** Spell out a term the first time you use it. Write "for example" and "that
+  is" instead of "e.g." and "i.e.".
+- **Lists.** Number a list when the order matters. Otherwise use bullets.
+- **Link text.** Describe the target. Never write "click here" or "read more".
+- **Code font.** Put identifiers, paths, flags, and commands in code font. Put UI labels in bold.
+- **Direction.** Do not point with "above", "below", or "on the left". A screen reader gives no
+  position, and the layout moves. Name the section or link to it.
+- **Inclusive language.** Avoid ableist and violent terms. Write "check", not "sanity check".
+  Write "placeholder", not "dummy". Keep a term when it is the literal name of a command or flag.
+- **Punctuation.** Use the serial comma. Avoid exclamation marks.
+- **No anthropomorphism.** A program does not want, think, or try.
+
+For code comments, add two rules:
+
+- Explain **why**, not what. The code already says what it does.
+- Delete a comment that no longer matches the code. A stale comment is worse than none.
+
+## Artifact style
+
+Publish Artifacts as a **printed sheet**, not a themed web page. Keep the same light look in
+every host theme.
+
+- **Ground and sheet.** Paint a muted warm-grey desk behind a near-white sheet. Give the sheet
+  square corners, a hairline edge, and a soft drop shadow. Square corners matter, because paper
+  has no rounded ones.
+- **Tokens.** `--desk: #e7e5df`, `--sheet: #fdfdfb`, `--edge: #cfccc4`, `--rule: #ddd9d1`,
+  `--rule-2: #ebe8e1`, `--ink: #1a1a17`, `--ink-2: #55534c`, `--ink-3: #8a877e`.
+- **Data ink.** `#1f5fa8` (blue) and `#c04a1d` (rust). Both clear 3:1 contrast on the sheet, and
+  both pass the colourblind separation checks. Add more hues only after you validate them.
+- **Type.** Use `Source Serif 4` for prose and `IBM Plex Mono` for every figure, label, and
+  caption. Load both from Google Fonts, the one font host the Artifact CSP admits. Always give a
+  fallback stack, or the face fails silently.
+- **Tables.** Set them like print: a heavy rule under the header row, hairlines between rows, no
+  fills, and no border radius. Add `font-variant-numeric: tabular-nums` to numeric columns, and
+  `white-space: nowrap` so a figure never breaks across lines.
+- **Table gutters.** Give every cell the same horizontal padding, about `12px` each side, for a
+  `24px` gutter between columns. Then reset `padding-left` on the first column and `padding-right`
+  on the last, so the table still aligns flush with the text column. Never zero `padding-right` on
+  right-aligned numeric columns alone: the next cell contributes no left padding, so two adjacent
+  numeric columns end up touching with no gutter at all. Keep header labels short, because the
+  header usually sets the column width, not the data. Move a formula or a definition into the
+  caption instead. Wrap each table in a container with `overflow-x: auto`, so a wide table scrolls
+  rather than crushing its columns.
+- **Section labels.** Set headings in small uppercase mono with wide letter-spacing.
+- **Single theme.** Omit the `prefers-color-scheme` and `data-theme` blocks. Define every colour
+  in `:root`, and paint the `body` background from a token, so the page holds on any host ground.
+- **Avoid** the cream paper look with a serif display face and a terracotta accent. Use cool
+  near-white stock and print inks instead.
+
+Keep the treatment utilitarian. A technical page needs hierarchy, spacing, and a real palette.
+It does not need a large hero or extra ornament.
+
 ## This machine
 
 - Dotfiles are managed by a git-tracked repo; the `dotfiles` alias jumps to its checkout. Edit
