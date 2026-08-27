@@ -81,13 +81,7 @@ else
     cat /tmp/check.log
 fi
 
-for t in eza rg fzf delta starship; do check "$t"; done
-# zellij is only packaged for pacman/brew; elsewhere install.sh warns and
-# continues, so absence is a note, not a failure
-if command -v zellij >/dev/null 2>&1; then pass "zellij on PATH"
-elif command -v pacman >/dev/null 2>&1; then flunk "zellij missing (packaged on Arch)"
-else echo "note: zellij not packaged here — best-effort, skipped"
-fi
+for t in eza rg fzf delta starship tmux; do check "$t"; done
 { command -v fd || command -v fdfind; } >/dev/null 2>&1 && pass "fd/fdfind" || flunk "fd/fdfind missing"
 # Arch upkeep tools. wl-clipboard is desktop-only and a container is headless,
 # so check the package name instead of the binary.

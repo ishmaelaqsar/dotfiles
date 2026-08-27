@@ -71,22 +71,40 @@ pj() {
     fi
 }
 
-# List all background Zellij sessions
-alias zl="zellij list-sessions"
+# tmux sessions.
+#
+# `new-session -A` attaches to the named session, or creates it when it is not
+# there, so one verb covers both. That form refuses to run inside tmux, where
+# attaching a client to its own server nests it, so __tmux_goto switches the
+# current client instead.
+__tmux_goto() {
+    local name="$1"
+    if [[ -n "$TMUX" ]]; then
+        tmux has-session -t "=$name" 2>/dev/null || tmux new-session -d -s "$name"
+        tmux switch-client -t "=$name"
+    else
+        tmux new-session -A -s "$name"
+    fi
+}
 
-# Attach to an existing session by name (Usage: za <session_name>)
-alias za="zellij attach"
+# List the sessions on the server
+alias tl="tmux list-sessions"
 
-# "Smart" Zellij Start:
-# Typing 'zm' will attach to a session named "main" if it exists.
-# If it doesn't exist, it will create it.
-alias zm="zellij attach -c main"
+# Go to a session. With no name, pick one from the running sessions.
+ta() {
+    local name="$1"
+    if [[ -z "$name" ]]; then
+        name=$(tmux list-sessions -F '#{session_name}' 2>/dev/null \
+            | fzf --height 40% --reverse --prompt="session > ") || return
+    fi
+    [[ -n "$name" ]] && __tmux_goto "$name"
+}
 
-# Start a new named Zellij session
-alias zn="zellij attach -c"
+# Go to the session named main, and create it on the first call
+tm() { __tmux_goto main; }
 
-# Kill all active Zellij sessions instantly
-alias zkill="zellij kill-all-sessions"
+# Go to a session by name, and create it on the first call (Usage: tn <name>)
+tn() { __tmux_goto "${1:?usage: tn <session_name>}"; }
 
-# Deletes exited/ghost sessions (The cleanup command)
-alias zclean="zellij delete-all-sessions --force"
+# Kill every session, and the server with them
+alias tkill="tmux kill-server"

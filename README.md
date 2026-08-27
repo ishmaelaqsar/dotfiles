@@ -30,9 +30,9 @@ git clone https://github.com/ishmaelaqsar/dotfiles.git ~/.dotfiles
 `install.sh` does these steps:
 
 1. **Install the packages** with the manager it finds (brew, apt, yay, paru, pacman or dnf):
-   `eza`, `fd`, `ripgrep`, `fzf`, `git-delta`, `lazygit`, `zellij` and more. The list is data —
-   see [The package table](#the-package-table). Some packages are best-effort: `zellij` has a
-   package on Arch and brew only, and `lazygit` is not in Fedora's base repos. It also installs
+   `eza`, `fd`, `ripgrep`, `fzf`, `git-delta`, `lazygit`, `tmux` and more. The list is data —
+   see [The package table](#the-package-table). Some packages are best-effort: `lazygit` is not in
+   Fedora's base repos. It also installs
    [OpenCode](https://opencode.ai) and [Ghostty](https://ghostty.org), which can fail without
    stopping the run. On Arch it builds **yay** first when no AUR helper exists.
 2. **Link the config files** (`.bashrc`, `.vimrc`, and the rest) into your home directory.
@@ -323,6 +323,67 @@ macOS. `.bash_profile` therefore exports `LG_CONFIG_FILE`, so one file serves bo
 `lazygit --print-config-dir` when a machine seems to ignore the config. That command follows
 `LG_CONFIG_FILE` only when the file at the end of it exists. An answer of
 `Library/Application Support` on macOS therefore means the symlink is missing, not the export.
+
+---
+
+## tmux
+
+The config is `dotfiles/.config/tmux/tmux.conf`, and the menus it reads are in
+`dotfiles/.config/tmux/menu/`. It needs tmux 3.2 or newer, for `display-popup` and
+`terminal-features`.
+
+**C-x is the leader**, as it is in emacs. It is not the tmux `prefix` option, though. tmux resolves
+the prefix key before it reads the root key table, so a real prefix swallows C-x and no binding can
+act on it. `prefix` is therefore `None`, and C-x is bound in the root table to open a menu.
+
+### The which-key layer
+
+C-x opens a menu of the keys it accepts, the way `which-key` does in emacs. The keys work at
+speed whether or not you read the menu, so `C-x 2` still splits a pane. Five rows open a submenu:
+
+| Key | Menu | Holds |
+| --- | ---- | ----- |
+| `C-x C-p` | pane | focus with `h j k l`, move with `H J K L`, split, mark and join, break out |
+| `C-x C-t` | window | new, rename, next, previous, reorder, find, kill |
+| `C-x C-n` | resize | `h j k l` by a step, `H J K L` by one cell, tile evenly |
+| `C-x C-o` | session | pick, next, previous, new, rename, detach, kill, reload the config |
+| `C-x C-s` | copy | copy mode, search, top and end of the history, paste, buffer list |
+
+Rows that repeat hold their menu open, so `C-x C-n l l l` widens a pane three steps. A key that no
+row claims closes the menu and does nothing, which makes Escape and `C-g` the cancel keys and
+means a typo cannot fire the wrong command.
+
+Two limits are worth knowing, because both are tmux's and neither can be worked around:
+
+* **No arrow key can be a menu row.** A tmux menu keeps the whole arrow family, with every
+  modifier, for moving its own selection. Pane moves therefore sit on `H J K L`, and on
+  `M-S-<arrow>` outside the menu.
+* **A menu taller than the terminal does not draw**, and its keys go with it. Each menu stays
+  under 21 rows, which fits a 24-row terminal. Keep it that way when you add a row.
+
+### Keys that need no leader
+
+`M-<arrow>` and `M-h/j/k/l` move the focus, `M-S-<arrow>` moves the pane itself, `M-n` splits,
+`M-i` and `M-o` reorder the window, `M-[` and `M-]` cycle the layout, and `M-f` opens a shell in a
+popup. `C-x ?` lists them from tmux itself, so the list cannot go stale.
+
+### emacs in the terminal
+
+Alt and C-x both shadow keys that readline and emacs want: `M-f`, `M-b`, `M-l`, `M-k`, and the
+whole C-x map. Two ways out:
+
+* `C-x C-x` sends one literal C-x to the program in the pane, so `C-x C-x C-s` saves a buffer.
+* **F12 turns the whole layer off**, which is the better answer for a long emacs session. Every
+  key then reaches the program, mouse events included. The left of the status bar turns yellow and
+  says `KEYS OFF`, because otherwise tmux looks broken. F12 turns it back on.
+
+### Sessions
+
+`.aliases` holds the shell side: `tl` lists, `ta` goes to a session and picks one with `fzf` when
+you name none, `tm` goes to the session named `main`, `tn <name>` goes to one by name, and `tkill`
+kills the server. `ta`, `tm` and `tn` create the session when it is not there, and all three work
+both inside and outside tmux: inside, they switch the client, because attaching a client to its own
+server nests it.
 
 ---
 

@@ -170,7 +170,7 @@ fi
 echo
 echo "Done: $removed item(s) removed."
 echo "System packages are not uninstalled. Installed by these scripts (remove manually if wanted):"
-echo "  install.sh:    eza fd/fdfind ripgrep fzf git-delta lazygit zellij bash-completion gnupg pinentry opencode ghostty"
+echo "  install.sh:    eza fd/fdfind ripgrep fzf git-delta lazygit tmux bash-completion gnupg pinentry opencode ghostty"
 echo "                 wl-clipboard (desktop), pacman-contrib + yay (Arch)"
 echo "  System units left enabled (disable by hand): pcscd.socket, paccache.timer"
 echo "  setup-c.sh:    build-essential/base-devel gdb lldb clangd cmake valgrind"
