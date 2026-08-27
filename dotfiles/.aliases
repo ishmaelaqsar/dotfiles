@@ -21,6 +21,7 @@ else
     __fd() { echo "fd is not installed." >&2; return 1; }
 fi
 command -v lazygit >/dev/null && alias lg='lazygit'
+command -v lazydocker >/dev/null && alias lzd='lazydocker'
 if command -v eza >/dev/null; then
     alias ls='eza --icons --group-directories-first'
     alias l='eza --icons --group-directories-first'
@@ -52,11 +53,21 @@ alias fixgpg="gpgconf --kill gpg-agent && gpg-connect-agent /bye && gpg --card-s
 # Show my public IP (useful for whitelisting)
 alias myip='curl ifconfig.me'
 
+# The fzf preview for a directory. eza draws a tree; ls is the fallback. The
+# preview runs through sh, so the ls alias above does not apply to it.
+if command -v eza >/dev/null; then
+    __FZF_DIR_PREVIEW='eza --icons --group-directories-first --tree --level=2 --color=always {}'
+else
+    __FZF_DIR_PREVIEW='ls -A {}'
+fi
+
 # Usage: cv some-project-name
 # Fuzzy find a folder and opens it in VS Code
 cv() {
     local dir
-    dir=$(__fd --type d --max-depth 3 . "$WORKSPACE" | fzf --height 40% --reverse --query="$1" --select-1 --exit-0)
+    dir=$(__fd --type d --max-depth 3 . "$WORKSPACE" \
+        | fzf --height 40% --reverse --query="$1" --select-1 --exit-0 \
+              --preview "$__FZF_DIR_PREVIEW" --preview-window "right,50%")
     if [ -n "$dir" ]; then
         code "$dir"
     fi
@@ -65,7 +76,9 @@ cv() {
 # Fuzzy find and cd into a directory within $WORKSPACE
 pj() {
     local dir
-    dir=$(__fd --type d --max-depth 3 . "$WORKSPACE" | fzf --height 40% --reverse --prompt="Workspace > ")
+    dir=$(__fd --type d --max-depth 3 . "$WORKSPACE" \
+        | fzf --height 40% --reverse --prompt="Workspace > " \
+              --preview "$__FZF_DIR_PREVIEW" --preview-window "right,50%")
     if [[ -n "$dir" ]]; then
         cd "$dir" || return
     fi

@@ -32,7 +32,7 @@ git clone https://github.com/ishmaelaqsar/dotfiles.git ~/.dotfiles
 1. **Install the packages** with the manager it finds (brew, apt, yay, paru, pacman or dnf):
    `eza`, `fd`, `ripgrep`, `fzf`, `git-delta`, `lazygit`, `tmux` and more. The list is data —
    see [The package table](#the-package-table). Some packages are best-effort: `lazygit` is not in
-   Fedora's base repos. It also installs
+   Fedora's base repos, and `lazydocker` is not in Debian's. It also installs
    [OpenCode](https://opencode.ai) and [Ghostty](https://ghostty.org), which can fail without
    stopping the run. On Arch it builds **yay** first when no AUR helper exists.
 2. **Link the config files** (`.bashrc`, `.vimrc`, and the rest) into your home directory.

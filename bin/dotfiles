@@ -272,8 +272,23 @@ def cmd_edit(args):
         return 1
     else:
         sys.stdout.flush()
+        # bat highlights the file in the preview. Debian names it batcat, and
+        # a box with neither falls back to cat.
+        pager = shutil.which("bat") or shutil.which("batcat")
+        if pager:
+            preview = f"{pager} --color=always --style=numbers"
+            preview += f' --line-range=:200 "{DOTFILES_DIR}"/{{}}'
+        else:
+            preview = f'cat "{DOTFILES_DIR}"/{{}}'
         picked = subprocess.run(
-            ["fzf", "--height", "40%", "--reverse", "--prompt", "dotfile > "],
+            [
+                "fzf",
+                "--height", "40%",
+                "--reverse",
+                "--prompt", "dotfile > ",
+                "--preview", preview,
+                "--preview-window", "right,60%",
+            ],
             input="\n".join(matches),
             capture_output=True,
             text=True,
