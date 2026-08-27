@@ -352,6 +352,12 @@ speed whether or not you read the menu, so `C-x 2` still splits a pane. Five row
 | `C-x C-n` | resize | `h j k l` by a step, `H J K L` by one cell, tile evenly |
 | `C-x C-o` | session | pick, next, previous, new, rename, detach, kill, reload the config |
 | `C-x C-s` | copy | copy mode, search, top and end of the history, paste, buffer list |
+| `C-x t` | tools | lazygit, lazydocker, the `vm` picker, htop, ncdu — each in a popup |
+
+The tools rows open a popup, so a full-screen program borrows the whole terminal and gives it back
+on exit. Each row checks for its tool first and says so when it is missing, rather than flashing an
+empty frame. A popup inherits the environment of the tmux **server**, so a tool installed after the
+server started is not on its `PATH` until the server restarts.
 
 Rows that repeat hold their menu open, so `C-x C-n l l l` widens a pane three steps. A key that no
 row claims closes the menu and does nothing, which makes Escape and `C-g` the cancel keys and
