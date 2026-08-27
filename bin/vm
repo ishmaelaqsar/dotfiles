@@ -30,14 +30,17 @@ Examples:
   vm status                      # the state and the address of $VM_NAME
   vm create --ram 4096 --cpu 4   # a new Debian 12 machine
   vm create --iso ~/iso/alpine.iso --variant alpine3.19
+  vm                             # pick a machine, and print its status
   vm ssh                         # open a session
   vm ssh uname -a                # run one command, then exit
   vm deploy ./setup.sh           # run a local script, with the user and the
                                  # address as its two arguments
   vm --dry-run delete            # print the commands, and change nothing
 
-With no command, vm prints the status of $VM_NAME. It prints this text when
-VM_NAME is not set.
+With no command, vm prints the status of a machine. Every command that acts on
+one machine takes the name from -n or from $VM_NAME, and offers an fzf picker
+when neither is set. Without a terminal, or without fzf, it prints the names
+and stops, so a script gets a list rather than a prompt.
 
 Exit codes: 0 success, 1 a command failed, a name is missing, or a tool is
 absent.
@@ -228,6 +231,19 @@ def get_arg_or_env(args, key, env_var):
 
 
 def require_vm_name(args):
+    """Return the machine to act on, and offer a picker when none is named."""
+    name = get_arg_or_env(args, "name", "VM_NAME")
+    if not name:
+        name = pick_machine()
+    return name
+
+
+def require_new_name(args):
+    """Return the name for a machine that does not exist yet.
+
+    `create` cannot use the picker: it lists the machines that are already
+    there, and every one of them is a name create has to refuse.
+    """
     name = get_arg_or_env(args, "name", "VM_NAME")
     if not name:
         print("❌ Error: No VM name specified.", file=sys.stderr)
@@ -284,6 +300,76 @@ def get_vm_ip(vm_name):
         print(f"⚠️  Unexpected error querying leases: {e}", file=sys.stderr)
 
     return None
+
+
+def wait_for_ip(vm_name):
+    """Poll for the address of a machine, and return it, or None.
+
+    A machine that has just booted has no address yet, so every command that
+    needs one waits here. It prints a dot per try, because a silent minute
+    looks like a hang.
+    """
+    print(f"🔍 Waiting for {vm_name} to report IP address...", end="", flush=True)
+    for _ in range(30):  # Wait up to 60 seconds
+        ip = get_vm_ip(vm_name)
+        if ip:
+            print(f" Found: {ip}")
+            return ip
+        print(".", end="", flush=True)
+        time.sleep(2)
+    return None
+
+
+def list_machines():
+    """Return the name of every machine the daemon knows."""
+    out = run(
+        BACKEND.get_virsh_cmd(["list", "--all", "--name"]), capture=True, check=False
+    )
+    return [line.strip() for line in out.splitlines() if line.strip()] if out else []
+
+
+def pick_machine():
+    """Return a machine name chosen with fzf.
+
+    fzf needs a terminal. Without one, or without fzf, print the names and stop,
+    so a script or an agent gets a list instead of a hang. A picker is never the
+    only way in: -n and VM_NAME still work everywhere.
+    """
+    names = list_machines()
+    if not names:
+        print("❌ No machine is defined.", file=sys.stderr)
+        print("   Create one with: vm -n <name> create", file=sys.stderr)
+        sys.exit(1)
+
+    if not sys.stdin.isatty() or shutil.which("fzf") is None:
+        reason = "fzf is not installed" if sys.stdin.isatty() else "there is no terminal"
+        print(f"Cannot ask which machine: {reason}.", file=sys.stderr)
+        print("Name one with -n, or set VM_NAME. These exist:", file=sys.stderr)
+        for n in names:
+            print(f"  {n}", file=sys.stderr)
+        sys.exit(1)
+
+    # The preview runs this same script, so the state and the address come from
+    # cmd_status rather than from a second copy of the query.
+    sys.stdout.flush()
+    picked = subprocess.run(
+        [
+            "fzf",
+            "--height", "40%",
+            "--reverse",
+            "--prompt", "machine > ",
+            "--preview", f"{os.path.abspath(sys.argv[0])} -n {{}} status",
+            "--preview-window", "right,50%",
+        ],
+        input="\n".join(names),
+        capture_output=True,
+        text=True,
+    )
+    name = picked.stdout.strip()
+    if not name:
+        print("Nothing picked.")
+        sys.exit(0)
+    return name
 
 
 # ------------------------------------------------------------
@@ -375,7 +461,7 @@ def cmd_delete(args):
 
 def cmd_create(args):
     """Create a machine with virt-install, using the defaults of this host."""
-    name = require_vm_name(args)
+    name = require_new_name(args)
 
     # Refuse when the machine already exists. A dry run skips the check.
     if not args.dry_run:
@@ -497,15 +583,7 @@ def cmd_ssh(args):
         print(f"🛑 [DRY-RUN] Resolving IP for {name}...")
         ip = "1.2.3.4 (PLACEHOLDER)"
     else:
-        print(f"🔍 Waiting for {name} to report IP address...", end="", flush=True)
-        ip = None
-        for _ in range(30): # Wait up to 60 seconds
-            ip = get_vm_ip(name)
-            if ip:
-                print(f" Found: {ip}")
-                break
-            print(".", end="", flush=True)
-            time.sleep(2)
+        ip = wait_for_ip(name)
 
     if not ip:
         print(f"\n❌ Cannot find IP for {name}. Ensure it is running and agent is installed.", file=sys.stderr)
@@ -542,15 +620,7 @@ def cmd_deploy(args):
         print(f"🛑 [DRY-RUN] Resolving IP...")
         ip = "1.2.3.4"
     else:
-        print(f"🔍 Waiting for {name} to report IP address...", end="", flush=True)
-        ip = None
-        for _ in range(30):
-            ip = get_vm_ip(name)
-            if ip:
-                print(f" Found: {ip}")
-                break
-            print(".", end="", flush=True)
-            time.sleep(2)
+        ip = wait_for_ip(name)
 
     if not ip:
         print(f"\n❌ Cannot find IP for {name}.", file=sys.stderr)
@@ -583,15 +653,7 @@ def cmd_setup(args):
         print(f"🛑 [DRY-RUN] Would find IP and install guest-agent on {name}")
         return
 
-    print(f"🔍 Waiting for {name} to report IP address...", end="", flush=True)
-    ip = None
-    for _ in range(30):
-        ip = get_vm_ip(name)
-        if ip:
-            print(f" Found: {ip}")
-            break
-        print(".", end="", flush=True)
-        time.sleep(2)
+    ip = wait_for_ip(name)
 
     if not ip:
         print(f"\n❌ Could not detect IP for {name}.", file=sys.stderr)
@@ -714,10 +776,9 @@ def main():
     args = parser.parse_args()
 
     if args.command is None:
-        if args.name or os.environ.get("VM_NAME"):
-            cmd_status(args)
-        else:
-            parser.print_help()
+        # cmd_status picks a machine when none is named, so bare `vm` is the
+        # quickest way to see what is there.
+        cmd_status(args)
         sys.exit(0)
 
     # Dispatch
@@ -743,12 +804,10 @@ def main():
 
 if __name__ == "__main__":
     # The help must be readable on a machine with no virsh, so check the tools
-    # only when there is real work to do. No arguments and no VM_NAME prints the
-    # help as well, so that path skips the checks too.
+    # only when there is real work to do. Bare `vm` is real work now: it lists
+    # the machines to pick from, and that needs virsh.
     _argv = sys.argv[1:]
-    _wants_help = (not _argv and not os.environ.get("VM_NAME")) or any(
-        a in ("-h", "--help") for a in _argv
-    )
+    _wants_help = any(a in ("-h", "--help") for a in _argv)
 
     # Check for required tools
     if not _wants_help and not shutil.which("virsh"):

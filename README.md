@@ -159,11 +159,15 @@ links them into `$HOME/bin`: `lib/sync-dotfiles` writes the symlinks, and `lib/p
 | `dotfiles` | Update, check, sync and edit the repository. See below. | It prints the help. The shell function changes directory. |
 | `manage-secrets` | Encrypt, decrypt and verify `dotfiles/.secrets`. The pre-commit hook runs `verify`. | It prints the help |
 | `venv` | Create and inspect Python virtual environments. It prefers uv. | It prints the environment path |
-| `vm` | Manage one QEMU machine through virsh and virt-install. | It prints the status of `$VM_NAME`, or the help |
+| `vm` | Manage one QEMU machine through virsh and virt-install. | It picks a machine, and prints its status |
 | `gnome-settings` | Apply, dump or restore the managed GNOME keys. | It prints the help |
 
-None of them is a TUI, and none of them reads from a terminal. Each one behaves the same way in a
-shell, in a script, in the pre-commit hook, and under an agent.
+None of them is a TUI, and **none of them needs a terminal**. `vm` and `manage-secrets get` offer
+an `fzf` picker when a name is missing and a terminal is there, because looking a name up and
+retyping it is the whole friction. Without a terminal, or without `fzf`, they print the names and
+exit non-zero instead. So each one still behaves predictably in a shell, in a script, in the
+pre-commit hook, and under an agent — a picker is never the only way in, and `-n`, `$VM_NAME` and a
+named key all still work.
 
 ### The dotfiles command
 
