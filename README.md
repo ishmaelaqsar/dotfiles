@@ -157,7 +157,7 @@ links them into `$HOME/bin`: `lib/sync-dotfiles` writes the symlinks, and `lib/p
 | Script | Purpose | With no argument |
 | :--- | :--- | :--- |
 | `dotfiles` | Update, check, sync and edit the repository. See below. | It prints the help. The shell function changes directory. |
-| `manage-secrets` | Encrypt, decrypt and verify `dotfiles/.secrets`. The pre-commit hook runs `verify`. | It prints the help |
+| `manage-secrets` | Encrypt, decrypt, list and verify `dotfiles/.secrets`. The pre-commit hook runs `verify`. | It prints the help |
 | `venv` | Create and inspect Python virtual environments. It prefers uv. | It prints the environment path |
 | `vm` | Manage one QEMU machine through virsh and virt-install. | It picks a machine, and prints its status |
 | `gnome-settings` | Apply, dump or restore the managed GNOME keys. | It prints the help |
@@ -263,6 +263,8 @@ source ~/.helpers
 | **Add a secret** | `add_secret KEY` | Ask for the value without an echo, encrypt it into `.secrets`, and export `KEY` to the current shell. |
 | **Add a secret in one line** | `add_secret KEY VALUE` | The same, but the value lands in `~/.bash_history`, and `ps` shows it while the command runs. Prefer the form above. |
 | **Load the secrets** | `load_secrets` | Decrypt every secret into an environment variable. It asks for the YubiKey PIN once a day. |
+| **List the names** | `manage-secrets list` | Print every key name. It decrypts nothing, so it never asks the YubiKey. |
+| **Read one secret** | `manage-secrets get [KEY]` | Print one value. With no key it picks one, then decrypts only that. |
 | **Verify** | `bin/manage-secrets verify` | Prove that no cleartext secret is in the commit. `git commit` runs it. |
 
 ### Example
