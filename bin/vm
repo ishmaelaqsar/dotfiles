@@ -426,32 +426,23 @@ def cmd_delete(args):
             print("❌ Confirmation failed. Aborting.")
             sys.exit(1)
 
-    # Stop it first
-    if args.dry_run:
-        print(f"🛑 [DRY-RUN] Check state and stop {name} if running.")
-    else:
-        state = run(BACKEND.get_virsh_cmd(["domstate", name]), capture=True)
-        if "running" in state:
-            print(f"Stopping {name}...")
-            run(BACKEND.get_virsh_cmd(["destroy", name]), check=False)
+    # The state check and the NVRAM probe only read, so they run in a dry run
+    # as well. A dry run that guessed at --nvram printed a command the real run
+    # would not use, which defeats the point of looking first.
+    state = run(BACKEND.get_virsh_cmd(["domstate", name]), capture=True, check=False)
+    if state and "running" in state:
+        print(f"Stopping {name}...")
+        run(BACKEND.get_virsh_cmd(["destroy", name]), check=False, dry_run=args.dry_run)
 
     print(f"🗑️  Deleting {name}...")
 
-    # Remove the NVRAM file only when it exists
+    # Remove the NVRAM file only when the machine has one
     delete_cmd = ["undefine", name, "--remove-all-storage"]
-
-    if not args.dry_run:
-        # Does this machine have NVRAM?
-        try:
-            nvram_check = run(
-                BACKEND.get_virsh_cmd(["dumpxml", name]), capture=True, check=False
-            )
-            if nvram_check and "nvram" in nvram_check.lower():
-                delete_cmd.append("--nvram")
-        except:
-            pass  # If we can't check, try without --nvram flag
-    else:
-        delete_cmd.append("--nvram")  # Include in dry-run display
+    nvram_check = run(
+        BACKEND.get_virsh_cmd(["dumpxml", name]), capture=True, check=False
+    )
+    if nvram_check and "nvram" in nvram_check.lower():
+        delete_cmd.append("--nvram")
 
     run(BACKEND.get_virsh_cmd(delete_cmd), dry_run=args.dry_run)
 
@@ -650,10 +641,10 @@ def cmd_setup(args):
     user = require_user(args)
 
     if args.dry_run:
-        print(f"🛑 [DRY-RUN] Would find IP and install guest-agent on {name}")
-        return
-
-    ip = wait_for_ip(name)
+        print(f"🛑 [DRY-RUN] Resolving IP for {name}...")
+        ip = "1.2.3.4 (PLACEHOLDER)"
+    else:
+        ip = wait_for_ip(name)
 
     if not ip:
         print(f"\n❌ Could not detect IP for {name}.", file=sys.stderr)
@@ -704,6 +695,10 @@ def cmd_setup(args):
         f"bash -c '{remote_cmd}'"
     ]
 
+    if args.dry_run:
+        print(f"🛑 [DRY-RUN] Would run: {' '.join(ssh_cmd)}")
+        return
+
     try:
         subprocess.run(ssh_cmd, check=True)
         print(f"\n✅ Setup complete! The VM should now report its IP address reliably.")
@@ -732,7 +727,9 @@ def main():
     parser.add_argument("-n", "--name", help="The machine name. It overrides VM_NAME.")
     parser.add_argument("-u", "--user", help="The SSH user. It overrides VM_USER.")
     parser.add_argument(
-        "--dry-run", action="store_true", help="Print every command, and run none"
+        "--dry-run",
+        action="store_true",
+        help="Print each command that would change something, and run none of them",
     )
 
     subparsers = parser.add_subparsers(dest="command", metavar="<command>")
