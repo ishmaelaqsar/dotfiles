@@ -111,7 +111,8 @@ commands | tags | per-manager package overrides
   unverifiable, not missing.
 * **tags** — `install.sh` installs a row when **all** of its tags are active. `base` is always
   active. `linux` is active off macOS, `desktop` on a graphical machine, and `arch` where `pacman`
-  exists. `toolchain` is never active; those rows only map a name for a `setup-*.sh` script.
+  exists. `toolchain` and `virt` are never active; those rows only map a name — `toolchain`
+  for a `setup-*.sh` script, and `virt` for the libvirt stack that `bin/vm` drives.
 * **overrides** — `mgr=pkg` pairs. An exact manager wins first, then `*=pkg`, then the first
   command name.
 
@@ -159,7 +160,7 @@ links them into `$HOME/bin`: `lib/sync-dotfiles` writes the symlinks, and `lib/p
 | `dotfiles` | Update, check, sync and edit the repository. See below. | It prints the help. The shell function changes directory. |
 | `manage-secrets` | Encrypt, decrypt, list and verify `dotfiles/.secrets`. The pre-commit hook runs `verify`. | It prints the help |
 | `venv` | Create and inspect Python virtual environments. It prefers uv. | It prints the environment path |
-| `vm` | Manage one QEMU machine through virsh and virt-install. | It picks a machine, and prints its status |
+| `vm` | Manage one QEMU machine through virsh and virt-install. A missing tool is reported with the package name this host uses. | It picks a machine, and prints its status |
 | `gnome-settings` | Apply, dump or restore the managed GNOME keys. | It prints the help |
 
 None of them is a TUI, and **none of them needs a terminal**. `vm` and `manage-secrets get` offer

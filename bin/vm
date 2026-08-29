@@ -16,6 +16,14 @@ import argparse
 import shutil
 import platform
 import time
+from pathlib import Path
+
+# lib/ sits beside bin/ in the repository, and resolve() follows the symlink
+# install.sh puts in $HOME/bin. pkgconf reads the same packages.conf that
+# lib/pkg.sh reads, so a message names the right package on every distro.
+REPO = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO / "lib"))
+import pkgconf
 
 EXAMPLES = """
 Environment:
@@ -76,7 +84,6 @@ class VMBackend:
             args = [
                 "--connect",
                 self.get_connection_uri(),
-                "--accelerate",
                 "--network",
                 "network=default",
                 "--graphics",
@@ -450,6 +457,37 @@ def cmd_delete(args):
         print(f"✅ {name} has been deleted.")
 
 
+def check_default_network():
+    """Stop when the default libvirt network is absent or inactive.
+
+    get_install_args attaches every machine to network=default. Arch and Debian
+    define that network but do not start it, so virt-install fails with an error
+    that names no cause. Catch it here, and name the fix instead.
+    """
+    out = run(
+        BACKEND.get_virsh_cmd(["net-info", "default"]), capture=True, check=False
+    )
+    if out and any(
+        line.split(":", 1)[1].strip().lower() == "yes"
+        for line in out.splitlines()
+        if line.lower().startswith("active:")
+    ):
+        return
+
+    if out:
+        print("❌ The libvirt network 'default' is inactive.", file=sys.stderr)
+    else:
+        # libvirt ships the network, but a minimal install may not define it.
+        print("❌ The libvirt network 'default' is not defined.", file=sys.stderr)
+        print(
+            "   sudo virsh net-define /usr/share/libvirt/networks/default.xml",
+            file=sys.stderr,
+        )
+    print("   sudo virsh net-start default", file=sys.stderr)
+    print("   sudo virsh net-autostart default", file=sys.stderr)
+    sys.exit(1)
+
+
 def cmd_create(args):
     """Create a machine with virt-install, using the defaults of this host."""
     name = require_new_name(args)
@@ -459,6 +497,7 @@ def cmd_create(args):
         if run(BACKEND.get_virsh_cmd(["dominfo", name]), check=False, capture=True):
             print(f"❌ VM '{name}' already exists.", file=sys.stderr)
             sys.exit(1)
+        check_default_network()
 
     # Defaults
     ram = args.ram or "2048"  # Bumped to 2GB for modern OS comfort
@@ -809,23 +848,38 @@ if __name__ == "__main__":
     # Check for required tools
     if not _wants_help and not shutil.which("virsh"):
         print("❌ Error: 'virsh' not found.", file=sys.stderr)
-        print("   Linux: sudo apt install libvirt-clients", file=sys.stderr)
-        print("   macOS: brew install libvirt virt-manager", file=sys.stderr)
+        print(f"   {pkgconf.install_hint('virsh')}", file=sys.stderr)
         sys.exit(1)
 
     # Only `create` needs virt-install
     if not _wants_help and "create" in _argv:
         if not shutil.which("virt-install"):
             print("❌ Error: 'virt-install' not found.", file=sys.stderr)
-            print("   Linux: sudo apt install virtinst", file=sys.stderr)
-            print("   macOS: brew install virt-manager", file=sys.stderr)
+            print(f"   {pkgconf.install_hint('virt-install')}", file=sys.stderr)
             sys.exit(1)
 
     # Warn when the daemon does not answer, then continue anyway
     if not _wants_help and not check_libvirt_running():
         print("⚠️  Warning: Cannot connect to libvirt daemon.", file=sys.stderr)
-        print("   Linux: sudo systemctl start libvirtd", file=sys.stderr)
-        print("   macOS: brew services start libvirt", file=sys.stderr)
+        if platform.system() == "Darwin":
+            print("   brew services start libvirt", file=sys.stderr)
+        else:
+            # Modern hosts run the modular daemons, where virtqemud serves
+            # qemu:///system. libvirtd is the monolithic daemon older hosts use.
+            print(
+                "   sudo systemctl enable --now virtqemud.socket"
+                "  (older hosts: libvirtd.socket)",
+                file=sys.stderr,
+            )
+            print(
+                f"   The daemon itself: {pkgconf.install_hint('libvirtd')}",
+                file=sys.stderr,
+            )
+            # A running daemon still refuses qemu:///system without the group.
+            print(
+                '   Then: sudo usermod -aG libvirt "$USER" — and log in again.',
+                file=sys.stderr,
+            )
         print("   Continuing anyway...\n", file=sys.stderr)
 
     main()
