@@ -3,7 +3,8 @@
 **Author:** Ishmael Aqsar
 
 Configuration files, maintenance scripts, and GPG-encrypted secrets for my development
-environment. They work on **macOS**, **Linux**, and inside **VS Code Dev Containers**.
+environment. They work on **macOS**, **Linux**, and inside **VS Code Dev Containers**. Build notes
+for the home servers are in `docs/`, as Org files.
 
 ---
 

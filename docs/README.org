@@ -1,0 +1,9 @@
+* docs/
+Build notes, in Org. Open them in Emacs: =S-TAB= folds to the overview, =C-c '= edits a shell block in =sh-mode=, and =C-c C-c= runs one after it asks. =bin/md2org= converted them from markdown; the repository =README.md= stays markdown, because GitHub renders it as the landing page.
+
+| File                 | What it is                                                                                                                                                         |
+|----------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| =forgejo-setup.org=  | Build notes for a self-hosted Forgejo git server on a Raspberry Pi Zero 2W: msmtp relay, Caddy with DNS-01 TLS, a Cloudflare tunnel, fail2ban, and rclone backups. |
+| =jellyfin-setup.org= | Build notes for a Raspberry Pi 5 media stack: Jellyfin, qBittorrent, MeTube, FileBrowser and Caddy, all under Docker Compose.                                      |
+
+The redacted =.example= templates these notes refer to are in =general/=.
