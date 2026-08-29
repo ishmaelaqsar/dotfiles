@@ -9,6 +9,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/pkg.sh"
 PKG_MGR="$(__detect_pkg_mgr)"
 
+# The sdkman installer refuses to run without zip and unzip. macOS ships both;
+# a minimal Arch or Debian does not.
+__pkg_install "$PKG_MGR" zip unzip
+
 if [ ! -d "$HOME/.sdkman" ]; then
     echo "Installing sdkman..."
     curl -s "https://get.sdkman.io?rcupdate=false" | bash
