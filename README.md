@@ -290,6 +290,10 @@ carries a value.
 `dotfiles/.config/opencode/`: the behavioural rules in `AGENTS.md`, and the commands for the
 Obsidian vault — `/brief`, `/daily`, `/kb`, `/project`, `/remind` and `/report`.
 
+`AGENTS.md` makes the agent a tutor. It asks what you tried, names the mechanism, and points
+at the primary source. It does not write the solution, and there is no escape word. A
+command is not a question: run, edit, and the vault commands are done as asked.
+
 The vault lives at `$OBSIDIAN_VAULT`, and defaults to `~/vault`. Two helpers in `.helpers` work
 from the shell: `jot <text>` appends to today's daily note without an LLM, and `sb` opens the
 agent over the vault.
