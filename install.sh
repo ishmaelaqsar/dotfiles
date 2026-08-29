@@ -653,7 +653,10 @@ fi
 # -----------------------------
 # Ghostty (terminal emulator) — best-effort
 # -----------------------------
-# No Debian package, Fedora needs a COPR; the config is harmless without Ghostty.
+# Ghostty ships prebuilt binaries for macOS only. On Linux each distributor
+# packages it: Arch and Ubuntu 26.04 carry it, Fedora has COPRs only. A machine
+# without the package finds nothing, so warn and go on — the config is harmless
+# without Ghostty.
 if [ "$IS_HOME_INSTALL" -eq 0 ] || [ "$IN_CONTAINER" -eq 1 ]; then
     echo "Skipping Ghostty installation."
 elif ! command -v ghostty >/dev/null 2>&1; then
@@ -661,7 +664,10 @@ elif ! command -v ghostty >/dev/null 2>&1; then
     case "$PKG_MGR" in
         brew)             __run brew install --cask ghostty || __warn "Ghostty install failed." ;;
         yay|paru|pacman)  __pkg_raw "$PKG_MGR" ghostty || __warn "Ghostty install failed." ;;
-        dnf)              echo "Ghostty is not in Fedora's base repos — enable a COPR manually (skipping)." ;;
+        apt)              __pkg_raw apt ghostty \
+                              || __warn "no 'ghostty' package — it needs Ubuntu 26.04 or newer. On Debian, take a .deb from github.com/mkasberg/ghostty-ubuntu." ;;
+        dnf)              __pkg_raw dnf ghostty \
+                              || __warn "no 'ghostty' package — enable a COPR first, for example 'dnf copr enable scottames/ghostty'." ;;
         *)                echo "No Ghostty package for this platform — install manually (skipping)." ;;
     esac
 fi

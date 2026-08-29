@@ -297,6 +297,10 @@ agent over the vault.
 
 ## Ghostty
 
+`install.sh` installs Ghostty where a package exists: brew on macOS, the Arch repos, and the
+Ubuntu repos from 26.04. Debian needs a `.deb`, and Fedora needs a COPR. Each warning names
+the source.
+
 The config is in `dotfiles/.config/ghostty/`. The Quake-style quick terminal is **opt-in per
 machine**, through the untracked `config.local`. The installer enables it on macOS. Linux needs
 compositor setup first — see `quick-terminal.conf`. GNOME cannot host it at all, so
