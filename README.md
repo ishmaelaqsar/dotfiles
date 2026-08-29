@@ -55,6 +55,7 @@ Flags:
 | :--- | :--- |
 | `-n`, `--dry-run` | Print every change, and make none. Read the whole plan first: packages, symlinks, git config, systemd units and GNOME keys. |
 | `-c`, `--check` | Report what is missing or has drifted, then exit. See [Check an existing install](#check-an-existing-install). |
+| `-y`, `--yes` | Ask nothing. The detection decides every optional step. See [What the script asks](#what-the-script-asks). |
 | `--desktop` | Run the desktop steps whatever the session looks like (GNOME settings, `wl-clipboard`). Use it over ssh, where `DISPLAY` is not set. |
 | `--no-desktop` | Skip those steps, for a server that has X libraries. |
 | `-f` | Install even when a different dotfiles checkout owns `~/.dotfiles`. |
@@ -76,6 +77,28 @@ Safety:
   `xcode-select --install` first.
 * After the install, run `opencode auth login` once to connect a model provider.
 * `install.sh` does not install Emacs. `setup-emacs.sh` does, on a machine that wants it.
+
+### What the script asks
+
+In a terminal, `install.sh` asks before each optional group, so a forgotten flag cannot install a
+tool you do not want. Enter keeps the default, which is yes. It asks only about the groups that
+apply to the machine:
+
+| Question | On a "no" |
+| :--- | :--- |
+| Install the packages via the detected manager? | Skips the package table, and the AUR helper on Arch. |
+| Desktop steps? (Linux with a display) | Skips `wl-clipboard`, the GNOME settings and keys, and the Quake Terminal extension. |
+| Install the Hyprland session helpers? (`Hyprland` on `PATH`) | Skips `fuzzel`, `waybar`, `mako`, `hyprlock`, `grim`, `slurp`, the portal, and `local.conf`. |
+| Install OpenCode? (when absent) | Skips it. |
+| Install Ghostty? (when absent) | Skips it. |
+
+The symlinks, the scripts in `bin/`, the fonts, the git config, and the GPG agent never ask. Without
+them the machine is not installed, and `--check` would fail.
+
+Nothing asks when stdin is not a terminal — the dev-container hook, `docker run` without `-t`, a
+pipe, an agent shell. Those runs take the detection as it stands, and print one line to say so.
+`-y` does the same in a terminal, for a run you have already read with `-n`. A dry run, a check,
+and a probe run change nothing, so they never ask either.
 
 ### Check an existing install
 
@@ -474,27 +497,91 @@ It manages these keys today:
 * The dark colour scheme, and 0xProto as the monospace font.
 * Caps Lock as Control, and the key-repeat rates.
 * Night Light, and fractional scaling.
-* Ghostty as the desktop terminal, and the window keys below.
+* Ghostty as the desktop terminal, and the keys in [The Super layout](#the-super-layout).
 
 The first apply writes the previous values to `~/.local/state/dotfiles/gnome-settings.json`.
+`install.sh` runs `apply` on any graphical Linux box with `gsettings`, GNOME or not: GTK apps
+under Hyprland read the key theme and the colour scheme from the same place, and the script skips
+the schemas that only GNOME Shell installs.
 
-### Window and workspace keys
+### The Super layout
 
-Super stays a window-manager key on Linux, as i3 and Hyprland use it. The terminal shortcuts do
-**not** match macOS: `Ctrl+C` cannot be the copy key in a terminal. Linux keeps `ctrl+shift+…`,
-and macOS keeps `cmd+…`.
+Super is the window-manager key on Linux, as i3 and Hyprland use it. `bin/gnome-settings` and
+`dotfiles/.config/hypr/hyprland.conf` bind the **same keys**, so the hands learn one layout. The
+terminal shortcuts do **not** match macOS: `Ctrl+C` cannot be the copy key in a terminal. Linux
+keeps `ctrl+shift+…`, and macOS keeps `cmd+…`.
+
+Launch:
 
 | Key | Action |
 | :--- | :--- |
 | `Super+Return` | Ghostty — the i3/sway/Hyprland idiom for "terminal". |
-| `Super+1…4` | Jump to that workspace. |
-| `Super+Shift+1…4` | Move the focused window to that workspace. |
-| `Super+Alt+Left/Right` | Previous or next workspace (a GNOME default, kept as is). |
+| `Super+e` | An Emacs frame on the running daemon. It starts the daemon when none runs. |
+| `Super+b` | The default web browser. |
+| `Super+n` | The home folder in the default file manager. |
+| `Super+Space` | The app launcher: the GNOME app grid, or `fuzzel` on Hyprland. |
+| `` Super+` `` | The drop-down terminal. See [Drop-down terminal](#drop-down-terminal). |
+| `Super+Shift+s` | Screenshot of a region: the GNOME screenshot UI, or `grim` and `slurp` to the clipboard. |
+| `Super+Escape` | Lock the screen. |
 
-This displaces two GNOME defaults. `Super+N` normally switches to the Nth **application** in the
-dash, so `gnome-settings` clears those bindings. The workspaces become **static**, and there are
-four of them (`WORKSPACES` in `bin/gnome-settings`), because a dynamic count has nothing to jump
-to when the desktop is quiet. `gnome-settings restore` puts both back.
+Windows and workspaces:
+
+| Key | GNOME | Hyprland |
+| :--- | :--- | :--- |
+| `Super+q` | Close the window. | Close the window. |
+| `Super+f` | Full screen. | Full screen. |
+| `Super+m` | Toggle maximised. | Maximise without hiding the bar. |
+| `Super+h` / `Super+l` | Tile left or right. | Focus left or right. |
+| `Super+k` / `Super+j` | Maximise or unmaximise. | Focus up or down. |
+| `Super+Shift+h j k l` | — | Move the window that way. |
+| `Super+Ctrl+h j k l` | — | Resize the window. |
+| `Super+v`, `Super+p`, `Super+s` | — | Float, pseudo-tile, toggle the split direction. |
+| `Super+Tab` | Switch application. | Cycle the windows. |
+| `Super+1…4` | Jump to that workspace. | The same, and 5 and 6. |
+| `Super+Shift+1…4` | Move the window to that workspace. | The same. |
+| `Super+Alt+Left/Right` | Previous or next workspace. | The same. |
+
+GNOME has no directional focus, so `h j k l` tile and maximise there. The arrow keys keep their
+GNOME defaults next to the letters.
+
+This displaces some GNOME defaults, and `gnome-settings restore` puts every one back. `Super+N`
+switches to the Nth **application** in the dash, `Super+h` minimises, `Super+Space` switches the
+input source, and `Super+l` locks the screen — so those move or go. The workspaces become
+**static**, and there are four of them (`WORKSPACES` in `bin/gnome-settings`), because a dynamic
+count has nothing to jump to when the desktop is quiet.
+
+### Hyprland
+
+`dotfiles/.config/hypr/hyprland.conf` is the tiling counterpart of the GNOME keys. When
+`Hyprland` is on `PATH`, `install.sh` activates the `hyprland` tag in the package table (and asks
+first, in a terminal), which
+brings `fuzzel` (launcher), `waybar` (bar), `mako` (notifications), `hyprlock`, `grim` and `slurp`,
+and `xdg-desktop-portal-hyprland`. Their configs are `dotfiles/.config/fuzzel/` and
+`dotfiles/.config/waybar/`. It does not install Hyprland itself: the package is the one thing that
+decides which desktop a machine runs.
+
+Machine-local settings — monitors, scale, a wallpaper — go in `~/.config/hypr/local.conf`, which
+`install.sh` creates empty and the repo does not track. The main config sources it last, so a line
+there wins.
+
+**The Emacs chord.** `Super+x` opens a chord, as `C-x` does in Emacs and in tmux. The next key
+runs one window command and closes the chord. The keys are the Emacs ones:
+
+| Chord | Emacs | Hyprland |
+| :--- | :--- | :--- |
+| `Super+x 0` | `delete-window` | Close the window. |
+| `Super+x 1` | `delete-other-windows` | Full screen. |
+| `Super+x 2` | `split-window-below` | The next window opens below this one. |
+| `Super+x 3` | `split-window-right` | The next window opens to the right. |
+| `Super+x o` | `other-window` | Focus the next window. |
+| `Escape`, `C-g` | `keyboard-quit` | Leave the chord. |
+
+A key that no row claims closes the chord and does nothing. waybar shows `C-x window` while the
+chord is open, the way tmux shows its menu. GNOME cannot host a chord — Mutter has no key
+submaps, and an extension is the only route — so the chord is Hyprland-only.
+
+**Keyboard layout.** `hyprland.conf` sets `kb_layout = gb`. Change it in `local.conf` on a machine
+with another keyboard: an `input { kb_layout = us }` block there wins.
 
 ### Drop-down terminal
 
@@ -518,6 +605,10 @@ Mutter grabs that key before any app sees it.
 be read on a machine that has the extension. To track them, set the hotkey, run
 `gsettings list-recursively org.gnome.shell.extensions.quake-terminal`, and add the keys to
 `SETTINGS` in `bin/gnome-settings`.
+
+Hyprland needs neither the extension nor Ghostty's own quick terminal. `hyprland.conf` starts one
+Ghostty window with the class `com.mitchellh.ghostty.scratch`, a window rule parks it on the
+special workspace `term`, and `` Super+` `` toggles that workspace over whatever is on screen.
 
 ### SSH agent: gpg-agent, not the GNOME agent
 

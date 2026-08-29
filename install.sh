@@ -4,10 +4,14 @@ set -euo pipefail
 # =============================================================================
 # Personal dotfiles installer — macOS, Debian, Arch (GNOME), Fedora.
 #
-# Usage: ./install.sh [-f] [-n] [-c] [--desktop|--no-desktop] [target-dir]
+# Usage: ./install.sh [-f] [-n] [-c] [-y] [--desktop|--no-desktop] [target-dir]
 #
 # A non-$HOME target is a probe run: file layout only, all live-state steps
 # (git --global, GPG keyring/agent, packages) are skipped.
+#
+# In a terminal the script asks before each optional group (packages, the
+# desktop steps, OpenCode, Ghostty). With no terminal on stdin, or with -y,
+# the detection decides and nothing asks.
 # =============================================================================
 
 # -----------------------------
@@ -16,21 +20,25 @@ set -euo pipefail
 FORCE=0
 DRY_RUN=0
 CHECK=0
+ASSUME_YES=0
 DESKTOP_OVERRIDE=""
 TARGET_ARG=""
 
 __usage() {
     cat <<'EOF'
-Usage: ./install.sh [-f] [-n] [-c] [--desktop|--no-desktop] [target-dir]
+Usage: ./install.sh [-f] [-n] [-c] [-y] [--desktop|--no-desktop] [target-dir]
 
   -f              install even when another dotfiles checkout owns ~/.dotfiles
   -n, --dry-run   print every change without making one
   -c, --check     report what is missing or has drifted, then exit
+  -y, --yes       ask nothing; let the detection decide every optional step
   --desktop       run the desktop steps (GNOME settings, clipboard) regardless
   --no-desktop    skip them, whatever the session looks like
   -h, --help      show this text
 
 A non-$HOME target is a probe run: file layout only, no live-state steps.
+In a terminal the script asks before each optional group. Without one it
+behaves as if -y was given.
 EOF
 }
 
@@ -39,6 +47,7 @@ while [ $# -gt 0 ]; do
         -f)            FORCE=1 ;;
         -n|--dry-run)  DRY_RUN=1 ;;
         -c|--check)    CHECK=1 ;;
+        -y|--yes)      ASSUME_YES=1 ;;
         --desktop)     DESKTOP_OVERRIDE=1 ;;
         --no-desktop)  DESKTOP_OVERRIDE=0 ;;
         -h|--help)     __usage; exit 0 ;;
@@ -133,12 +142,48 @@ else
     FONT_DIR="$TARGET_DIR/.local/share/fonts"
 fi
 
+# The optional groups. The detection sets them, and the questions below can
+# turn each one off. Everything else — the symlinks, the git config, the GPG
+# agent — always runs, because without it the machine is not installed.
+WANT_PACKAGES=1
+WANT_HYPRLAND=0
+command -v Hyprland >/dev/null 2>&1 && WANT_HYPRLAND=1
+WANT_OPENCODE=1
+WANT_GHOSTTY=1
+
+# Ask before an optional group when a person is at the keyboard. A pipe, the
+# dev-container hook, or an agent shell has no terminal on stdin, and a
+# question there would hang, so those runs take the detection as it stands.
+# -y does the same in a terminal. The modes that change nothing never ask.
+INTERACTIVE=0
+if [ "$ASSUME_YES" -eq 0 ] && [ "$DRY_RUN" -eq 0 ] && [ "$CHECK" -eq 0 ] && [ "$IS_HOME_INSTALL" -eq 1 ]; then
+    if [ -t 0 ]; then
+        INTERACTIVE=1
+    else
+        echo "No terminal on stdin — installing without questions, as with -y."
+    fi
+fi
+
+# __ask "question" — 0 for yes. Enter is yes. Always yes when not interactive.
+__ask() {
+    local answer
+    [ "$INTERACTIVE" -eq 1 ] || return 0
+    read -r -p "$1 [Y/n] " answer
+    [[ ! "$answer" =~ ^[Nn] ]]
+}
+
 # Which rows of lib/packages.conf apply to this machine. A row installs when
-# all of its tags are active.
-ACTIVE_TAGS=(base)
-[[ "$OSTYPE" != darwin* ]] && ACTIVE_TAGS+=(linux)
-[ "$IS_GRAPHICAL" -eq 1 ] && ACTIVE_TAGS+=(desktop)
-command -v pacman >/dev/null 2>&1 && ACTIVE_TAGS+=(arch)
+# all of its tags are active. Computed after the questions, because a "no"
+# removes a tag.
+__active_tags() {
+    ACTIVE_TAGS=(base)
+    [[ "$OSTYPE" != darwin* ]] && ACTIVE_TAGS+=(linux)
+    [ "$IS_GRAPHICAL" -eq 1 ] && ACTIVE_TAGS+=(desktop)
+    command -v pacman >/dev/null 2>&1 && ACTIVE_TAGS+=(arch)
+    [ "$WANT_HYPRLAND" -eq 1 ] && ACTIVE_TAGS+=(hyprland)
+    return 0
+}
+__active_tags
 
 # Not every entry in bin/ is a script to link. Python writes its byte-code
 # cache next to the scripts it runs, and a cache directory in ~/bin is junk.
@@ -288,9 +333,37 @@ if [ "$CHECK" -eq 1 ]; then
     exit $?
 fi
 
+# -----------------------------
+# The questions  (a terminal, a home install, and no -y)
+# -----------------------------
+# One question per optional group, and only when the group applies to this
+# machine. Each answer sets the variable that the step below already tests.
+if [ "$INTERACTIVE" -eq 1 ]; then
+    echo "Optional steps for this machine. Enter keeps the default."
+    if [ "$IN_CONTAINER" -eq 0 ] && [ "$PKG_MGR" != "none" ]; then
+        __ask "Install the packages via $PKG_MGR (tags: ${ACTIVE_TAGS[*]})?" || WANT_PACKAGES=0
+    fi
+    if [ "$IS_GRAPHICAL" -eq 1 ] && [[ "$OSTYPE" != darwin* ]]; then
+        __ask "Desktop steps: the clipboard package, the GNOME settings and keys, the Quake Terminal extension?" \
+            || IS_GRAPHICAL=0
+    fi
+    if [ "$WANT_HYPRLAND" -eq 1 ]; then
+        __ask "Hyprland is installed. Install its session helpers (fuzzel, waybar, mako, hyprlock, grim, slurp, portal)?" \
+            || WANT_HYPRLAND=0
+    fi
+    if [ "$IN_CONTAINER" -eq 0 ] && ! command -v opencode >/dev/null 2>&1; then
+        __ask "Install OpenCode, the terminal agent?" || WANT_OPENCODE=0
+    fi
+    if [ "$IN_CONTAINER" -eq 0 ] && ! command -v ghostty >/dev/null 2>&1; then
+        __ask "Install Ghostty, the terminal emulator?" || WANT_GHOSTTY=0
+    fi
+    __active_tags
+    echo
+fi
+
 # Arch with no AUR helper: build one, then detect again so the rest of the run
 # (and setup-java.sh's jdtls) can reach the AUR.
-if [ "$PKG_MGR" = "pacman" ] && [ "$IS_HOME_INSTALL" -eq 1 ] && [ "$IN_CONTAINER" -eq 0 ]; then
+if [ "$PKG_MGR" = "pacman" ] && [ "$IS_HOME_INSTALL" -eq 1 ] && [ "$IN_CONTAINER" -eq 0 ] && [ "$WANT_PACKAGES" -eq 1 ]; then
     if __bootstrap_aur_helper; then
         PKG_MGR="$(__detect_pkg_mgr)"
     else
@@ -300,6 +373,8 @@ fi
 
 if [ "$IN_CONTAINER" -eq 1 ]; then
     echo "[container] Skipping package installation."
+elif [ "$WANT_PACKAGES" -eq 0 ]; then
+    echo "Skipping package installation, as asked."
 elif [ "$IS_HOME_INSTALL" -eq 1 ] && [ "$PKG_MGR" != "none" ]; then
     echo "Installing packages via $PKG_MGR (tags: ${ACTIVE_TAGS[*]})..."
     __pkg_refresh "$PKG_MGR"
@@ -620,7 +695,7 @@ fi
 # -----------------------------
 # OpenCode (terminal agent)
 # -----------------------------
-if [ "$IS_HOME_INSTALL" -eq 0 ] || [ "$IN_CONTAINER" -eq 1 ]; then
+if [ "$IS_HOME_INSTALL" -eq 0 ] || [ "$IN_CONTAINER" -eq 1 ] || [ "$WANT_OPENCODE" -eq 0 ]; then
     echo "Skipping OpenCode installation."
 elif ! command -v opencode >/dev/null 2>&1; then
     echo "Installing OpenCode..."
@@ -631,7 +706,7 @@ elif ! command -v opencode >/dev/null 2>&1; then
     esac
 fi
 
-if [ "$IS_HOME_INSTALL" -eq 1 ] && [ "$IN_CONTAINER" -eq 0 ]; then
+if [ "$IS_HOME_INSTALL" -eq 1 ] && [ "$IN_CONTAINER" -eq 0 ] && command -v opencode >/dev/null 2>&1; then
     echo "NOTE: run 'opencode auth login' to connect a model provider (interactive, not scripted here)."
 fi
 
@@ -642,7 +717,7 @@ fi
 # packages it: Arch and Ubuntu 26.04 carry it, Fedora has COPRs only. A machine
 # without the package finds nothing, so warn and go on — the config is harmless
 # without Ghostty.
-if [ "$IS_HOME_INSTALL" -eq 0 ] || [ "$IN_CONTAINER" -eq 1 ]; then
+if [ "$IS_HOME_INSTALL" -eq 0 ] || [ "$IN_CONTAINER" -eq 1 ] || [ "$WANT_GHOSTTY" -eq 0 ]; then
     echo "Skipping Ghostty installation."
 elif ! command -v ghostty >/dev/null 2>&1; then
     echo "Installing Ghostty..."
@@ -668,6 +743,22 @@ if [[ "$OSTYPE" == darwin* ]] && [ -d "$GHOSTTY_TARGET_DIR" ] && [ ! -e "$GHOSTT
         cat <<'EOF' > "$GHOSTTY_TARGET_DIR/config.local"
 # Machine-local Ghostty overrides — not tracked by the dotfiles repo.
 config-file = quick-terminal.conf
+EOF
+    fi
+fi
+
+# Hyprland reads local.conf for the monitors and the wallpaper of one machine.
+# `source =` wants the file to exist, so create an empty one.
+HYPR_TARGET_DIR="$TARGET_DIR/.config/hypr"
+if [ "$WANT_HYPRLAND" -eq 1 ] && [ -d "$HYPR_TARGET_DIR" ] && [ ! -e "$HYPR_TARGET_DIR/local.conf" ]; then
+    if [ "$DRY_RUN" -eq 1 ]; then
+        echo "  [dry-run] write $HYPR_TARGET_DIR/local.conf"
+    else
+        echo "Creating $HYPR_TARGET_DIR/local.conf for the machine-local Hyprland settings..."
+        cat <<'EOF' > "$HYPR_TARGET_DIR/local.conf"
+# Machine-local Hyprland settings — not tracked by the dotfiles repo.
+# Monitors, scale, and a wallpaper go here. For example:
+# monitor = , preferred, auto, 1
 EOF
     fi
 fi
@@ -705,7 +796,7 @@ fi
 # extra tooling is needed — only the right build for this shell version.
 QUAKE_UUID="quake-terminal@diegodario88.github.io"
 
-if [ "$IS_HOME_INSTALL" -eq 1 ] && [ "$IN_CONTAINER" -eq 0 ] \
+if [ "$IS_HOME_INSTALL" -eq 1 ] && [ "$IN_CONTAINER" -eq 0 ] && [ "$IS_GRAPHICAL" -eq 1 ] \
    && command -v gnome-shell >/dev/null 2>&1 && command -v gnome-extensions >/dev/null 2>&1; then
     if gnome-extensions list 2>/dev/null | grep -qx "$QUAKE_UUID"; then
         echo "Quake Terminal extension already installed."
@@ -749,9 +840,12 @@ fi
 # GNOME desktop settings
 # -----------------------------
 # gsettings is GNOME's `defaults write`. bin/gnome-settings holds the key
-# allowlist and saves the previous values, so cleanup.sh can undo this.
-if [ "$IS_HOME_INSTALL" -eq 1 ] && [ "$IN_CONTAINER" -eq 0 ] \
-   && command -v gsettings >/dev/null 2>&1 && command -v gnome-shell >/dev/null 2>&1; then
+# allowlist and saves the previous values, so cleanup.sh can undo this. It
+# runs on any desktop with gsettings: GTK apps under Hyprland read the key
+# theme and the colour scheme from the same place, and the script skips the
+# schemas that only GNOME Shell installs.
+if [ "$IS_HOME_INSTALL" -eq 1 ] && [ "$IN_CONTAINER" -eq 0 ] && [ "$IS_GRAPHICAL" -eq 1 ] \
+   && command -v gsettings >/dev/null 2>&1; then
     echo "Applying GNOME settings..."
     __run python3 "$SOURCE_BIN_DIR/gnome-settings" apply \
         || __warn "GNOME settings failed."

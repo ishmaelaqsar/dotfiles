@@ -38,11 +38,34 @@ STATE_FILE = (
     / "gnome-settings.json"
 )
 
-# Relocatable schema for the one custom keybinding this repository owns. The trailing slash
-# is part of the path, and gsettings rejects the path without it.
-KB_PATH = "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/dotfiles-terminal/"
-KB_SCHEMA = f"org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:{KB_PATH}"
 MEDIA_KEYS = "org.gnome.settings-daemon.plugins.media-keys"
+WM_KEYS = "org.gnome.desktop.wm.keybindings"
+SHELL_KEYS = "org.gnome.shell.keybindings"
+MUTTER_KEYS = "org.gnome.mutter.keybindings"
+
+# App launchers: (slug, name, command, binding). Each one becomes a custom
+# keybinding under the relocatable schema below, at a path this repository owns.
+# dotfiles/.config/hypr/hyprland.conf binds the same keys, so the hands learn
+# one layout for both desktops. The trailing slash is part of a gsettings path.
+LAUNCHERS = [
+    # Super+Return is the i3/sway/Hyprland idiom for "terminal", and GNOME
+    # leaves the key free.
+    ("terminal", "Ghostty", "ghostty", "<Super>Return"),
+    # A new frame on the running daemon, and start the daemon when none runs.
+    ("emacs", "Emacs", "emacsclient -c --alternate-editor=", "<Super>e"),
+]
+
+KB_BASE = "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/dotfiles-"
+KB_SCHEMA = "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding"
+
+
+def kb_path(slug):
+    return f"{KB_BASE}{slug}/"
+
+
+def kb_schema(slug):
+    return f"{KB_SCHEMA}:{kb_path(slug)}"
+
 
 # How many static workspaces to keep, and therefore how many Super+N jumps.
 WORKSPACES = 4
@@ -66,17 +89,42 @@ SETTINGS = [
     # a terminal.
     ("org.gnome.desktop.default-applications.terminal", "exec", "'ghostty'"),
     ("org.gnome.desktop.default-applications.terminal", "exec-arg", "'-e'"),
-    # GNOME has no quick terminal (Mutter has no layer shell), so bind a
-    # normal Ghostty window. Super+Return is the i3/sway/Hyprland idiom for
-    # "terminal", and GNOME leaves the key free.
-    (KB_SCHEMA, "name", "'Ghostty'"),
-    (KB_SCHEMA, "command", "'ghostty'"),
-    (KB_SCHEMA, "binding", "'<Super>Return'"),
+    # The browser and the file manager go through GNOME's own media keys, so
+    # they follow the default apps instead of a hard-coded command.
+    (MEDIA_KEYS, "www", "['<Super>b']"),
+    (MEDIA_KEYS, "home", "['<Super>n']"),
+    # Super+Space opens the app grid, the launcher. GNOME ships Super+Space as
+    # the input-source switch, which has to go first, or the shell keeps the key.
+    (WM_KEYS, "switch-input-source", "[]"),
+    (WM_KEYS, "switch-input-source-backward", "[]"),
+    (SHELL_KEYS, "toggle-application-view", "['<Super>space', '<Super>a']"),
+    (SHELL_KEYS, "show-screenshot-ui", "['<Super><Shift>s', 'Print']"),
+    # Super+l is the lock key by default, and tiling right wants it.
+    (MEDIA_KEYS, "screensaver", "['<Super>Escape']"),
+    # Window keys. Super+q closes, Super+f goes full screen, Super+m toggles
+    # the maximised state. Super+h and Super+l tile left and right; Super+k and
+    # Super+j maximise and unmaximise. Super+h minimises by default, and a
+    # keyboard desktop has no use for a window it cannot see, so that goes.
+    (WM_KEYS, "close", "['<Super>q', '<Alt>F4']"),
+    (WM_KEYS, "minimize", "[]"),
+    (WM_KEYS, "toggle-fullscreen", "['<Super>f']"),
+    (WM_KEYS, "toggle-maximized", "['<Super>m', '<Alt>F10']"),
+    (WM_KEYS, "maximize", "['<Super>k', '<Super>Up']"),
+    (WM_KEYS, "unmaximize", "['<Super>j', '<Super>Down']"),
+    (MUTTER_KEYS, "toggle-tiled-left", "['<Super>h', '<Super>Left']"),
+    (MUTTER_KEYS, "toggle-tiled-right", "['<Super>l', '<Super>Right']"),
     # Numbered workspaces need a fixed count. GNOME's dynamic workspaces grow
     # and shrink, so "jump to 4" has nothing to jump to on a quiet desktop.
     ("org.gnome.mutter", "dynamic-workspaces", "false"),
     ("org.gnome.desktop.wm.preferences", "num-workspaces", str(WORKSPACES)),
 ]
+
+for slug, name, command, binding in LAUNCHERS:
+    SETTINGS += [
+        (kb_schema(slug), "name", f"'{name}'"),
+        (kb_schema(slug), "command", f"'{command}'"),
+        (kb_schema(slug), "binding", f"'{binding}'"),
+    ]
 
 # Super+N jumps to a workspace and Super+Shift+N moves the window there — the
 # i3 layout. GNOME ships Super+N as "switch to application N" in the dash, so
@@ -84,9 +132,9 @@ SETTINGS = [
 # Left/right switching is already Super+Alt+Left/Right and Super+PageUp/Down.
 for n in range(1, WORKSPACES + 1):
     SETTINGS += [
-        ("org.gnome.shell.keybindings", f"switch-to-application-{n}", "[]"),
-        ("org.gnome.desktop.wm.keybindings", f"switch-to-workspace-{n}", f"['<Super>{n}']"),
-        ("org.gnome.desktop.wm.keybindings", f"move-to-workspace-{n}", f"['<Super><Shift>{n}']"),
+        (SHELL_KEYS, f"switch-to-application-{n}", "[]"),
+        (WM_KEYS, f"switch-to-workspace-{n}", f"['<Super>{n}']"),
+        (WM_KEYS, f"move-to-workspace-{n}", f"['<Super><Shift>{n}']"),
     ]
 
 
@@ -155,15 +203,17 @@ def apply():
         ok, _ = gsettings("set", schema, key, value)
         print(f"  {'set ' if ok else 'FAIL'} {schema} {key} = {value}")
 
-    # Register the keybinding path. GNOME reads a custom binding only when its
+    # Register the keybinding paths. GNOME reads a custom binding only when its
     # path is listed here.
     bindings = get(MEDIA_KEYS, "custom-keybindings")
     if bindings is not None:
         remember(MEDIA_KEYS, "custom-keybindings", bindings)
-        if KB_PATH not in bindings:
-            merged = parse_list(bindings) + [KB_PATH]
-            gsettings("set", MEDIA_KEYS, "custom-keybindings", format_list(merged))
-            print(f"  set  {MEDIA_KEYS} custom-keybindings += {KB_PATH}")
+        merged = parse_list(bindings)
+        missing = [kb_path(slug) for slug, *_ in LAUNCHERS if kb_path(slug) not in merged]
+        if missing:
+            gsettings("set", MEDIA_KEYS, "custom-keybindings", format_list(merged + missing))
+            for path in missing:
+                print(f"  set  {MEDIA_KEYS} custom-keybindings += {path}")
 
     save_state(state)
     print(f"Applied. Previous values saved in {STATE_FILE}")

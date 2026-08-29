@@ -12,5 +12,6 @@
 - **To add or rename a package, edit `lib/packages.conf`** — one row per tool, selected by tag.
   `lib/pkg.sh` is the driver and needs no change. Keep the row's first command name the one that
   lands on `PATH`, or mark it `~` when none does.
-- `dotfiles/.config/ghostty/config.local` is machine-local and untracked by design.
+- `dotfiles/.config/ghostty/config.local` and `~/.config/hypr/local.conf` are machine-local and
+  untracked by design.
 - Don't commit or push on your own initiative.

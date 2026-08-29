@@ -71,7 +71,12 @@ grep -q "wl-clipboard" /tmp/dry-nodesktop.log \
     || pass "--check fails on a bare box"
 
 say "install.sh (home install, container detection overridden)"
-./install.sh || flunk "install.sh exited non-zero"
+# stdin closed, as under the dev-container hook: the script must not ask, must
+# say so, and must still install everything the detection selected.
+./install.sh < /dev/null > /tmp/install.log 2>&1 || flunk "install.sh exited non-zero"
+cat /tmp/install.log
+grep -q "No terminal on stdin" /tmp/install.log \
+    && pass "no terminal: the script says it asks nothing" || flunk "no terminal, and no note about it"
 
 say "install.sh --check (must pass right after an install)"
 if ./install.sh --check > /tmp/check.log 2>&1; then

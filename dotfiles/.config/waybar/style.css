@@ -1,0 +1,50 @@
+* {
+    font-family: "0xProto Nerd Font Mono", monospace;
+    font-size: 12px;
+    border: none;
+    border-radius: 0;
+    min-height: 0;
+}
+
+window#waybar {
+    background: #1a1a17;
+    color: #fdfdfb;
+}
+
+#workspaces button {
+    padding: 0 8px;
+    color: #8a877e;
+}
+
+#workspaces button.active {
+    color: #fdfdfb;
+    border-bottom: 2px solid #1f5fa8;
+}
+
+#workspaces button.urgent {
+    color: #c04a1d;
+}
+
+#submap {
+    padding: 0 8px;
+    background: #1f5fa8;
+    color: #fdfdfb;
+}
+
+#window,
+#tray,
+#network,
+#pulseaudio,
+#battery,
+#clock {
+    padding: 0 10px;
+}
+
+#battery.warning {
+    color: #c04a1d;
+}
+
+#battery.critical {
+    color: #c04a1d;
+    font-weight: bold;
+}

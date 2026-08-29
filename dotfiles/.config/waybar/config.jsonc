@@ -1,0 +1,42 @@
+// waybar — the bar Hyprland starts. Workspaces, the window title, and the
+// clock, tray, network, and battery. style.css holds the look.
+{
+    "layer": "top",
+    "position": "top",
+    "height": 28,
+    "modules-left": ["hyprland/workspaces", "hyprland/submap"],
+    "modules-center": ["hyprland/window"],
+    "modules-right": ["tray", "network", "pulseaudio", "battery", "clock"],
+
+    "hyprland/workspaces": {
+        "format": "{id}",
+        "on-click": "activate"
+    },
+    "hyprland/submap": {
+        // Shows "window" while the Super+x chord is open, the way tmux shows
+        // its menu.
+        "format": "C-x {}"
+    },
+    "hyprland/window": {
+        "max-length": 80
+    },
+    "clock": {
+        "format": "{:%a %d %b  %H:%M}",
+        "tooltip-format": "<tt>{calendar}</tt>"
+    },
+    "network": {
+        "format-wifi": "{essid} {signalStrength}%",
+        "format-ethernet": "eth",
+        "format-disconnected": "offline"
+    },
+    "pulseaudio": {
+        "format": "vol {volume}%",
+        "format-muted": "mute",
+        "on-click": "pavucontrol"
+    },
+    "battery": {
+        "format": "bat {capacity}%",
+        "format-charging": "chg {capacity}%",
+        "states": { "warning": 20, "critical": 10 }
+    }
+}
