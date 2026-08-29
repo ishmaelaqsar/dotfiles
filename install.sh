@@ -592,7 +592,7 @@ else
     # Import Public Key (Bootstrapping)
     # -----------------------------
     # If a public key is found in dotfiles/public.asc, this auto-imports it.
-    # Command to generate: gpg --armor --export $KEYID > dotfiles/public.asc
+    # Command to generate: gpg --armor --export <key-id> > dotfiles/public.asc
 
     PUB_KEY="$DOTFILES_DIR/public.asc"
     if ! command -v gpg >/dev/null 2>&1; then

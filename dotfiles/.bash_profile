@@ -64,7 +64,6 @@ else
     export VISUAL="$EDITOR"
 fi
 
-export GIT_OPEN="$VISUAL"
 
 # lazygit looks in ~/Library/Application Support on macOS, and in ~/.config on
 # Linux. Name the file, so one config serves both platforms.

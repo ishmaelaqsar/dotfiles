@@ -2,28 +2,11 @@
 # Helper Functions
 # ============================================================
 
-# Check for internet connectivity. The last host is a name, so it also proves
-# that DNS answers.
-__has_internet() {
-    # Linux ping takes -W <seconds>. macOS ping takes -t <seconds>, and reads
-    # -W as milliseconds, so -W 1 there times out after 1 ms.
-    local wait="-W"
-    [[ "$OSTYPE" == darwin* ]] && wait="-t"
-    ping -c 1 "$wait" 1 1.1.1.1 >/dev/null 2>&1 || \
-    ping -c 1 "$wait" 1 8.8.8.8 >/dev/null 2>&1 || \
-    ping -c 1 "$wait" 1 cpan.org >/dev/null 2>&1
-}
-
-# Detect git project root (fallback: current dir)
-__get_project_root() {
-    git rev-parse --show-toplevel 2>/dev/null || pwd
-}
-
 # Usage: encrypt <file_or_folder> [recipient_email]
 #        echo "string" | encrypt [recipient_email]
 #
 # Encrypts a file, directory (auto-archives to .tar.gz), or stdin stream.
-# If [recipient_email] is omitted, defaults to $IDENTITY, then $KEYID.
+# If [recipient_email] is omitted, defaults to $IDENTITY.
 # Generates output in the format: <filename>.<timestamp>.enc
 encrypt() {
     local recipient
@@ -34,7 +17,7 @@ encrypt() {
     # file. Otherwise `encrypt notes.txt` in a script reads the file name as the
     # recipient.
     if [[ ! -t 0 && ( -z "$1" || ! -e "$1" ) ]]; then
-        recipient="${1:-${IDENTITY:-$KEYID}}"
+        recipient="${1:-$IDENTITY}"
         output="encrypted.$(date +%s).enc"
 
         if [[ -z "$recipient" ]]; then
@@ -57,7 +40,7 @@ encrypt() {
     fi
 
     # If file mode, 2nd arg is recipient. Fallback to env vars.
-    recipient="${2:-${IDENTITY:-$KEYID}}"
+    recipient="${2:-$IDENTITY}"
     if [[ -z "$recipient" ]]; then
         echo "Error: No recipient specified. Pass as 2nd arg or set \$IDENTITY."
         return 1
@@ -136,7 +119,7 @@ decrypt() {
 # Generates output: <filename>.asc
 sign() {
     local input="$1"
-    local signer="${IDENTITY:-$KEYID}"
+    local signer="$IDENTITY"
 
     if [[ -z "$input" ]]; then
         echo "Usage: sign <filename>"
@@ -149,7 +132,7 @@ sign() {
     fi
 
     if [[ -z "$signer" ]]; then
-        echo "Error: \$IDENTITY or \$KEYID environment variables are not set."
+        echo "Error: \$IDENTITY is not set."
         return 1
     fi
 
@@ -267,109 +250,99 @@ load_secrets() {
 # ============================================================
 # Kubernetes Helpers
 # ============================================================
-kube-debug() {
-    local namespace="${KUBE_NS:-default}"
-    local pod=""
+# Defined only where kubectl is. Without it the functions could never run,
+# and their names would shadow nothing useful.
+if command -v kubectl >/dev/null 2>&1; then
+    kube-debug() {
+        local namespace="${KUBE_NS:-default}"
+        local pod=""
 
-    # Parse arguments
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            -n|--namespace)
-                namespace="$2"
-                shift 2
-                ;;
-            *)
-                # If it's not a flag, assume it's the pod name
-                pod="$1"
-                shift
-                ;;
-        esac
-    done
+        # Parse arguments
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                -n|--namespace)
+                    namespace="$2"
+                    shift 2
+                    ;;
+                *)
+                    # If it's not a flag, assume it's the pod name
+                    pod="$1"
+                    shift
+                    ;;
+            esac
+        done
 
-    # Validate that a pod was actually provided
-    if [[ -z "$pod" ]]; then
-        echo "Error: Pod name is required."
-        echo "Usage: kube-debug [-n namespace] <pod_name>"
-        return 1
+        # Validate that a pod was actually provided
+        if [[ -z "$pod" ]]; then
+            echo "Error: Pod name is required."
+            echo "Usage: kube-debug [-n namespace] <pod_name>"
+            return 1
+        fi
+
+        # Execute the command
+        echo "Attaching debug container to '$pod' in namespace '$namespace'..."
+        kubectl debug -it -n "$namespace" "$pod" --image=alpine
+    }
+
+    kube-dump() {
+        local namespace="${KUBE_NS:-default}"
+        local pod=""
+
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                -n|--namespace) namespace="$2"; shift 2 ;;
+                *) pod="$1"; shift ;;
+            esac
+        done
+
+        if [[ -z "$pod" ]]; then
+            echo "Usage: kube-dump [-n namespace] <pod_name>"
+            return 1
+        fi
+
+        local filename="${pod}_$(date +%s).log"
+        echo "Dumping ALL logs for '$pod' in '$namespace' to $filename..."
+
+        # --all-containers gets sidecars too
+        # --timestamps adds exact UTC times to the left column
+        # --tail=-1 ensures it grabs from the very beginning of the container's life
+        kubectl logs -n "$namespace" "$pod" --all-containers --timestamps --tail=-1 > "$filename"
+
+        echo "✅ Done. You can now open $filename in your editor."
+    }
+
+    kube-crash() {
+        local namespace="${KUBE_NS:-default}"
+        local pod=""
+
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                -n|--namespace) namespace="$2"; shift 2 ;;
+                *) pod="$1"; shift ;;
+            esac
+        done
+
+        if [[ -z "$pod" ]]; then
+            echo "Usage: kube-crash [-n namespace] <pod_name>"
+            return 1
+        fi
+
+        echo "Fetching previous (crashed) logs for '$pod' in '$namespace'..."
+        # The -p flag (previous) is the magic here
+        kubectl logs -n "$namespace" "$pod" -p --all-containers | less
+    }
+
+    # rg when it is there, grep otherwise, like the grep alias in .aliases.
+    if command -v rg >/dev/null 2>&1; then
+        alias kfind='kubectl get pods -A | rg -i'
+    else
+        alias kfind='kubectl get pods -A | grep -i'
     fi
-
-    # Execute the command
-    echo "Attaching debug container to '$pod' in namespace '$namespace'..."
-    kubectl debug -it -n "$namespace" "$pod" --image=alpine
-}
-
-kube-dump() {
-    local namespace="${KUBE_NS:-default}"
-    local pod=""
-
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            -n|--namespace) namespace="$2"; shift 2 ;;
-            *) pod="$1"; shift ;;
-        esac
-    done
-
-    if [[ -z "$pod" ]]; then
-        echo "Usage: kube-dump [-n namespace] <pod_name>"
-        return 1
-    fi
-
-    local filename="${pod}_$(date +%s).log"
-    echo "Dumping ALL logs for '$pod' in '$namespace' to $filename..."
-
-    # --all-containers gets sidecars too
-    # --timestamps adds exact UTC times to the left column
-    # --tail=-1 ensures it grabs from the very beginning of the container's life
-    kubectl logs -n "$namespace" "$pod" --all-containers --timestamps --tail=-1 > "$filename"
-
-    echo "✅ Done. You can now open $filename in your editor."
-}
-
-kube-crash() {
-    local namespace="${KUBE_NS:-default}"
-    local pod=""
-
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            -n|--namespace) namespace="$2"; shift 2 ;;
-            *) pod="$1"; shift ;;
-        esac
-    done
-
-    if [[ -z "$pod" ]]; then
-        echo "Usage: kube-crash [-n namespace] <pod_name>"
-        return 1
-    fi
-
-    echo "Fetching previous (crashed) logs for '$pod' in '$namespace'..."
-    # The -p flag (previous) is the magic here
-    kubectl logs -n "$namespace" "$pod" -p --all-containers | less
-}
-
-alias kfind='kubectl get pods -A | rg -i'
+fi
 
 # ============================================================
 # Git Helpers
 # ============================================================
-git-pull() {
-    local target_dir
-
-    if [[ -z "$1" ]]; then
-        # Default to current directory if no argument provided
-        target_dir="$(pwd)"
-    else
-        target_dir="$WORKSPACE/$1"
-    fi
-
-    if [[ ! -d "$target_dir/.git" ]]; then
-        echo "Error: Directory '$target_dir' is not a git repository."
-        return 1
-    fi
-
-    echo "Pulling in $target_dir..."
-    git -C "$target_dir" pull
-}
-
 # git-gone: delete local branches whose upstream on the remote is gone.
 # Prunes remote-tracking refs first, then deletes any local branch that
 # `git branch -vv` marks as '[<remote>: gone]'. Skips the current branch.
