@@ -233,7 +233,9 @@ style for code with no `.clang-format` of its own: `clang-format` stops at the f
 walking up from the file, so a project's file wins. Debugging has two routes: `M-x gdb` and
 `M-x lldb` from `gud`, text only, and Dape (`C-x C-a d`), a DAP client with breakpoints in the
 margin and locals in a side window, over gdb's own DAP mode on Linux and `lldb-dap` on macOS.
-For Python, `basedpyright` from `setup-python.sh` checks and completes, `ruff` sorts the imports and formats on every
+Any buffer whose language server can format does so on save — Go through `gopls`, which also
+organizes the imports, Java through `jdtls` with the 4-space indent Emacs sends it, C and C++
+through `clangd` and the `.clang-format` rule. For Python, `basedpyright` from `setup-python.sh` checks and completes, `ruff` sorts the imports and formats on every
 save because pyright formats nothing, and Dape debugs through `debugpy-adapter`, the entry point
 the `debugpy` uv tool puts on `PATH`.
 

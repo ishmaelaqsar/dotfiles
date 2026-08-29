@@ -210,17 +210,25 @@ there and the theme's faces are computed for a dumb terminal. Every frame
           (toml "https://github.com/tree-sitter/tree-sitter-toml")
           (yaml "https://github.com/ikatyang/tree-sitter-yaml")))
 
+;; Modes that have a classic twin are remapped to the tree-sitter one.
 (setopt major-mode-remap-alist
         '((sh-mode . bash-ts-mode)
           (c-mode . c-ts-mode)
           (c++-mode . c++-ts-mode)
           (c-or-c++-mode . c-or-c++-ts-mode)
-          (go-mode . go-ts-mode)
           (java-mode . java-ts-mode)
           (js-json-mode . json-ts-mode)
           (python-mode . python-ts-mode)
-          (conf-toml-mode . toml-ts-mode)
-          (yaml-mode . yaml-ts-mode)))
+          (conf-toml-mode . toml-ts-mode)))
+
+;; Go and YAML have no classic mode in Emacs, and their ts-modes register a
+;; file association only when the grammar is already installed, so a fresh
+;; machine would open .go in fundamental-mode. Register the associations here;
+;; the hook below then fetches the grammar on the first file.
+(dolist (entry '(("\\.go\\'" . go-ts-mode)
+                 ("/go\\.mod\\'" . go-mod-ts-mode)
+                 ("\\.ya?ml\\'" . yaml-ts-mode)))
+  (add-to-list 'auto-mode-alist entry))
 
 (defun my/treesit-install-missing ()
   "Install the grammar of the current tree-sitter mode when it is absent.
@@ -236,7 +244,7 @@ this function when every machine runs 31."
       (when (treesit-language-available-p lang)
         (funcall major-mode)))))
 
-(dolist (mode '(bash-ts-mode c-ts-mode c++-ts-mode go-ts-mode java-ts-mode
+(dolist (mode '(bash-ts-mode c-ts-mode c++-ts-mode go-ts-mode go-mod-ts-mode java-ts-mode
                 json-ts-mode python-ts-mode toml-ts-mode yaml-ts-mode))
   (add-hook (intern (format "%s-hook" mode)) #'my/treesit-install-missing))
 
@@ -248,6 +256,33 @@ this function when every machine runs 31."
   ;; basedpyright is not in eglot's default table.
   (add-to-list 'eglot-server-programs
                '((python-mode python-ts-mode) . ("basedpyright-langserver" "--stdio"))))
+
+;;;; Format on save through the language server
+
+;; gopls, jdtls and clangd implement textDocument/formatting, so any buffer
+;; whose server reports the capability formats before a save; Go also gets its
+;; imports organized first, which is what goimports does. basedpyright reports
+;; no such capability, so Python stays with ruff below. jdtls needs no
+;; profile: eglot sends tab-width and indent-tabs-mode as the formatting
+;; options, so Java gets 4 spaces from the settings above; a project that
+;; wants a style ships its own java.format.settings.url.
+(declare-function eglot-managed-p "eglot")
+(declare-function eglot-server-capable "eglot")
+(declare-function eglot-format-buffer "eglot")
+(declare-function eglot-code-action-organize-imports "eglot")
+
+(defun my/eglot-format-buffer ()
+  "Organize the imports where the server does that, then format the buffer."
+  (when (derived-mode-p 'go-ts-mode 'go-mode)
+    (ignore-errors (eglot-code-action-organize-imports (point-min) (point-max))))
+  (eglot-format-buffer))
+
+(defun my/eglot-format-on-save ()
+  "Add or remove the save hook as eglot starts or stops managing this buffer."
+  (if (and (eglot-managed-p) (eglot-server-capable :documentFormattingProvider))
+      (add-hook 'before-save-hook #'my/eglot-format-buffer nil t)
+    (remove-hook 'before-save-hook #'my/eglot-format-buffer t)))
+(add-hook 'eglot-managed-mode-hook #'my/eglot-format-on-save)
 
 ;;;; Python formatting: ruff
 
