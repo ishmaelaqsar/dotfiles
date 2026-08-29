@@ -132,7 +132,7 @@ machine that needs them. They are idempotent.
 | `setup-go.sh` | go | gopls | delve |
 | `setup-java.sh` | sdkman → Temurin LTS, maven, gradle | jdtls (brew/AUR) | JDWP/jdb (in the JDK) |
 | `setup-sbcl.sh` | SBCL + Quicklisp | none — CL uses Swank/Slynk via the editor | SBCL built-in |
-| `setup-emacs.sh` | Emacs 30 (`emacs-plus@30` on macOS, the pgtk package on Linux), Sly, Magit | `eglot`, built in, over the servers the rows above install | none |
+| `setup-emacs.sh` | Emacs 30 (`emacs-plus@30` on macOS, the pgtk package on Linux) and the packages `init.el` selects: Sly, Magit, Vertico, Orderless, Consult, Marginalia, Embark, Avy, Corfu, Cape | `eglot`, built in, over the servers the rows above install | none |
 | `setup-yk.sh` | [yk](https://github.com/ishmaelaqsar/yk), the YubiKey maintenance tool | none | none |
 
 These scripts share the package-manager logic in `lib/pkg.sh`, and the name mappings in
@@ -166,6 +166,7 @@ links them into `$HOME/bin`: `lib/sync-dotfiles` writes the symlinks, and `lib/p
 | `vm` | Manage one QEMU machine through virsh and virt-install. A missing tool is reported with the package name this host uses. | It picks a machine, and prints its status |
 | `gnome-settings` | Apply, dump or restore the managed GNOME keys. | It prints the help |
 | `ediff` | Compare two files in Emacs, in the terminal. `pacnew` runs it as `DIFFPROG`. | It prints an Emacs error |
+| `md2org` | Convert markdown files to Org with `pandoc`, one `.org` beside each. | It prints the usage |
 
 None of them is a TUI, and **none of them needs a terminal**. `vm` and `manage-secrets get` offer
 an `fzf` picker when a name is missing and a terminal is there, because looking a name up and
@@ -220,12 +221,45 @@ picker. `consult-ripgrep` and `consult-fd` run the installed `rg` and `fd` with 
 and `xref` searches with `rg` as well. fzf stays in the shell. No framework, and no vim keys: the
 point is the Emacs keys the rest of the repository already uses.
 
+Five more packages, all from GNU ELPA: Marginalia annotates every candidate; Embark acts on the
+candidate or the thing at point (`C-.`, `C-;`), and any prefix followed by `C-h` lists its keys;
+Avy jumps to a visible position (`M-j`, then the characters you see); Corfu completes at point
+in a graphical frame, with Cape adding buffer words and file paths. A terminal frame on Emacs 30
+cannot draw Corfu's child frame, so it keeps the built-in completion there.
+
+Startup is measured, not guessed: `early-init.el` holds the garbage collector and the file-name
+handlers during init and turns on `package-quickstart`; the daemon starts in about 0.45 s. After
+`M-x package-install`, run `M-x package-quickstart-refresh`. `M-x use-package-report` shows the
+load time of each package when one feels slow.
+
 To change the editor on one machine, drop a file in `~/.bashrc.d/`, which is sourced last, and
 export the three variables:
 
 ```bash
 export EDITOR=emacs VISUAL=emacs GIT_EDITOR=emacs
 ```
+
+---
+
+## Org
+
+Notes live in `$ORG_DIR`, default `~/org/`, which `.bash_profile` exports. The Obsidian vault
+stays markdown: Obsidian and the six vault commands read `.md`. `C-c c` captures into
+`inbox.org`, `C-c a` opens the agenda over the directory, and `<s TAB` inserts a source block.
+
+A literate notebook is an Org file with one header line:
+
+```org
+#+PROPERTY: header-args :session nb :results output
+```
+
+Every block then shares one interpreter, so a variable from the first block is visible in the
+second. `C-c C-c` runs the block under point and asks once, because `org-confirm-babel-evaluate`
+stays on. Babel is loaded for Emacs Lisp, shell, Python, C, Common Lisp (through Sly) and SQLite.
+A session is a process that Org never stops, so closing the last Org buffer kills the
+interpreters, and `M-x my/org-babel-kill-sessions` does it by hand.
+
+`md2org FILE.md` writes `FILE.org` beside it through `pandoc`, for the markdown you move over.
 
 ---
 

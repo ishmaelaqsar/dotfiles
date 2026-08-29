@@ -52,6 +52,9 @@ export VM_USER="ishmael"
 # Second brain vault — defaults to ~/vault (.helpers); override per machine:
 # export OBSIDIAN_VAULT="$HOME/some/other/vault"
 
+# Org notes. Outside the vault, which stays markdown for Obsidian.
+export ORG_DIR="$HOME/org"
+
 # Local workspace. install.sh creates the directory: a login shell reads its
 # configuration, and does not build the home directory.
 export WORKSPACE="$HOME/workspace"

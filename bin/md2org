@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# md2org FILE...: write FILE.org beside each markdown FILE. pandoc reads GitHub
+# markdown, and --wrap=none keeps every paragraph on one line, so a later diff
+# shows a changed sentence and not a reflowed paragraph. The markdown file is
+# left in place.
+set -euo pipefail
+
+if [ $# -eq 0 ]; then
+    echo "Usage: md2org FILE.md [FILE.md ...]" >&2
+    exit 2
+fi
+
+for f in "$@"; do
+    out="${f%.*}.org"
+    pandoc -f gfm -t org --wrap=none -o "$out" "$f"
+    echo "$out"
+done

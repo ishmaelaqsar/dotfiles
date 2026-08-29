@@ -244,6 +244,64 @@ this function when every machine runs 31."
 (use-package magit
   :bind ("C-x g" . magit-status))
 
+;;;; Org
+
+;; Notes live in $ORG_DIR, outside the Obsidian vault, which stays markdown
+;; because Obsidian and the vault commands read it. Babel runs a block on
+;; C-c C-c and asks once per block; a notebook shares one interpreter across
+;; its blocks with `#+PROPERTY: header-args :session nb :results output'.
+(use-package org
+  :bind (("C-c a" . org-agenda)
+         ("C-c c" . org-capture)
+         ("C-c l" . org-store-link))
+  :hook (org-mode . visual-line-mode)
+  :custom
+  (org-directory (file-name-as-directory (or (getenv "ORG_DIR") "~/org")))
+  (org-agenda-files (list org-directory))
+  (org-default-notes-file (expand-file-name "inbox.org" org-directory))
+  (org-startup-indented t)
+  (org-hide-emphasis-markers t)
+  (org-return-follows-link t)
+  (org-src-window-setup 'current-window)
+  (org-src-preserve-indentation t)
+  (org-edit-src-content-indentation 0)
+  (org-confirm-babel-evaluate t)
+  ;; python3 on PATH. A notebook that needs packages sets, per file,
+  ;; #+PROPERTY: header-args:python :python "uv run --project DIR python"
+  (org-babel-python-command "python3")
+  ;; ob-lisp defaults to SLIME; the REPL here is Sly.
+  (org-babel-lisp-eval-fn #'sly-eval)
+  :config
+  (make-directory org-directory t)
+  (require 'org-tempo)                  ; <s TAB expands to a src block
+  (org-babel-do-load-languages
+   'org-babel-load-languages
+   '((emacs-lisp . t) (shell . t) (python . t) (C . t) (lisp . t) (sqlite . t))))
+
+;; A :session is an interpreter in a comint buffer, and Org never stops it.
+;; Python sessions come from run-python (inferior-python-mode), shell sessions
+;; from shell (shell-mode). Sly is left alone: it is the user's own REPL, and
+;; Babel only borrows it.
+(defun my/org-babel-kill-sessions ()
+  "Kill every Babel session interpreter and its buffer."
+  (interactive)
+  (dolist (buf (buffer-list))
+    (when (and (get-buffer-process buf)
+               (with-current-buffer buf
+                 (derived-mode-p 'inferior-python-mode 'shell-mode)))
+      (let ((kill-buffer-query-functions nil))
+        (kill-buffer buf)))))
+
+(defun my/org-kill-sessions-when-last ()
+  "Kill the Babel sessions when the last Org buffer closes."
+  (when (and (derived-mode-p 'org-mode)
+             (not (seq-some (lambda (b)
+                              (and (not (eq b (current-buffer)))
+                                   (eq (buffer-local-value 'major-mode b) 'org-mode)))
+                            (buffer-list))))
+    (my/org-babel-kill-sessions)))
+(add-hook 'kill-buffer-hook #'my/org-kill-sessions-when-last)
+
 ;;;; Server
 
 (require 'server)
