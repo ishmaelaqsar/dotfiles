@@ -154,7 +154,7 @@ dotfiles sync --check >/dev/null 2>&1 \
     && pass "dotfiles sync --check passes" || flunk "dotfiles sync --check failed"
 # The sync engine lives in lib/ now, so nothing links it into ~/bin
 [ ! -e "$HOME/bin/sync-dotfiles" ] \
-    && pass "the sync engine is not linked into ~/bin" || flunk "~/bin/sync-dotfiles still exists"
+    && pass "the sync engine is not linked into ~/bin" || flunk "\$HOME/bin/sync-dotfiles still exists"
 [ -L "$HOME/.config/lazygit/config.yml" ] \
     && pass "lazygit config symlinked" || flunk "lazygit config missing"
 

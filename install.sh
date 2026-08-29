@@ -410,18 +410,6 @@ for script_path in "$SOURCE_BIN_DIR"/*; do
 done
 
 # -----------------------------
-# Install Starship (Prompt)
-# -----------------------------
-if ! command -v starship >/dev/null; then
-    if [ "$DRY_RUN" -eq 1 ]; then
-        echo "  [dry-run] install Starship into $TARGET_DIR/bin"
-    else
-        echo "Installing Starship..."
-        curl -sS https://starship.rs/install.sh | sh -s -- -y -b "$TARGET_DIR/bin"
-    fi
-fi
-
-# -----------------------------
 # Fonts (0xProto Nerd Font, vendored in general/)
 # -----------------------------
 if [ "$IN_CONTAINER" -eq 1 ]; then

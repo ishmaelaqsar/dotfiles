@@ -34,9 +34,9 @@ Environment:
 
 Examples:
   vm list                        # every machine the daemon knows
-  vm -n debian12 start           # start one machine
+  vm -n debian13 start           # start one machine
   vm status                      # the state and the address of $VM_NAME
-  vm create --ram 4096 --cpu 4   # a new Debian 12 machine
+  vm create --ram 4096 --cpu 4   # a new Debian 13 machine
   vm create --iso ~/iso/alpine.iso --variant alpine3.19
   vm                             # pick a machine, and print its status
   vm ssh                         # open a session
@@ -503,7 +503,7 @@ def cmd_create(args):
     ram = args.ram or "2048"  # Bumped to 2GB for modern OS comfort
     vcpus = args.cpu or "2"
     disk_size = args.disk or "20"
-    variant = args.variant or "debian12"
+    variant = args.variant or "debian13"
 
     print(
         f"🔨 Preparing to create VM '{name}' on {BACKEND.os_type} ({BACKEND.arch})..."
@@ -520,17 +520,17 @@ def cmd_create(args):
         location_args = ["--cdrom", iso_path]
         print(f"   Source: ISO ({iso_path})")
     else:
-        # Debian 12 netinst, for this architecture
+        # Debian 13 netinst, for this architecture
         if BACKEND.arch in ("aarch64", "arm64"):
             installer_arch = "arm64"
-            print(f"   Source: Debian 12 (Bookworm) Network Install (ARM64)")
+            print(f"   Source: Debian 13 (Trixie) Network Install (ARM64)")
         else:
             installer_arch = "amd64"
-            print(f"   Source: Debian 12 (Bookworm) Network Install (AMD64)")
+            print(f"   Source: Debian 13 (Trixie) Network Install (AMD64)")
 
         location_args = [
             "--location",
-            f"http://deb.debian.org/debian/dists/bookworm/main/installer-{installer_arch}/",
+            f"http://deb.debian.org/debian/dists/trixie/main/installer-{installer_arch}/",
         ]
 
     # The base virt-install command
@@ -791,7 +791,7 @@ def main():
         "--iso", help="A local ISO file. It replaces the network install."
     )
     create_p.add_argument(
-        "--variant", help="The OS variant, such as ubuntu22.04. Default debian12."
+        "--variant", help="The OS variant, such as ubuntu24.04. Default debian13."
     )
 
     # Tools

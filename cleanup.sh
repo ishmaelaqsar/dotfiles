@@ -24,6 +24,10 @@ done
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SELF_DIR="$(cd "$SCRIPT_DIR" && pwd -P)"
 
+# The package table, so the summary at the end names what install.sh installs
+# today rather than a list that drifts.
+source "$SCRIPT_DIR/lib/pkg.sh"
+
 # Same guard as install.sh: if a different checkout owns this home, nothing
 # here was installed by us — removing fonts/config would break that setup.
 OTHER_DIR="$(cd "$HOME/.dotfiles" 2>/dev/null && pwd -P || true)"
@@ -170,8 +174,9 @@ fi
 echo
 echo "Done: $removed item(s) removed."
 echo "System packages are not uninstalled. Installed by these scripts (remove manually if wanted):"
-echo "  install.sh:    eza fd/fdfind ripgrep fzf git-delta lazygit tmux bash-completion gnupg pinentry opencode ghostty"
-echo "                 wl-clipboard (desktop), pacman-contrib + yay (Arch)"
+# Every row that install.sh can select on some machine, by its first name.
+TABLE_TOOLS="$(while IFS= read -r commands; do printf '%s ' "$(__pkg_primary "$commands")"; done < <(__pkg_select base linux desktop arch))"
+echo "  install.sh:    ${TABLE_TOOLS}opencode ghostty, and yay on Arch"
 echo "  System units left enabled (disable by hand): pcscd.socket, paccache.timer"
 echo "  setup-c.sh:    build-essential/base-devel gdb lldb clangd cmake valgrind"
 echo "  setup-go.sh:   go"

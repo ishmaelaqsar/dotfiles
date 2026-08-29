@@ -14,7 +14,7 @@ environment. They work on **macOS**, **Linux**, and inside **VS Code Dev Contain
 VS Code can install the dotfiles in every container. Open Settings (`Cmd+,` or `Ctrl+,`), search
 for **Dotfiles**, and set three fields:
 
-1. **Repository** — `your-github-username/dotfiles`
+1. **Repository** — `ishmaelaqsar/dotfiles`
 2. **Install Command** — `install.sh`
 3. **Target Path** — `~/.dotfiles`
 
