@@ -119,7 +119,7 @@ class VMBackend:
                     "--machine",
                     "virt",
                     "--boot",
-                    "uefi",  # Essential for ARM64
+                    "uefi",  # aarch64 boots through UEFI only
                 ]
 
             # The macOS builds support Spice poorly, so use VNC with
@@ -312,7 +312,7 @@ def get_vm_ip(vm_name):
 def wait_for_ip(vm_name):
     """Poll for the address of a machine, and return it, or None.
 
-    A machine that has just booted has no address yet, so every command that
+    A machine that booted a moment ago has no address yet, so every command that
     needs one waits here. It prints a dot per try, because a silent minute
     looks like a hang.
     """
@@ -423,7 +423,7 @@ def cmd_delete(args):
     """Delete the machine, its disk and its NVRAM."""
     name = require_vm_name(args)
 
-    print(f"⚠️  WARNING: This will PERMANENTLY DELETE '{name}' and all its disk images.")
+    print(f"This deletes '{name}' and its disk images. There is no undo.")
 
     if args.dry_run:
         print(f"🛑 [DRY-RUN] Skipping confirmation input.")
@@ -500,7 +500,7 @@ def cmd_create(args):
         check_default_network()
 
     # Defaults
-    ram = args.ram or "2048"  # Bumped to 2GB for modern OS comfort
+    ram = args.ram or "2048"  # 2 GB: a current installer needs it
     vcpus = args.cpu or "2"
     disk_size = args.disk or "20"
     variant = args.variant or "debian13"

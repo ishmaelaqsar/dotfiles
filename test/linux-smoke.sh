@@ -182,7 +182,7 @@ done
 say "setup-sbcl.sh"
 if [ "${SMOKE_EMULATED:-0}" = "1" ]; then
     # SBCL hangs compiling ASDF under qemu; bootstrap is distro-independent
-    # and proven natively elsewhere — just verify the package name here
+    # and proven natively elsewhere, so verify the package name only
     echo "note: skipping SBCL/quicklisp under emulation; checking package name only"
     if command -v pacman >/dev/null 2>&1; then
         pacman -Si sbcl >/dev/null 2>&1 && pass "pacman knows 'sbcl'" || flunk "no 'sbcl' package in pacman repos"

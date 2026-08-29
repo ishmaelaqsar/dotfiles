@@ -1,6 +1,4 @@
-" ============================================================
-" Minimal Vi/Vim Configuration
-" ============================================================
+" Minimal vi configuration: syntax, line numbers, 4-space indent, smart search.
 set nocompatible              " Disable legacy vi compatibility (enables standard features)
 syntax on                     " Enable syntax highlighting
 set number                    " Show line numbers

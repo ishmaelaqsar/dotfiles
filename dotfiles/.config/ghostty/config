@@ -11,7 +11,7 @@ macos-titlebar-style = native
 cursor-style = block
 cursor-style-blink = false
 
-# `clipboard` = copy selections to the system clipboard too, not just the
+# `clipboard` = copy selections to the system clipboard too, not only the
 # primary selection (`true` never reaches ctrl+shift+v on Linux)
 copy-on-select = clipboard
 

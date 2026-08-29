@@ -118,8 +118,8 @@ def cmd_status(_args):
     healthy = run_script_quiet("install.sh", "--check") == 0
     print(f"Machine:    {'every check passes' if healthy else 'a check failed'}")
 
-    # A dotfile edit takes effect at once, through the symlink, so it is easy to
-    # leave one uncommitted. Report it, but do not call it a failure.
+    # A dotfile edit takes effect at once, through the symlink, so one is often
+    # left uncommitted. Report it, but do not call it a failure.
     changes = git("status", "--short")
     print()
     if changes:
@@ -169,7 +169,7 @@ def cmd_sync(args):
     if args.target:
         engine_args.append(args.target)
 
-    # A write into the home directory of another checkout would hijack it. A
+    # A write into the home directory of another checkout would take it over. A
     # check and a dry run change nothing, so let those through.
     if not (args.check or args.dry_run) and not args.target:
         other = home_owned_by_other()

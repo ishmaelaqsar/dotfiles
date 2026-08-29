@@ -38,7 +38,7 @@ STATE_FILE = (
     / "gnome-settings.json"
 )
 
-# Relocatable schema for the one custom keybinding we own. The trailing slash
+# Relocatable schema for the one custom keybinding this repository owns. The trailing slash
 # is part of the path, and gsettings rejects the path without it.
 KB_PATH = "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/dotfiles-terminal/"
 KB_SCHEMA = f"org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:{KB_PATH}"
@@ -140,7 +140,7 @@ def apply():
     state = load_state()
 
     def remember(schema, key, current):
-        # setdefault, so a re-run never records our own value over the
+        # setdefault, so a re-run never records the value set here over the
         # pre-dotfiles one, and a key added later still gets recorded.
         state.setdefault(f"{schema} {key}", current)
 

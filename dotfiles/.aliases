@@ -1,4 +1,4 @@
-# Allow aliases to be sudo'ed (e.g. 'sudo ll')
+# Let an alias follow sudo (for example `sudo ll`)
 alias sudo='sudo '
 
 alias ..='cd ..'

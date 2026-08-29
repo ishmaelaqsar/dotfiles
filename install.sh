@@ -294,7 +294,7 @@ if [ "$PKG_MGR" = "pacman" ] && [ "$IS_HOME_INSTALL" -eq 1 ] && [ "$IN_CONTAINER
     if __bootstrap_aur_helper; then
         PKG_MGR="$(__detect_pkg_mgr)"
     else
-        __warn "no AUR helper — AUR-only packages will be skipped."
+        __warn "no AUR helper — AUR-only packages are skipped."
     fi
 fi
 
@@ -496,8 +496,7 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
         echo "Warning: pinentry-mac not found. Please run: brew install pinentry-mac"
     fi
 else
-    # Linux: Try standard pinentries in order of preference
-    # We prefer GUI (gnome3/qt) if available, falling back to curses/tty
+    # Linux: prefer a GUI pinentry, then curses, then tty
     if command -v pinentry-gnome3 >/dev/null; then
         PINENTRY_PATH=$(command -v pinentry-gnome3)
     elif command -v pinentry-qt >/dev/null; then
@@ -567,7 +566,7 @@ else
         echo "  -> Enabling gpg-agent-ssh.socket"
         __run systemctl --user enable gpg-agent-ssh.socket 2>/dev/null \
             || __warn "could not enable gpg-agent-ssh.socket."
-        # Starting it now fails when the agent this script just reloaded
+        # Starting it now fails when the agent this script reloaded a moment ago
         # already holds the socket file. The enable above is what matters —
         # systemd takes the socket at the next login.
         if [ "$DRY_RUN" -eq 0 ]; then

@@ -9,8 +9,8 @@ source "$SCRIPT_DIR/lib/pkg.sh"
 PKG_MGR="$(__detect_pkg_mgr)"
 
 if [[ "$OSTYPE" == darwin* ]]; then
-    # Xcode CLT provides clang, clangd, lldb and make. gdb is skipped on
-    # macOS (codesigning hassle) — lldb is the debugger here.
+    # Xcode CLT provides clang, clangd, lldb and make. gdb needs a code-signing
+    # certificate on macOS, so lldb is the debugger there.
     if ! xcode-select -p >/dev/null 2>&1; then
         echo "Installing Xcode Command Line Tools (dialog will appear)..."
         xcode-select --install

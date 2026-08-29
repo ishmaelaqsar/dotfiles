@@ -243,7 +243,7 @@ add_secret() {
 # ones.
 load_secrets() {
     echo "Loading secrets from YubiKey..."
-    # Pass all arguments (e.g., specific keys) down to the python script
+    # Pass every argument (for example, named keys) down to the Python script
     eval "$(manage-secrets decrypt "$@")"
 }
 
@@ -308,7 +308,7 @@ if command -v kubectl >/dev/null 2>&1; then
         # --tail=-1 ensures it grabs from the very beginning of the container's life
         kubectl logs -n "$namespace" "$pod" --all-containers --timestamps --tail=-1 > "$filename"
 
-        echo "✅ Done. You can now open $filename in your editor."
+        echo "Wrote $filename."
     }
 
     kube-crash() {
@@ -328,7 +328,7 @@ if command -v kubectl >/dev/null 2>&1; then
         fi
 
         echo "Fetching previous (crashed) logs for '$pod' in '$namespace'..."
-        # The -p flag (previous) is the magic here
+        # -p reads the log of the previous container instance
         kubectl logs -n "$namespace" "$pod" -p --all-containers | less
     }
 
@@ -435,7 +435,7 @@ dotfiles() {
 }
 
 # sb: enter the vault and launch the terminal agent over it as a second brain.
-# Forwards any args to opencode (e.g. `sb /brief`).
+# Forwards any arguments to opencode (for example `sb /brief`).
 sb() {
     cd "$OBSIDIAN_VAULT" || return 1
     if command -v opencode >/dev/null 2>&1; then
