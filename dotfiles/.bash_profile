@@ -57,28 +57,24 @@ export VM_USER="ishmael"
 export WORKSPACE="$HOME/workspace"
 
 # ------------------------------------------------------------
-# Editor: Emacs where it is installed, then VS Code, then vi
+# Editor: emacsclient, then a plain emacs, then vi
 # ------------------------------------------------------------
 # emacsclient needs a running Emacs. -t opens in the terminal, -c a new frame,
 # and -a '' starts a daemon when none runs, so a git commit never hangs on a
-# missing server. "code --wait" is the VS Code CLI; --wait matters for git.
+# missing server. A machine with emacs but no client (a minimal install) gets
+# emacs -nw -q, and a machine with no Emacs at all keeps vi.
 if command -v emacsclient >/dev/null 2>&1; then
     export EDITOR="emacsclient -t -a ''"
     export VISUAL="emacsclient -c -a ''"
-    export GIT_EDITOR="$EDITOR"
-elif command -v code >/dev/null 2>&1; then
-    export EDITOR='vi'
-    export VISUAL='code --wait'
-    export GIT_EDITOR='code --wait'
+elif command -v emacs >/dev/null 2>&1; then
+    export EDITOR='emacs -nw -q'
+    export VISUAL="$EDITOR"
 else
     export EDITOR='vi'
     export VISUAL="$EDITOR"
 fi
+export GIT_EDITOR="$EDITOR"
 
-
-# lazygit looks in ~/Library/Application Support on macOS, and in ~/.config on
-# Linux. Name the file, so one config serves both platforms.
-export LG_CONFIG_FILE="$HOME/.config/lazygit/config.yml"
 
 # ============================================================
 # Load User .bashrc (for interactive shells)

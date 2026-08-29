@@ -30,12 +30,12 @@ git clone https://github.com/ishmaelaqsar/dotfiles.git ~/.dotfiles
 `install.sh` does these steps:
 
 1. **Install the packages** with the manager it finds (brew, apt, yay, paru, pacman or dnf):
-   `eza`, `fd`, `ripgrep`, `fzf`, `git-delta`, `lazygit`, `tmux` and more. The list is data —
-   see [The package table](#the-package-table). Some packages are best-effort: `lazygit` is not in
-   Fedora's base repos, and `lazydocker` is not in Debian's. It also installs
+   `eza`, `fd`, `ripgrep`, `fzf`, `git-delta`, `tmux` and more. The list is data —
+   see [The package table](#the-package-table). Some packages are best-effort: `lazydocker` is
+   not in Debian's repos. It also installs
    [OpenCode](https://opencode.ai) and [Ghostty](https://ghostty.org), which can fail without
    stopping the run. On Arch it builds **yay** first when no AUR helper exists.
-2. **Link the config files** (`.bashrc`, `.vimrc`, and the rest) into your home directory.
+2. **Link the config files** (`.bashrc`, `.editorconfig`, and the rest) into your home directory.
 3. **Link the scripts** in `bin/` into `$HOME/bin`.
 4. **Install the 0xProto Nerd Font** from `general/0xProto/`.
 5. **Configure global git**: the identity, the global ignore and attributes files, and **delta**
@@ -165,6 +165,7 @@ links them into `$HOME/bin`: `lib/sync-dotfiles` writes the symlinks, and `lib/p
 | `venv` | Create and inspect Python virtual environments. It prefers uv. | It prints the environment path |
 | `vm` | Manage one QEMU machine through virsh and virt-install. A missing tool is reported with the package name this host uses. | It picks a machine, and prints its status |
 | `gnome-settings` | Apply, dump or restore the managed GNOME keys. | It prints the help |
+| `ediff` | Compare two files in Emacs, in the terminal. `pacnew` runs it as `DIFFPROG`. | It prints an Emacs error |
 
 None of them is a TUI, and **none of them needs a terminal**. `vm` and `manage-secrets get` offer
 an `fzf` picker when a name is missing and a terminal is there, because looking a name up and
@@ -204,16 +205,20 @@ Two details are deliberate:
 
 Emacs, where `setup-emacs.sh` has installed it. `.bash_profile` then sets `EDITOR` to
 `emacsclient -t -a ''` and `VISUAL` to `emacsclient -c -a ''`: the terminal for a git commit, a
-frame for a large edit, and `-a ''` starts the daemon when none runs. On a machine without Emacs
-the old pair applies: VS Code (`code --wait`) as `VISUAL`, and vi for a quick edit through the
-minimal `.vimrc`.
+frame for a large edit, and `-a ''` starts the daemon when none runs. A machine with `emacs` but
+no client gets `emacs -nw -q`; a machine with no Emacs keeps vi. Two openers: `ce` picks a
+directory under `$WORKSPACE` with fzf and opens it in a frame, and `alt+shift+o` in Ghostty does
+the same for the current directory.
 
-The init is `dotfiles/.config/emacs/init.el`, about 140 lines on the built-ins of Emacs 30:
+The init is `dotfiles/.config/emacs/init.el`, written in the built-in `use-package` on Emacs 30:
 `eglot` over the language servers the other `setup-*.sh` scripts install, the tree-sitter modes
-with a grammar fetched on first use, `fido-vertical-mode` for completion, and generated files
-under `~/.local/state/emacs/` (`early-init.el` sends the native-compilation cache there too). Two packages come from MELPA: Sly for Common Lisp, and Magit on
-`C-x g`. No framework, and no vim keys: the point is the Emacs keys the rest of the repository
-already uses.
+with a grammar fetched on first use, terminal polish for `emacsclient -t` (mouse, OSC 52
+clipboard, 24-bit colour), and generated files under `~/.local/state/emacs/` (`early-init.el`
+sends the native-compilation cache there too). Five packages come from MELPA: Sly for Common
+Lisp, Magit on `C-x g`, and Vertico, Orderless and Consult, which make the minibuffer the fuzzy
+picker. `consult-ripgrep` and `consult-fd` run the installed `rg` and `fd` with a live preview,
+and `xref` searches with `rg` as well. fzf stays in the shell. No framework, and no vim keys: the
+point is the Emacs keys the rest of the repository already uses.
 
 To change the editor on one machine, drop a file in `~/.bashrc.d/`, which is sourced last, and
 export the three variables:
@@ -333,34 +338,6 @@ compositor setup first — see `quick-terminal.conf`. GNOME cannot host it at al
 
 ---
 
-## lazygit
-
-The config is in `dotfiles/.config/lazygit/config.yml`. `lg` is the alias.
-
-lazygit runs its own `git diff` and **ignores `core.pager`**, so the config names `delta` a second
-time. Three flags matter:
-
-* `--paging=never` stops delta from starting a pager inside lazygit's panel.
-* `--no-gitconfig` makes delta ignore the machine's `[delta]` keys. A machine that sets
-  side-by-side globally is unreadable in a panel this narrow, and delta cannot turn the option off
-  for one call.
-* `--dark` matches the terminal theme.
-
-The config sets no editor and no theme, on purpose. lazygit reads `EDITOR` and `VISUAL` from
-`.bash_profile`, and it draws with the colours of the terminal, so the Ghostty theme already
-applies.
-
-`Ctrl-G` in the Local Branches tab runs `git-gone` from `.helpers`, which deletes every local
-branch whose upstream is gone. It runs through `bash -lc`, because `git-gone` is a shell function.
-
-lazygit reads `~/.config/lazygit/` on Linux, but `~/Library/Application Support/lazygit/` on
-macOS. `.bash_profile` therefore exports `LG_CONFIG_FILE`, so one file serves both. Run
-`lazygit --print-config-dir` when a machine seems to ignore the config. That command follows
-`LG_CONFIG_FILE` only when the file at the end of it exists. An answer of
-`Library/Application Support` on macOS therefore means the symlink is missing, not the export.
-
----
-
 ## tmux
 
 The config is `dotfiles/.config/tmux/tmux.conf`, and the menus it reads are in
@@ -383,7 +360,7 @@ speed whether or not you read the menu, so `C-x 2` still splits a pane. Five row
 | `C-x C-n` | resize | `h j k l` by a step, `H J K L` by one cell, tile evenly |
 | `C-x C-o` | session | pick, next, previous, new, rename, detach, kill, reload the config |
 | `C-x C-s` | copy | copy mode, search, top and end of the history, paste, buffer list |
-| `C-x t` | tools | lazygit, lazydocker, the `vm` picker, htop, ncdu — each in a popup |
+| `C-x t` | tools | Magit, lazydocker, the `vm` picker, htop, ncdu — each in a popup |
 
 The tools rows open a popup, so a full-screen program borrows the whole terminal and gives it back
 on exit. Each row checks for its tool first and says so when it is missing, rather than flashing an

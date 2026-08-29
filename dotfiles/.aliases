@@ -20,7 +20,6 @@ elif command -v fdfind >/dev/null; then
 else
     __fd() { echo "fd is not installed." >&2; return 1; }
 fi
-command -v lazygit >/dev/null && alias lg='lazygit'
 command -v lazydocker >/dev/null && alias lzd='lazydocker'
 if command -v eza >/dev/null; then
     alias ls='eza --icons --group-directories-first'
@@ -40,7 +39,8 @@ fi
 # Arch upkeep (pacman-contrib). An upgrade leaves .pacnew files behind and
 # never says so, and the package cache grows without limit.
 command -v checkupdates >/dev/null && alias pacup='checkupdates'
-command -v pacdiff >/dev/null && alias pacnew='sudo DIFFPROG=vimdiff pacdiff'
+# pacdiff runs under sudo, where ~/bin is not on PATH, so the path is absolute.
+command -v pacdiff >/dev/null && alias pacnew="sudo DIFFPROG=$HOME/bin/ediff pacdiff"
 command -v paccache >/dev/null && alias paccleanup='sudo paccache -rk2'
 command -v pacman >/dev/null && alias pacorphans='pacman -Qtdq'
 
@@ -61,15 +61,17 @@ else
     __FZF_DIR_PREVIEW='ls -A {}'
 fi
 
-# Usage: cv some-project-name
-# Fuzzy find a folder and opens it in VS Code
-cv() {
+# Usage: ce some-project-name
+# Fuzzy find a directory under $WORKSPACE, and open it in an Emacs frame (Dired).
+# --alternate-editor= with an empty value starts a daemon when none runs, and
+# needs no quoting inside the function, unlike -a ''.
+ce() {
     local dir
     dir=$(__fd --type d --max-depth 3 . "$WORKSPACE" \
         | fzf --height 40% --reverse --query="$1" --select-1 --exit-0 \
               --preview "$__FZF_DIR_PREVIEW" --preview-window "right,50%")
     if [ -n "$dir" ]; then
-        code "$dir"
+        emacsclient -c --alternate-editor= "$dir"
     fi
 }
 

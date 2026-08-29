@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# ediff A B: compare two files in Emacs, in the terminal. pacdiff calls it as
+# DIFFPROG, under sudo, so -q: root has no init and needs none for ediff.
+exec emacs -nw -q --eval "(ediff-files \"$1\" \"$2\")"

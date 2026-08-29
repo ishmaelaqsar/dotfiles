@@ -15,8 +15,8 @@ cursor-style-blink = false
 # primary selection (`true` never reaches ctrl+shift+v on Linux)
 copy-on-select = clipboard
 
-# Meta + Shift + O to open the current directory in VS Code
-keybind = alt+shift+o=text:code .\r
+# Meta + Shift + O opens the current directory in an Emacs frame (Dired)
+keybind = alt+shift+o=text:emacsclient -c --alternate-editor= .\r
 
 # Machine-local overrides (untracked); opt in to the quick terminal here
 # with `config-file = quick-terminal.conf` (automatic on macOS via install.sh)

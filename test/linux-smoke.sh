@@ -129,15 +129,7 @@ if command -v delta >/dev/null 2>&1; then
 else
     echo "note: delta absent — pager wiring skipped, as install.sh does"
 fi
-# lazygit is packaged for apt, pacman and brew, but is not in Fedora's base repos
-if command -v lazygit >/dev/null 2>&1; then pass "lazygit on PATH"
-elif command -v dnf >/dev/null 2>&1; then echo "note: lazygit needs a COPR on Fedora — best-effort, skipped"
-else flunk "lazygit missing (packaged for apt and pacman)"
-fi
 bash -lic 'type ll' >/dev/null 2>&1 && pass "aliases load in interactive shell" || flunk "aliases failed to load"
-# lazygit reads a different directory per platform, so the path is exported
-[ -n "$(bash -lic 'echo "$LG_CONFIG_FILE"' 2>/dev/null)" ] \
-    && pass "LG_CONFIG_FILE exported" || flunk "LG_CONFIG_FILE not exported"
 # `dotfiles` must be the shell function, not the alias earlier versions wrote:
 # an alias expands first and would hide the function
 [ ! -f "$HOME/.bashrc.d/dotfiles_alias" ] \
@@ -155,8 +147,6 @@ dotfiles sync --check >/dev/null 2>&1 \
 # The sync engine lives in lib/ now, so nothing links it into ~/bin
 [ ! -e "$HOME/bin/sync-dotfiles" ] \
     && pass "the sync engine is not linked into ~/bin" || flunk "\$HOME/bin/sync-dotfiles still exists"
-[ -L "$HOME/.config/lazygit/config.yml" ] \
-    && pass "lazygit config symlinked" || flunk "lazygit config missing"
 
 say "setup-c.sh"
 ./setup-c.sh || flunk "setup-c.sh exited non-zero"
