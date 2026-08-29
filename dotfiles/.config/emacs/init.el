@@ -25,6 +25,9 @@
 
 ;; use-package is built in. Nothing here uses :ensure: the setup script
 ;; installs, and a missing package logs a warning instead of stopping the load.
+;; After M-x package-install, run M-x package-quickstart-refresh, because
+;; early-init.el turns package-quickstart on. M-x use-package-report measures
+;; load times when a package feels slow.
 (require 'use-package)
 
 ;;;; Generated files
@@ -56,7 +59,11 @@
         fill-column 100
         sentence-end-double-space nil
         require-final-newline t
-        scroll-conservatively 101)
+        scroll-conservatively 101
+        ;; A language server answers in one chunk, not sixteen.
+        read-process-output-max (* 1024 1024)
+        ;; The async compiler logs its warnings instead of raising a window.
+        native-comp-async-report-warnings-errors 'silent)
 
 (savehist-mode 1)
 (recentf-mode 1)
@@ -180,8 +187,10 @@ this function when every machine runs 31."
 
 ;;;; Common Lisp
 
-;; Sly loads Slynk through the Quicklisp that setup-sbcl.sh installs.
+;; Sly loads Slynk through the Quicklisp that setup-sbcl.sh installs. :commands
+;; defers it: nothing loads until the first M-x sly.
 (use-package sly
+  :commands (sly sly-connect)
   :custom (inferior-lisp-program "sbcl"))
 
 ;;;; Magit

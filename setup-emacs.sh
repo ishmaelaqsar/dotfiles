@@ -57,7 +57,7 @@ INIT="$HOME/.config/emacs/init.el"
 if [ -f "$INIT" ]; then
     echo "Installing the packages init.el selects..."
     emacs --batch --eval '(package-initialize)' -l "$INIT" \
-        --eval '(progn (package-refresh-contents) (package-install-selected-packages t))' \
+        --eval '(progn (package-refresh-contents) (package-install-selected-packages t) (package-quickstart-refresh))' \
         || echo "Warning: package install failed. Run it from Emacs: M-x package-install-selected-packages" >&2
 else
     echo "Note: $INIT is missing. Run ./install.sh to link it, then run this script again." >&2
