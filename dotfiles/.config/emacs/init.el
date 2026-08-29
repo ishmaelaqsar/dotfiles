@@ -80,6 +80,12 @@
 ;; A terminal frame draws a menu-bar line otherwise, so this is not GUI-only.
 (menu-bar-mode -1)
 
+;; Modus ships with Emacs: dark, to match Ghostty and the GNOME colour scheme,
+;; and every face pair clears WCAG AAA contrast. modus-operandi is its light
+;; twin, and M-x modus-themes-toggle switches between the two.
+(setopt modus-themes-to-toggle '(modus-vivendi modus-operandi))
+(load-theme 'modus-vivendi :no-confirm)
+
 (when (display-graphic-p)
   (tool-bar-mode -1)
   (scroll-bar-mode -1)
