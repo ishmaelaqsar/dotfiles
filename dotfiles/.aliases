@@ -7,15 +7,15 @@ alias ....='cd ../../..'
 alias ~='cd ~'
 alias -- -='cd -'  # Go back to previous directory
 
-# Modern replacements, guarded so a fresh machine keeps stock ls/grep/find.
+# Modern replacements, guarded so a fresh machine keeps stock ls/grep.
 # Debian installs fd as `fdfind`, hence the elif. The functions below call __fd,
-# so one name covers both platforms; an alias would not work inside a function.
+# so one name covers both platforms. Do not alias `find` itself: scripts that
+# the shell sources (for example sdkman-init.sh) call `find -type f`, and fd
+# rejects those flags.
 command -v rg >/dev/null && alias grep='rg --smart-case'
 if command -v fd >/dev/null; then
-    alias find='fd'
     __fd() { fd "$@"; }
 elif command -v fdfind >/dev/null; then
-    alias find='fdfind'
     __fd() { fdfind "$@"; }
 else
     __fd() { echo "fd is not installed." >&2; return 1; }

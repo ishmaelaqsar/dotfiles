@@ -7,7 +7,9 @@ set -euo pipefail
 
 if ! command -v uv >/dev/null 2>&1; then
     echo "Installing uv..."
-    curl -LsSf https://astral.sh/uv/install.sh | sh
+    # --no-modify-path stops the installer from appending to ~/.bashrc and
+    # ~/.bash_profile. The dotfiles already put ~/.local/bin on PATH.
+    curl -LsSf https://astral.sh/uv/install.sh | sh -s -- --no-modify-path
     export PATH="$HOME/.local/bin:$PATH"
 fi
 
