@@ -253,19 +253,27 @@ this function when every machine runs 31."
 
 ;; basedpyright checks types and completes, and formats nothing: pyright never
 ;; implemented textDocument/formatting. ruff is the formatter, installed as a
-;; uv tool by setup-python.sh, so run it on save. replace-buffer-contents keeps
-;; point and marks where they were.
+;; uv tool by setup-python.sh, so run it on save: first the import sorter
+;; (rule set I, the isort rules), then the formatter, the order ruff itself
+;; documents. replace-buffer-contents keeps point and marks where they were.
+(defun my/ruff--pipe (args)
+  "Pipe the buffer through ruff with ARGS. Return the output buffer, or nil."
+  (let ((out (generate-new-buffer " *ruff*")))
+    (if (zerop (apply #'call-process-region (point-min) (point-max) "ruff" nil out nil args))
+        out
+      (kill-buffer out)
+      nil)))
+
 (defun my/ruff-format-buffer ()
-  "Format the buffer with ruff, when ruff is on PATH."
+  "Sort the imports and format the buffer with ruff, when ruff is on PATH."
   (when (executable-find "ruff")
-    (let ((src (current-buffer))
-          (file (or (buffer-file-name) "stdin.py")))
-      (with-temp-buffer
-        (let ((out (current-buffer)))
-          (with-current-buffer src
-            (when (zerop (call-process-region (point-min) (point-max) "ruff" nil out nil
-                                              "format" "--stdin-filename" file "-"))
-              (replace-buffer-contents out))))))))
+    (let ((file (or (buffer-file-name) "stdin.py")))
+      (dolist (args `(("check" "--fix" "--select" "I" "--quiet" "--stdin-filename" ,file "-")
+                      ("format" "--stdin-filename" ,file "-")))
+        (let ((out (my/ruff--pipe args)))
+          (when out
+            (replace-buffer-contents out)
+            (kill-buffer out)))))))
 
 (defun my/ruff-format-on-save ()
   "Format with ruff before this buffer is saved."
