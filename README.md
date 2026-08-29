@@ -211,7 +211,7 @@ minimal `.vimrc`.
 The init is `dotfiles/.config/emacs/init.el`, about 140 lines on the built-ins of Emacs 30:
 `eglot` over the language servers the other `setup-*.sh` scripts install, the tree-sitter modes
 with a grammar fetched on first use, `fido-vertical-mode` for completion, and generated files
-under `~/.local/state/emacs/`. Two packages come from MELPA: Sly for Common Lisp, and Magit on
+under `~/.local/state/emacs/` (`early-init.el` sends the native-compilation cache there too). Two packages come from MELPA: Sly for Common Lisp, and Magit on
 `C-x g`. No framework, and no vim keys: the point is the Emacs keys the rest of the repository
 already uses.
 

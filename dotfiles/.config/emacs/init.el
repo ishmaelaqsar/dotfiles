@@ -33,7 +33,10 @@
 (setopt backup-directory-alist `(("." . ,(expand-file-name "backup/" my/state-dir)))
         auto-save-file-name-transforms `((".*" ,(expand-file-name "auto-save/" my/state-dir) t))
         auto-save-list-file-prefix (expand-file-name "auto-save-list/" my/state-dir)
-        create-lockfiles nil)
+        create-lockfiles nil
+        recentf-save-file (expand-file-name "recentf" my/state-dir)
+        savehist-file (expand-file-name "history" my/state-dir)
+        save-place-file (expand-file-name "places" my/state-dir))
 
 ;;;; Defaults
 
@@ -71,6 +74,7 @@
 
 ;;;; Tree-sitter
 
+(require 'treesit)
 (setopt treesit-language-source-alist
         '((bash "https://github.com/tree-sitter/tree-sitter-bash")
           (c "https://github.com/tree-sitter/tree-sitter-c")
@@ -113,6 +117,7 @@ fetches its grammar, and the mode is entered again with it in place."
 
 ;;;; eglot
 
+(defvar eglot-server-programs)
 (with-eval-after-load 'eglot
   ;; basedpyright is not in eglot's default table.
   (add-to-list 'eglot-server-programs
@@ -129,13 +134,13 @@ fetches its grammar, and the mode is entered again with it in place."
 
 ;;;; Magit
 
+(autoload 'magit-status "magit" nil t)
 (global-set-key (kbd "C-x g") #'magit-status)
 
 ;;;; Server
 
-(unless noninteractive
-  (require 'server)
-  (unless (server-running-p)
-    (server-start)))
+(require 'server)
+(unless (or noninteractive (server-running-p))
+  (server-start))
 
 ;;; init.el ends here

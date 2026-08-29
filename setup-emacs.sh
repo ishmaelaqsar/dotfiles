@@ -26,10 +26,18 @@ if [[ "$OSTYPE" == darwin* ]]; then
     if ! command -v emacs >/dev/null 2>&1; then
         __pkg_raw brew emacs-plus@30
     fi
+    # Spotlight indexes both /Applications and ~/Applications. A user outside
+    # the admin group cannot write the first, so fall back to the second.
     APP="$(brew --prefix emacs-plus@30 2>/dev/null)/Emacs.app"
-    if [ -d "$APP" ] && [ ! -e /Applications/Emacs.app ]; then
-        ln -sfn "$APP" /Applications/Emacs.app \
-            || echo "Note: could not link $APP into /Applications. Do it by hand." >&2
+    APP_DIR=/Applications
+    [ -w "$APP_DIR" ] || APP_DIR="$HOME/Applications"
+    if [ -d "$APP" ] && [ ! -e "$APP_DIR/Emacs.app" ]; then
+        mkdir -p "$APP_DIR"
+        if ln -sfn "$APP" "$APP_DIR/Emacs.app"; then
+            echo "Linked Emacs.app into $APP_DIR."
+        else
+            echo "Note: could not link $APP into $APP_DIR. Do it by hand." >&2
+        fi
     fi
 else
     __pkg_install "$PKG_MGR" emacs
