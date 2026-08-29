@@ -10,10 +10,9 @@ Do **not** git commit — leave syncing to the vault's own mechanism.
 1. Today's file is `Daily Notes/<YYYY-MM-DD>.md` (use the current date). Create it if missing.
 2. Append the content from `$ARGUMENTS` (or the relevant snippet/command/thought from context)
    as a new top-level bullet:
-   - Inline-tag the topic, e.g. `* #homelab <note>`.
+   - Inline-tag the topic, for example `* #homelab <note>`.
    - Put commands/code in a fenced block under the bullet.
    - Keep it terse — this is an inbox, not a polished note.
 3. If the captured item is clearly durable (reusable knowledge, a real project, a reminder),
-   say so and suggest promoting it via `/kb`, `/project`, or `/remind` — but still capture it
-   here now.
+   say so and suggest `/kb`, `/project`, or `/remind` for it. Still capture it here now.
 4. Report the line(s) appended.

@@ -26,4 +26,4 @@ Do **not** git commit — leave syncing to the vault's own mechanism.
 3. Do **not** delete reminders when handled later — they get `done: true`.
 4. Report: the subject, the resolved due date (echo it back so the user can catch a misparse),
    and the path. Note that firing/pinging is handled by an always-on agent once one is set up;
-   for now this just records the reminder.
+   for now this records the reminder only.

@@ -4,7 +4,7 @@ description: "Digest of the Obsidian vault at $OBSIDIAN_VAULT: due/overdue remin
 
 Produce a concise terminal digest of the second-brain vault at `$OBSIDIAN_VAULT` (resolve from
 the environment; default `~/vault`). **Read-only by default** — report; only modify notes if the
-user explicitly asks (e.g. "mark X done", "bump that project"). Never git commit.
+user explicitly asks (for example "mark X done", "bump that project"). Never git commit.
 
 Use today's date for all date math. Gather and report, in this order:
 
@@ -17,11 +17,11 @@ Use today's date for all date math. Gather and report, in this order:
 2. **Projects in flight** (`Projects/Progressing/*.md`): title + a one-line status from the
    summary/frontmatter. Also note counts for `Pending` and anything in `Shelved`.
 
-3. **Health lint** (keep it light — flag, don't fix):
+3. **Health lint** (keep it light — flag, do not fix):
    - **Stale** — `Progressing` projects whose `updated` is > 21 days ago.
    - **Status drift** — a project whose `status` frontmatter doesn't match its folder.
    - **Orphans** — notes with no inbound `[[links]]` and no tags.
-   - **Broken links** — `[[targets]]` that don't resolve to a note.
+   - **Broken links** — `[[targets]]` that do not resolve to a note.
    - **Past-due unhandled** — reminders long overdue and never marked `done`.
 
 Keep the output tight and scannable (short headers + bullet lists). End with a one-line

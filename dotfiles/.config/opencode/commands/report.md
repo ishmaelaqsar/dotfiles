@@ -4,14 +4,14 @@ description: "Write up the current session's investigation/analysis as a point-i
 
 Capture the current investigation/analysis as a **report** note in the Obsidian vault at
 `$OBSIDIAN_VAULT` (resolve from the environment; default `~/vault`). A report is a
-*point-in-time* findings document (what we learned on date X), distinct from `/kb` (evergreen
+*point-in-time* findings document (what was learned on date X), distinct from `/kb` (evergreen
 reference) and `/project` (tracked work).
 
 If the vault has its own `AGENTS.md`, read it first and follow its conventions (tags, backlinks,
 lint rules).
 
 1. **Decide the subject & title** from `$ARGUMENTS` if given, else from the recent conversation
-   (the investigation just completed).
+   (the investigation completed in this session).
 2. **Target** `Reports/YYYY-MM-DD <Title>.md` (today's date; create the `Reports/` folder if
    missing). If a report on the same subject from today already exists, offer to extend it.
 3. **Write the note**, lint-clean, with frontmatter:
@@ -26,7 +26,7 @@ lint rules).
    ---
    ```
 
-   Body structure (adapt to the subject — don't pad):
+   Body structure (adapt to the subject; do not pad):
    - Lead with a `> [!summary]` callout: the finding, the cause, the recommendation, in a few lines.
    - **Headline numbers** as a table where the analysis is quantitative.
    - Numbered/titled **findings** sections; use tables for data and `> [!note]`/`> [!warning]`
@@ -34,7 +34,7 @@ lint rules).
    - A **recommendations / what-to-do** list.
    - A **Source & method** footer: where the data came from, how it was computed, and any
      reproduction caveats — so the report is auditable later.
-4. Cross-link related vault notes with `[[…]]` and inline `#tags`. Prefer linking over duplicating.
+4. Cross-link related vault notes with `[[…]]` and inline `#tags`. Prefer a link over a copy.
 5. **Do not git commit** — leave syncing to the vault's own mechanism. Keep markdown lint-clean
    (one H1, blank lines around headings/lists, frontmatter at the very top).
 6. Report the path written and the tags used.
