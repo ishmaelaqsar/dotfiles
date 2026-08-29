@@ -22,7 +22,9 @@ if [[ "$OSTYPE" == darwin* ]]; then
     if brew trust --help >/dev/null 2>&1; then
         brew trust d12frosted/emacs-plus >/dev/null 2>&1 || true
     fi
-    # Native compilation is the default of this formula, so no option.
+    # Native compilation is the default of this formula, so no option. 31 is in
+    # the tap as emacs-plus@31; bump when Debian carries it, and delete the
+    # grammar hook in init.el, which treesit-auto-install-grammar replaces.
     if ! command -v emacs >/dev/null 2>&1; then
         __pkg_raw brew emacs-plus@30
     fi
