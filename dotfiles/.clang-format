@@ -1,0 +1,10 @@
+# The clang-format style for code with no .clang-format of its own. clang-format
+# walks up from the file to the root and stops at the first .clang-format it
+# meets, so a project's file wins, and this one, linked to ~/.clang-format,
+# covers everything else under the home directory. clangd formats with it.
+BasedOnStyle: LLVM
+IndentWidth: 4
+ColumnLimit: 100
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: Never
+PointerAlignment: Left

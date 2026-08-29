@@ -128,12 +128,12 @@ machine that needs them. They are idempotent.
 
 | Script | Toolchain | LSP | Debugger |
 | :--- | :--- | :--- | :--- |
-| `setup-c.sh` | C/C++ (CLT / build-essential / base-devel), cmake | clangd | lldb, gdb + valgrind (Linux) |
+| `setup-c.sh` | C/C++ (CLT / build-essential / base-devel), cmake | clangd | lldb, gdb + valgrind (Linux); Dape in Emacs |
 | `setup-python.sh` | uv (manages interpreters) | ruff + basedpyright | debugpy |
 | `setup-go.sh` | go | gopls | delve |
 | `setup-java.sh` | sdkman → Temurin LTS, maven, gradle | jdtls (brew/AUR) | JDWP/jdb (in the JDK) |
 | `setup-sbcl.sh` | SBCL + Quicklisp | none — CL uses Swank/Slynk via the editor | SBCL built-in |
-| `setup-emacs.sh` | Emacs 30 (`emacs-plus@30` on macOS, the pgtk package on Linux) and the packages `init.el` selects: Sly, Magit, Vertico, Orderless, Consult, Marginalia, Embark, Avy, Corfu, Cape | `eglot`, built in, over the servers the rows above install | none |
+| `setup-emacs.sh` | Emacs 30 (`emacs-plus@30` on macOS, the pgtk package on Linux) and the packages `init.el` selects: Sly, Magit, Vertico, Orderless, Consult, Marginalia, Embark, Avy, Corfu, Cape, Dape | `eglot`, built in, over the servers the rows above install | none |
 | `setup-yk.sh` | [yk](https://github.com/ishmaelaqsar/yk), the YubiKey maintenance tool | none | none |
 
 These scripts share the package-manager logic in `lib/pkg.sh`, and the name mappings in
@@ -227,6 +227,12 @@ candidate or the thing at point (`C-.`, `C-;`), and any prefix followed by `C-h`
 Avy jumps to a visible position (`M-j`, then the characters you see); Corfu completes at point
 in a graphical frame, with Cape adding buffer words and file paths. A terminal frame on Emacs 30
 cannot draw Corfu's child frame, so it keeps the built-in completion there.
+
+For C and C++, `clangd` from `setup-c.sh` is the language server, and `~/.clang-format` is the
+style for code with no `.clang-format` of its own: `clang-format` stops at the first one it meets
+walking up from the file, so a project's file wins. Debugging has two routes: `M-x gdb` and
+`M-x lldb` from `gud`, text only, and Dape (`C-x C-a d`), a DAP client with breakpoints in the
+margin and locals in a side window, over gdb's own DAP mode on Linux and `lldb-dap` on macOS.
 
 Startup is measured, not guessed: `early-init.el` holds the garbage collector and the file-name
 handlers during init and turns on `package-quickstart`; the daemon starts in about 0.45 s. After

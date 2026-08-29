@@ -23,7 +23,7 @@
 (require 'package)
 (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
 (setopt package-selected-packages
-        '(avy cape consult corfu embark embark-consult magit marginalia orderless sly vertico))
+        '(avy cape consult corfu dape embark embark-consult magit marginalia orderless sly vertico))
 
 ;; use-package is built in. Nothing here uses :ensure: the setup script
 ;; installs, and a missing package logs a warning instead of stopping the load.
@@ -230,6 +230,25 @@ this function when every machine runs 31."
   ;; basedpyright is not in eglot's default table.
   (add-to-list 'eglot-server-programs
                '((python-mode python-ts-mode) . ("basedpyright-langserver" "--stdio"))))
+
+;;;; Debugging: Dape
+
+;; A DAP client: breakpoints in the margin, locals and a REPL in side windows.
+;; gud's M-x gdb and M-x lldb stay for the text-only route. Adapters: gdb's own
+;; `-i dap' on Linux (gdb 14 or newer, which setup-c.sh installs), and lldb-dap,
+;; which Xcode ships outside PATH on macOS, hence xcrun.
+(use-package dape
+  :commands (dape dape-breakpoint-toggle)
+  :bind (("C-x C-a d" . dape)
+         ("C-x C-a b" . dape-breakpoint-toggle))
+  :custom
+  (dape-buffer-window-arrangement 'right)
+  (dape-inlay-hints t)
+  :config
+  (when (and (eq system-type 'darwin) (not (executable-find "lldb-dap")))
+    (let ((cfg (alist-get 'lldb-dap dape-configs)))
+      (plist-put cfg 'command "xcrun")
+      (plist-put cfg 'command-args '("lldb-dap")))))
 
 ;;;; Common Lisp
 

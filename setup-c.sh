@@ -29,4 +29,4 @@ fi
 
 echo "Done. Toolchain: $(cc --version 2>/dev/null | head -1 || echo 'cc not found')"
 command -v clangd >/dev/null 2>&1 && echo "LSP: $(clangd --version | head -1)" \
-    || echo "Note: clangd not on PATH — on Debian it may be versioned (clangd-XX)."
+    || echo "Note: clangd not on PATH."
