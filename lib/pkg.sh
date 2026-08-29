@@ -166,6 +166,20 @@ __pkg_sudo() {
     if [ "$(id -u)" -eq 0 ]; then __run "$@"; else __run sudo "$@"; fi
 }
 
+# Bring the package database up to date before an install. Arch needs the
+# full -Syu: a plain -S installs the versions the local database lists, which
+# every mirror has dropped once the database is stale, so each download is a
+# 404; and -Sy alone leaves a partial upgrade. dnf refreshes on its own, and
+# brew updates itself on install.
+__pkg_refresh() {
+    case "$1" in
+        apt)      __pkg_sudo apt-get update || __warn "apt-get update failed." ;;
+        yay|paru) __run "$1" -Syu --noconfirm || __warn "$1 -Syu failed." ;;
+        pacman)   __pkg_sudo pacman -Syu --noconfirm || __warn "pacman -Syu failed." ;;
+        *)        ;;
+    esac
+}
+
 # Install raw package names with no mapping or presence check
 __pkg_raw() {
     local mgr=$1; shift

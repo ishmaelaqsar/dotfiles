@@ -7,6 +7,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/pkg.sh"
 PKG_MGR="$(__detect_pkg_mgr)"
+__pkg_refresh "$PKG_MGR"
 
 if [[ "$OSTYPE" == darwin* ]]; then
     # Xcode CLT provides clang, clangd, lldb and make. gdb needs a code-signing

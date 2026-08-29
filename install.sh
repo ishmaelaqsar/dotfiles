@@ -302,9 +302,7 @@ if [ "$IN_CONTAINER" -eq 1 ]; then
     echo "[container] Skipping package installation."
 elif [ "$IS_HOME_INSTALL" -eq 1 ] && [ "$PKG_MGR" != "none" ]; then
     echo "Installing packages via $PKG_MGR (tags: ${ACTIVE_TAGS[*]})..."
-    if [ "$PKG_MGR" = "apt" ]; then
-        __pkg_sudo apt-get update || __warn "apt-get update failed."
-    fi
+    __pkg_refresh "$PKG_MGR"
 
     # The list itself lives in lib/packages.conf, selected by tag.
     __pkg_install_tagged "$PKG_MGR" "${ACTIVE_TAGS[@]}"

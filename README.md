@@ -547,6 +547,10 @@ aliases wrap the rest:
 | `paccleanup` | `paccache -rk2` | Trim the package cache by hand. |
 | `pacorphans` | `pacman -Qtdq` | List orphaned dependencies. |
 
+`install.sh` and the `setup-*.sh` scripts run `pacman -Syu` before they install. A plain `-S`
+asks the mirrors for the versions the local database lists, and once that database is stale every
+mirror answers 404; `-Sy` alone would leave a partial upgrade. So an install is also an upgrade.
+
 `dotfiles/.makepkg.conf` builds AUR packages with every core, and skips package compression.
 Nothing packages an AUR helper, so `install.sh` builds `yay-bin` once on a fresh Arch machine.
 Without it, the AUR-only packages (`jdtls`) are skipped.

@@ -9,6 +9,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/pkg.sh"
 PKG_MGR="$(__detect_pkg_mgr)"
+__pkg_refresh "$PKG_MGR"
 
 if [[ "$OSTYPE" == darwin* ]]; then
     # emacs-plus builds a real Emacs.app. The core formula is a daemon build with
