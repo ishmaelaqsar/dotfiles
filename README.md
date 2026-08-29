@@ -131,6 +131,7 @@ machine that needs them. They are idempotent.
 | `setup-go.sh` | go | gopls | delve |
 | `setup-java.sh` | sdkman → Temurin LTS, maven, gradle | jdtls (brew/AUR) | JDWP/jdb (in the JDK) |
 | `setup-sbcl.sh` | SBCL + Quicklisp | none — CL uses Swank/Slynk via the editor | SBCL built-in |
+| `setup-yk.sh` | [yk](https://github.com/ishmaelaqsar/yk), the YubiKey maintenance tool | none | none |
 
 These scripts share the package-manager logic in `lib/pkg.sh`, and the name mappings in
 [`lib/packages.conf`](#the-package-table) — the `toolchain` rows. They write shell init to
@@ -281,6 +282,15 @@ load_secrets
 `.bashrc` sets `HISTCONTROL=ignoreboth`, so a command that starts with a space
 stays out of the history file. `HISTIGNORE` also drops any `add_secret` line that
 carries a value.
+
+### Key maintenance
+
+[yk](https://github.com/ishmaelaqsar/yk) renews, rotates and reports on the subkeys. `setup-yk.sh`
+clones it into `~/.local/share/yk` and links `~/bin/yk`. `.bash_profile` exports `YK_PUBKEY`, the
+public key that `sync-dotfiles` links to `~/public.asc`, so `yk status` and `yk remind` need no
+argument. The first shell of each day runs `yk remind`. It prints nothing while every subkey is
+more than 90 days from its expiry, and a short report when one is not. The stamp that limits it
+to one run a day is `~/.local/state/dotfiles/yk-remind`.
 
 ---
 

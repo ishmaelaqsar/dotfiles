@@ -42,6 +42,11 @@ if [[ -v CONTAINER_ID ]] || [[ -n "$REMOTE_CONTAINERS" ]]; then
 fi
 
 export IDENTITY="Ishmael Aqsar <ishmael-dev@aqsar.dev>"
+
+# The public key of the YubiKey identity. sync-dotfiles links it here from
+# dotfiles/public.asc. yk reads the expiry dates from it, so `yk status` and
+# `yk remind` need no argument.
+export YK_PUBKEY="$HOME/public.asc"
 export VM_USER="ishmael"
 
 # Second brain vault — defaults to ~/vault (.helpers); override per machine:
