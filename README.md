@@ -74,6 +74,7 @@ Safety:
   is none. On a fresh macOS machine `/usr/bin/python3` is only a stub, so run
   `xcode-select --install` first.
 * After the install, run `opencode auth login` once to connect a model provider.
+* `install.sh` does not install Emacs. `setup-emacs.sh` does, on a machine that wants it.
 
 ### Check an existing install
 
@@ -131,6 +132,7 @@ machine that needs them. They are idempotent.
 | `setup-go.sh` | go | gopls | delve |
 | `setup-java.sh` | sdkman → Temurin LTS, maven, gradle | jdtls (brew/AUR) | JDWP/jdb (in the JDK) |
 | `setup-sbcl.sh` | SBCL + Quicklisp | none — CL uses Swank/Slynk via the editor | SBCL built-in |
+| `setup-emacs.sh` | Emacs 30 (`emacs-plus@30` on macOS, the pgtk package on Linux), Sly, Magit | `eglot`, built in, over the servers the rows above install | none |
 | `setup-yk.sh` | [yk](https://github.com/ishmaelaqsar/yk), the YubiKey maintenance tool | none | none |
 
 These scripts share the package-manager logic in `lib/pkg.sh`, and the name mappings in
@@ -200,13 +202,21 @@ Two details are deliberate:
 
 ## Editor
 
-* **Visual editor** — VS Code (`code --wait`). Git uses it for a commit or a merge. Use it for a
-  large edit.
-* **Terminal editor** — vi. Use it for a quick edit. The minimal `.vimrc` gives syntax
-  highlighting and standard behaviour.
+Emacs, where `setup-emacs.sh` has installed it. `.bash_profile` then sets `EDITOR` to
+`emacsclient -t -a ''` and `VISUAL` to `emacsclient -c -a ''`: the terminal for a git commit, a
+frame for a large edit, and `-a ''` starts the daemon when none runs. On a machine without Emacs
+the old pair applies: VS Code (`code --wait`) as `VISUAL`, and vi for a quick edit through the
+minimal `.vimrc`.
 
-`.bash_profile` sets both. To change the editor on one machine, drop a file in `~/.bashrc.d/`,
-which is sourced last, and export the three variables:
+The init is `dotfiles/.config/emacs/init.el`, about 140 lines on the built-ins of Emacs 30:
+`eglot` over the language servers the other `setup-*.sh` scripts install, the tree-sitter modes
+with a grammar fetched on first use, `fido-vertical-mode` for completion, and generated files
+under `~/.local/state/emacs/`. Two packages come from MELPA: Sly for Common Lisp, and Magit on
+`C-x g`. No framework, and no vim keys: the point is the Emacs keys the rest of the repository
+already uses.
+
+To change the editor on one machine, drop a file in `~/.bashrc.d/`, which is sourced last, and
+export the three variables:
 
 ```bash
 export EDITOR=emacs VISUAL=emacs GIT_EDITOR=emacs

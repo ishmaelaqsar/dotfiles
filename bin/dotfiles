@@ -13,6 +13,7 @@ one case has to live in the shell.
 
 import argparse
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -302,7 +303,9 @@ def cmd_edit(args):
     editor = os.environ.get("VISUAL") or os.environ.get("EDITOR") or "vi"
     print(f"→ {editor} {target}")
     sys.stdout.flush()
-    code = subprocess.run([*editor.split(), str(target)]).returncode
+    # shlex, not split: EDITOR may carry a quoted empty argument, as
+    # `emacsclient -t -a ''` does, and split() would drop it.
+    code = subprocess.run([*shlex.split(editor), str(target)]).returncode
 
     # A file that is new to the repository has no symlink yet. A link that
     # points somewhere else means another checkout owns this home directory.

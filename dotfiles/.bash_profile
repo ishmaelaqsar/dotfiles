@@ -57,15 +57,21 @@ export VM_USER="ishmael"
 export WORKSPACE="$HOME/workspace"
 
 # ------------------------------------------------------------
-# Editor Configuration (VS Code + Vi)
+# Editor: Emacs where it is installed, then VS Code, then vi
 # ------------------------------------------------------------
-export EDITOR='vi'
-
-# "code" is the VS Code CLI. --wait is required for git commits.
-if command -v code >/dev/null 2>&1; then
+# emacsclient needs a running Emacs. -t opens in the terminal, -c a new frame,
+# and -a '' starts a daemon when none runs, so a git commit never hangs on a
+# missing server. "code --wait" is the VS Code CLI; --wait matters for git.
+if command -v emacsclient >/dev/null 2>&1; then
+    export EDITOR="emacsclient -t -a ''"
+    export VISUAL="emacsclient -c -a ''"
+    export GIT_EDITOR="$EDITOR"
+elif command -v code >/dev/null 2>&1; then
+    export EDITOR='vi'
     export VISUAL='code --wait'
     export GIT_EDITOR='code --wait'
 else
+    export EDITOR='vi'
     export VISUAL="$EDITOR"
 fi
 

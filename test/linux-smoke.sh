@@ -202,6 +202,23 @@ if [ "$MODE" = "full" ]; then
     [ -f "$HOME/.bashrc.d/sdkman" ] && pass "sdkman bashrc.d entry" || flunk "sdkman bashrc.d entry missing"
 fi
 
+say "setup-emacs.sh (package name only; the install is large)"
+# The emacs row carries a per-distro override, so prove each distro knows it.
+if command -v pacman >/dev/null 2>&1; then
+    pacman -Si emacs-wayland >/dev/null 2>&1 && pass "pacman knows 'emacs-wayland'" || flunk "no 'emacs-wayland' package in pacman repos"
+elif command -v apt-cache >/dev/null 2>&1; then
+    apt-cache show emacs-pgtk >/dev/null 2>&1 && pass "apt knows 'emacs-pgtk'" || flunk "no 'emacs-pgtk' package in apt"
+elif command -v dnf >/dev/null 2>&1; then
+    dnf info emacs >/dev/null 2>&1 && pass "dnf knows 'emacs'" || flunk "no 'emacs' package in dnf"
+fi
+[ -L "$HOME/.config/emacs/init.el" ] && pass "emacs init symlinked" || flunk "emacs init missing"
+if [ "$MODE" = "full" ]; then
+    ./setup-emacs.sh || flunk "setup-emacs.sh exited non-zero"
+    # The init must load with no network and no grammar installed.
+    emacs --batch -l "$HOME/.config/emacs/init.el" --eval '(kill-emacs)' >/dev/null 2>&1 \
+        && pass "init.el loads in batch" || flunk "init.el failed to load"
+fi
+
 say "cleanup.sh -a"
 # printf, not `yes`: yes dies of SIGPIPE when cleanup stops reading, and
 # under pipefail that masquerades as a cleanup failure

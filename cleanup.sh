@@ -6,7 +6,8 @@ set -euo pipefail
 # Usage: ./cleanup.sh [-f] [-a]
 #   -f  skip the foreign-checkout guard
 #   -a  also remove language toolchains installed by setup-*.sh
-#       (sdkman, quicklisp, uv, yk). ~/go is never touched — it may hold code.
+#       (sdkman, quicklisp, uv, yk, Emacs packages). ~/go is never touched —
+#       it may hold code.
 #
 # System packages are never uninstalled (shared dependencies); the list to
 # remove by hand is printed at the end.
@@ -37,7 +38,7 @@ if [ -n "$OTHER_DIR" ] && [ "$OTHER_DIR" != "$SELF_DIR" ] && [ "$FORCE" -ne 1 ];
     exit 1
 fi
 
-echo "This removes dotfiles symlinks, generated config, fonts$( [ "$ALL" -eq 1 ] && echo ', and language toolchains (sdkman, quicklisp, uv, yk)')."
+echo "This removes dotfiles symlinks, generated config, fonts$( [ "$ALL" -eq 1 ] && echo ', and language toolchains (sdkman, quicklisp, uv, yk, Emacs packages)')."
 read -r -p "Proceed? [y/N] " answer
 [[ "$answer" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 0; }
 
@@ -164,6 +165,9 @@ if [ "$ALL" -eq 1 ]; then
         *"/.local/share/yk/"*) rm -f "$HOME/bin/yk" ;;
     esac
     rm -f "${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/yk-remind"
+    # Emacs: the packages and the state. init.el itself is a symlink, and the
+    # symlink pass above removed it. The emacs-plus tap stays.
+    rm -rf "$HOME/.config/emacs/elpa" "${XDG_STATE_HOME:-$HOME/.local/state}/emacs"
     rm -f "$HOME/.local/bin/uv" "$HOME/.local/bin/uvx"
     # uv tool shims are symlinks into ~/.local/share/uv, and the line above
     # left them dangling. Match on the target: deleting every dangling link in
@@ -188,4 +192,5 @@ echo "  System units left enabled (disable by hand): pcscd.socket, paccache.time
 echo "  setup-c.sh:    build-essential/base-devel gdb lldb clangd cmake valgrind"
 echo "  setup-go.sh:   go"
 echo "  setup-sbcl.sh: sbcl"
+echo "  setup-emacs.sh: emacs (emacs-plus@30 on macOS, and its tap)"
 echo "  setup-yk.sh:   none — a clone under ~/.local/share/yk, which -a removes"
