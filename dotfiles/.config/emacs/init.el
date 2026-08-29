@@ -86,12 +86,24 @@
 (setopt modus-themes-to-toggle '(modus-vivendi modus-operandi))
 (load-theme 'modus-vivendi :no-confirm)
 
-(when (display-graphic-p)
-  (tool-bar-mode -1)
-  (scroll-bar-mode -1)
-  ;; The family the terminal uses, and install.sh installs.
-  (when (member "0xProto Nerd Font Mono" (font-family-list))
-    (set-face-attribute 'default nil :family "0xProto Nerd Font Mono" :height 130)))
+(defun my/apply-frame-settings (&optional frame)
+  "Apply what depends on the frame: bars, font, and the theme's faces.
+A daemon loads the init with no frame, so `display-graphic-p' is false
+there and the theme's faces are computed for a dumb terminal. Every frame
+`emacsclient' creates later needs this run for it."
+  (with-selected-frame (or frame (selected-frame))
+    (when (display-graphic-p)
+      (tool-bar-mode -1)
+      (scroll-bar-mode -1)
+      ;; The family the terminal uses, and install.sh installs.
+      (when (member "0xProto Nerd Font Mono" (font-family-list))
+        (set-face-attribute 'default nil :family "0xProto Nerd Font Mono" :height 130)))
+    (when (daemonp)
+      (enable-theme 'modus-vivendi))))
+
+(if (daemonp)
+    (add-hook 'server-after-make-frame-hook #'my/apply-frame-settings)
+  (my/apply-frame-settings))
 
 ;;;; Terminal frames
 
