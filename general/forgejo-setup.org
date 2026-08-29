@@ -1,49 +1,46 @@
-# 📓 Forgejo Self-Hosted Git Server
-**Hardware:** Raspberry Pi Zero 2W (512MB RAM)  
-**OS:** Raspberry Pi OS Lite (64-bit)  
-**Security:** AppArmor (Enforced) + fail2ban (Active) + Caddy (DNS-01 TLS)  
-**Goal:** Send trusted mail. Push to Git quickly on the LAN. Keep global access secure.
+* 📓 Forgejo Self-Hosted Git Server
+*Hardware:* Raspberry Pi Zero 2W (512MB RAM)\\
+*OS:* Raspberry Pi OS Lite (64-bit)\\
+*Security:* AppArmor (Enforced) + fail2ban (Active) + Caddy (DNS-01 TLS)\\
+*Goal:* Send trusted mail. Push to Git quickly on the LAN. Keep global access secure.
 
----
+--------------
 
-## 🏗️ Phase 1: System Foundation
-### 1. OS & Security Prep
-* **OS:** Raspberry Pi OS Lite (64-bit).
-* **Enable AppArmor:** append ` lsm=apparmor` to the single line in
-  `/boot/firmware/cmdline.txt`. Edit the file by hand. The `sed` command below
-  is not idempotent. A kernel package upgrade can also rewrite the file. Check
-  the flag again after each upgrade.
-  ```bash
+** 🏗️ Phase 1: System Foundation
+*** 1. OS & Security Prep
+- *OS:* Raspberry Pi OS Lite (64-bit).
+- *Enable AppArmor:* append = lsm=apparmor= to the single line in =/boot/firmware/cmdline.txt=. Edit the file by hand. The =sed= command below is not idempotent. A kernel package upgrade can also rewrite the file. Check the flag again after each upgrade.
+  #+begin_src sh
   sudo sed -i '$ s/$/ lsm=apparmor/' /boot/firmware/cmdline.txt   # once only
   sudo reboot
-  ```
-  Check the result after the reboot. If `aa-status` reports `apparmor
-  filesystem is not mounted`, the flag did not take effect. Every profile below
-  is then inert:
-  ```bash
+  #+end_src
+
+  Check the result after the reboot. If =aa-status= reports =apparmor filesystem is not mounted=, the flag did not take effect. Every profile below is then inert:
+  #+begin_src sh
   grep -o 'lsm=[a-z,]*' /proc/cmdline
   sudo aa-status
-  ```
-* **Install Core Utilities & Security:**
-  ```bash
+  #+end_src
+
+- *Install Core Utilities & Security:*
+  #+begin_src sh
   sudo apt update && sudo apt upgrade -y
   sudo apt install apparmor apparmor-utils msmtp msmtp-mta fail2ban ca-certificates curl wget rclone -y
-  ```
+  #+end_src
 
-### 2. SD Card Longevity (Log2Ram)
-```bash
+*** 2. SD Card Longevity (Log2Ram)
+#+begin_src sh
 curl -L https://github.com/azlux/log2ram/archive/master.tar.gz | tar zx
 cd log2ram-master && sudo ./install.sh
 sudo reboot
-```
+#+end_src
 
----
+--------------
 
-## 📧 Phase 2: Multi-Identity Mail Relay (msmtp)
+** 📧 Phase 2: Multi-Identity Mail Relay (msmtp)
 This relay sends trusted mail from your domain aliases. It sends the mail through the Google SMTP server.
 
-### 1. Configure Relay: `sudo nano /etc/msmtprc`
-```text
+*** 1. Configure Relay: =sudo nano /etc/msmtprc=
+#+begin_src text
 defaults
 auth           on
 tls            on
@@ -67,25 +64,23 @@ user           <your-gmail-username>@gmail.com
 password       <16-character-app-password>
 
 account default : personal
-```
-`sudo chmod 600 /etc/msmtprc`
+#+end_src
 
-Mode 600 makes the file **root-only**. For any other user, msmtp then reports
-`no configuration file available`. That message looks like a missing file, but
-the true cause is the permission. Keep mode 600, and run msmtp as root. The
-backup job in Phase 7 does this.
+=sudo chmod 600 /etc/msmtprc=
 
-### 2. AppArmor Logging Fix
-```bash
+Mode 600 makes the file *root-only*. For any other user, msmtp then reports =no configuration file available=. That message looks like a missing file, but the true cause is the permission. Keep mode 600, and run msmtp as root. The backup job in Phase 7 does this.
+
+*** 2. AppArmor Logging Fix
+#+begin_src sh
 echo "owner /var/log/msmtp.log rw," | sudo tee /etc/apparmor.d/local/usr.bin.msmtp
 sudo systemctl reload apparmor
-```
+#+end_src
 
----
+--------------
 
-## 🛠️ Phase 3: Forgejo Git Server (v14.0.1)
-### 1. Installation & Directory Setup
-```bash
+** 🛠️ Phase 3: Forgejo Git Server (v14.0.1)
+*** 1. Installation & Directory Setup
+#+begin_src sh
 sudo adduser --system --shell /bin/bash --group --disabled-password --home /home/git git
 sudo mkdir -p /var/lib/forgejo/{custom,data,log} /etc/forgejo
 sudo chown -R git:git /var/lib/forgejo/
@@ -99,10 +94,10 @@ sha256sum -c forgejo-14.0.1-linux-arm64.sha256 || { echo "CHECKSUM FAILED"; exit
 
 sudo mv forgejo-14.0.1-linux-arm64 /usr/local/bin/forgejo
 sudo chmod +x /usr/local/bin/forgejo
-```
+#+end_src
 
-### 2. Config Enhancements: `sudo nano /etc/forgejo/app.ini`
-```ini
+*** 2. Config Enhancements: =sudo nano /etc/forgejo/app.ini=
+#+begin_src ini
 [server]
 DOMAIN = git.<your-domain>.dev
 ROOT_URL = https://git.<your-domain>.dev/
@@ -113,17 +108,12 @@ ENABLED = true
 PROTOCOL = sendmail
 SENDMAIL_PATH = /usr/bin/msmtp -a dev
 FROM = "Forgejo Hub" <<dev-alias>@<your-domain>.dev>
-```
+#+end_src
 
-`TRUSTED_PROXIES` gives Forgejo the true client IP from Caddy. Do **not** add
-`REVERSE_PROXY_AUTHENTICATION_USER` here. That key names the header which holds
-an authenticated **username**. Its default is `X-WEBAUTH-USER`. It does not
-name the client IP. If you set it to `X-Forwarded-For`, the client controls a
-login name. This becomes a risk when you set `[service]
-ENABLE_REVERSE_PROXY_AUTHENTICATION` to true.
+=TRUSTED_PROXIES= gives Forgejo the true client IP from Caddy. Do *not* add =REVERSE_PROXY_AUTHENTICATION_USER= here. That key names the header which holds an authenticated *username*. Its default is =X-WEBAUTH-USER=. It does not name the client IP. If you set it to =X-Forwarded-For=, the client controls a login name. This becomes a risk when you set =[service] ENABLE_REVERSE_PROXY_AUTHENTICATION= to true.
 
-### 3. Service Setup: `sudo nano /etc/systemd/system/forgejo.service`
-```ini
+*** 3. Service Setup: =sudo nano /etc/systemd/system/forgejo.service=
+#+begin_src ini
 [Unit]
 Description=Forgejo Git Server
 After=network.target
@@ -139,14 +129,15 @@ Environment=USER=git HOME=/home/git GITEA_WORK_DIR=/var/lib/forgejo
 
 [Install]
 WantedBy=multi-user.target
-```
-`sudo systemctl enable --now forgejo`
+#+end_src
 
----
+=sudo systemctl enable --now forgejo=
 
-## 🔐 Phase 4: Local HTTPS Gateway (Caddy)
-### 1. Install Custom Caddy (DNS-01)
-```bash
+--------------
+
+** 🔐 Phase 4: Local HTTPS Gateway (Caddy)
+*** 1. Install Custom Caddy (DNS-01)
+#+begin_src sh
 curl -JL "https://caddyserver.com/api/download?os=linux&arch=arm64&p=github.com/caddy-dns/cloudflare" -o caddy
 chmod +x caddy
 sudo mv caddy /usr/local/bin/caddy
@@ -156,10 +147,10 @@ sudo setcap CAP_NET_BIND_SERVICE=+eip /usr/local/bin/caddy
 # check against. Confirm what you installed instead:
 caddy version
 caddy list-modules | grep cloudflare
-```
+#+end_src
 
-### 2. Caddyfile Setup: `nano ~/Caddyfile`
-```caddy
+*** 2. Caddyfile Setup: =nano ~/Caddyfile=
+#+begin_src caddy
 {
     email <your-email>
 }
@@ -173,10 +164,10 @@ git.<your-domain>.dev {
         header_up X-Forwarded-For {remote_host}
     }
 }
-```
+#+end_src
 
-### 3. Caddy Service: `sudo nano /etc/systemd/system/caddy.service`
-```ini
+*** 3. Caddy Service: =sudo nano /etc/systemd/system/caddy.service=
+#+begin_src ini
 [Unit]
 Description=Caddy SSL Gateway
 After=network.target network-online.target
@@ -193,14 +184,15 @@ Restart=on-failure
 
 [Install]
 WantedBy=multi-user.target
-```
-`sudo systemctl daemon-reload && sudo systemctl enable --now caddy`
+#+end_src
 
----
+=sudo systemctl daemon-reload && sudo systemctl enable --now caddy=
 
-## 🌐 Phase 5: Global Access (Cloudflare Tunnel)
-### 1. Install & Authenticate
-```bash
+--------------
+
+** 🌐 Phase 5: Global Access (Cloudflare Tunnel)
+*** 1. Install & Authenticate
+#+begin_src sh
 # Install from Cloudflare's signed apt repository. A bare .deb from the
 # releases page carries no signature, and apt also keeps this one updated.
 curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg \
@@ -212,10 +204,10 @@ sudo apt-get update && sudo apt-get install -y cloudflared
 cloudflared tunnel login
 cloudflared tunnel create forgejo-tunnel
 cloudflared tunnel route dns forgejo-tunnel git.<your-domain>.dev
-```
+#+end_src
 
-### 2. Config: `sudo nano /etc/cloudflared/config.yml`
-```yaml
+*** 2. Config: =sudo nano /etc/cloudflared/config.yml=
+#+begin_src yaml
 tunnel: <TUNNEL-UUID>
 credentials-file: /home/<your-username>/.cloudflared/<TUNNEL-UUID>.json
 
@@ -223,67 +215,63 @@ ingress:
   - hostname: git.<your-domain>.dev
     service: http://localhost:3000
   - service: http_status:404
-```
-`sudo cloudflared service install && sudo systemctl start cloudflared`
+#+end_src
 
----
+=sudo cloudflared service install && sudo systemctl start cloudflared=
 
-## 🛡️ Phase 6: Active Defense (fail2ban)
-### 1. Filter: `sudo nano /etc/fail2ban/filter.d/forgejo.conf`
-```text
+--------------
+
+** 🛡️ Phase 6: Active Defense (fail2ban)
+*** 1. Filter: =sudo nano /etc/fail2ban/filter.d/forgejo.conf=
+#+begin_src text
 [Definition]
 failregex = ^.*Failed authentication attempt for .* from <HOST>
             ^.*Invalid user .+ from <HOST>
-```
+#+end_src
 
-### 2. Jail: `sudo nano /etc/fail2ban/jail.d/forgejo.local`
-```text
+*** 2. Jail: =sudo nano /etc/fail2ban/jail.d/forgejo.local=
+#+begin_src text
 [forgejo]
 enabled = true
 filter = forgejo
 logpath = /var/lib/forgejo/log/forgejo.log
 maxretry = 5
 bantime = 1h
-```
-`sudo systemctl restart fail2ban`
+#+end_src
 
----
+=sudo systemctl restart fail2ban=
 
-## 💾 Phase 7: Backups & Automation
+--------------
 
-**Run the whole job as root.** `/var/lib/forgejo` is `git:git` and mode 750. A
-normal user cannot read it, and rclone then stops with `permission denied`.
-Root also reads `/etc/msmtprc`, which is mode 600. Root removes both problems,
-and it needs no sudo rules.
+** 💾 Phase 7: Backups & Automation
+*Run the whole job as root.* =/var/lib/forgejo= is =git:git= and mode 750. A normal user cannot read it, and rclone then stops with =permission denied=. Root also reads =/etc/msmtprc=, which is mode 600. Root removes both problems, and it needs no sudo rules.
 
-### 1. Give root its own rclone remote
-rclone reads the configuration of the user that runs it. Root has none by
-default, so copy yours:
-```bash
+*** 1. Give root its own rclone remote
+rclone reads the configuration of the user that runs it. Root has none by default, so copy yours:
+
+#+begin_src sh
 sudo mkdir -p /root/.config/rclone
 sudo cp ~/.config/rclone/rclone.conf /root/.config/rclone/
 sudo chmod 600 /root/.config/rclone/rclone.conf
 sudo rclone lsd gdrive:        # must list your folders
-```
+#+end_src
 
-### 2. Add a Dead-Man's Switch
-Mail tells you when a job **fails**. It cannot tell you when a job never runs
-at all. A dead-man's switch inverts the logic: silence becomes the alarm.
+*** 2. Add a Dead-Man's Switch
+Mail tells you when a job *fails*. It cannot tell you when a job never runs at all. A dead-man's switch inverts the logic: silence becomes the alarm.
 
-Create a check at healthchecks.io. Set the period to 1 day and the grace time
-to 1 hour. Keep the URL out of the script, because the script goes in a public
-repository:
-```bash
+Create a check at healthchecks.io. Set the period to 1 day and the grace time to 1 hour. Keep the URL out of the script, because the script goes in a public repository:
+
+#+begin_src sh
 sudo tee /etc/backup-forgejo.env >/dev/null <<'EOF'
 HC_URL=https://hc-ping.com/<your-uuid>
 EOF
 sudo chmod 600 /etc/backup-forgejo.env
-```
-A self-hosted healthchecks instance works the same way. But put the watchdog on
-a different host. A watchdog on the host that it watches is worth much less.
+#+end_src
 
-### 3. Backup Script: `sudo nano /usr/local/bin/backup-forgejo.sh`
-```bash
+A self-hosted healthchecks instance works the same way. But put the watchdog on a different host. A watchdog on the host that it watches is worth much less.
+
+*** 3. Backup Script: =sudo nano /usr/local/bin/backup-forgejo.sh=
+#+begin_src sh
 #!/bin/bash
 set -euo pipefail
 
@@ -339,99 +327,91 @@ else
     notify "BACKUP FAILED" "rclone sync failed on $(hostname) with code $rc."
     ping_hc /fail
 fi
-```
-```bash
+#+end_src
+
+#+begin_src sh
 sudo chown root:root /usr/local/bin/backup-forgejo.sh
 sudo chmod 700 /usr/local/bin/backup-forgejo.sh
 sudo /usr/local/bin/backup-forgejo.sh      # test it before you schedule it
-```
-`Forgejo_Archive` must be a **sibling** of `Forgejo_Backup`. rclone refuses a
-backup directory inside the destination.
+#+end_src
 
-### 4. Automation (`sudo crontab -e`)
-Use **root's** crontab, not your own:
-```bash
+=Forgejo_Archive= must be a *sibling* of =Forgejo_Backup=. rclone refuses a backup directory inside the destination.
+
+*** 4. Automation (=sudo crontab -e=)
+Use *root's* crontab, not your own:
+
+#+begin_src sh
 # Daily Backup at 3 AM
 0 3 * * * /usr/local/bin/backup-forgejo.sh
 # Weekly Update & Reboot. apt-get needs the noninteractive settings, or an
 # unattended upgrade blocks on a config-file prompt and never reboots.
 0 4 * * 0 DEBIAN_FRONTEND=noninteractive apt-get update -y && DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::=--force-confold upgrade && /sbin/reboot
-```
-Raspberry Pi OS already grants the first user `NOPASSWD: ALL` in
-`/etc/sudoers.d/010_<your-username>-nopasswd`. Confirm with `sudo cat
-/etc/sudoers.d/010_*`. Do not add a second sudoers file; root cron needs none.
+#+end_src
 
-### 5. Verify the Backup
-Always check the backup. An unchecked backup is only an assumption. `rclone
-check` compares the two sides. It reports the differences, and it changes
-nothing:
-```bash
+Raspberry Pi OS already grants the first user =NOPASSWD: ALL= in =/etc/sudoers.d/010_<your-username>-nopasswd=. Confirm with =sudo cat /etc/sudoers.d/010_*=. Do not add a second sudoers file; root cron needs none.
+
+*** 5. Verify the Backup
+Always check the backup. An unchecked backup is only an assumption. =rclone check= compares the two sides. It reports the differences, and it changes nothing:
+
+#+begin_src sh
 sudo rclone check /var/lib/forgejo/ gdrive:Forgejo_Backup --one-way \
     --exclude '/data/queues/**' \
     --exclude '/data/indexers/**' \
     --exclude '/data/sessions/**' \
     --exclude '*.db-shm' --exclude '*.db-wal'
-```
-Use the same exclusions as the sync. The previous run restarts Forgejo at its
-end, and that restart rewrites the queue, the index and the SQLite scratch
-files. Without the exclusions, the check always reports these differences.
+#+end_src
 
----
+Use the same exclusions as the sync. The previous run restarts Forgejo at its end, and that restart rewrites the queue, the index and the SQLite scratch files. Without the exclusions, the check always reports these differences.
 
-## 📱 Phase 8: Mobile & Networking
-* **Split-Brain DNS:** In your router, map `git.<your-domain>.dev` to the internal IP of the Pi. This keeps local access fast.
-* **SPF Record:** TXT record `v=spf1 include:_spf.mx.cloudflare.net include:_spf.google.com ~all`.
-* **Mobile Mail:** Add the identities to the Gmail app with "Send Mail As" in the desktop settings. Use `smtp.gmail.com` and the App Password.
+--------------
 
----
+** 📱 Phase 8: Mobile & Networking
+- *Split-Brain DNS:* In your router, map =git.<your-domain>.dev= to the internal IP of the Pi. This keeps local access fast.
+- *SPF Record:* TXT record =v=spf1 include:_spf.mx.cloudflare.net include:_spf.google.com ~all=.
+- *Mobile Mail:* Add the identities to the Gmail app with "Send Mail As" in the desktop settings. Use =smtp.gmail.com= and the App Password.
 
-## 🆘 Phase 9: Disaster Recovery (Restoration Guide)
-### 1. Re-initialize
-Follow **Phases 1-4** on a new SD card. **Do not run the web installer.**
+--------------
 
-### 2. Restore Data
-```bash
+** 🆘 Phase 9: Disaster Recovery (Restoration Guide)
+*** 1. Re-initialize
+Follow *Phases 1-4* on a new SD card. *Do not run the web installer.*
+
+*** 2. Restore Data
+#+begin_src sh
 sudo systemctl stop forgejo
 sudo rclone copy gdrive:Forgejo_Backup /var/lib/forgejo/ --progress
-```
-`Forgejo_Backup` holds the current mirror. To recover a file that a later run
-overwrote or deleted, look in the dated folders under `Forgejo_Archive`:
-```bash
+#+end_src
+
+=Forgejo_Backup= holds the current mirror. To recover a file that a later run overwrote or deleted, look in the dated folders under =Forgejo_Archive=:
+
+#+begin_src sh
 rclone lsd gdrive:Forgejo_Archive                       # list the dates
 rclone copy gdrive:Forgejo_Archive/<date>/<path> ./     # take one file back
-```
+#+end_src
 
-### 3. Permissions & Restart
-```bash
+*** 3. Permissions & Restart
+#+begin_src sh
 sudo chown -R git:git /var/lib/forgejo/
 sudo chmod -R 750 /var/lib/forgejo/
 sudo systemctl start forgejo
-```
+#+end_src
 
----
+--------------
 
-## 🩹 Phase 10: Troubleshooting
-**Tunnel Connectivity:** If the tunnel fails after a reboot, read the log with
-`journalctl -u cloudflared`. The usual cause is an incorrect system time. This
-is a known fault of the Pi Zero.
+** 🩹 Phase 10: Troubleshooting
+*Tunnel Connectivity:* If the tunnel fails after a reboot, read the log with =journalctl -u cloudflared=. The usual cause is an incorrect system time. This is a known fault of the Pi Zero.
 
-**SMTP Failures:** Read `/var/log/msmtp.log`. The usual fix is a new Google App
-Password. The message `account dev not found: no configuration file available`
-does not mean a missing account. It means the caller cannot read
-`/etc/msmtprc`. Run msmtp as root. AppArmor can also block a `passwordeval`
-command when it enforces the `msmtp` profile. Check with `journalctl -k | grep
--i apparmor`.
+*SMTP Failures:* Read =/var/log/msmtp.log=. The usual fix is a new Google App Password. The message =account dev not found: no configuration file available= does not mean a missing account. It means the caller cannot read =/etc/msmtprc=. Run msmtp as root. AppArmor can also block a =passwordeval= command when it enforces the =msmtp= profile. Check with =journalctl -k | grep -i apparmor=.
 
-**Backup Failures:** The job is silent by design, so prove it runs.
-```bash
+*Backup Failures:* The job is silent by design, so prove it runs.
+
+#+begin_src sh
 sudo crontab -l                                  # the schedule lives in root's crontab
 journalctl -u cron --since "7 days ago" | grep backup-forgejo
 journalctl -u forgejo --since "7 days ago" | grep -i stopping
 sudo bash -x /usr/local/bin/backup-forgejo.sh    # watch a run end to end
-```
-`failed to open directory "": open /var/lib/forgejo: permission denied` means
-the job is not running as root. `didn't find section in config file` means root
-has no `/root/.config/rclone/rclone.conf` — see Phase 7 step 1.
+#+end_src
 
-Do not trust the folder date in the Google Drive web interface. Drive does not
-change that date when the contents change. Use `rclone check` instead.
+=failed to open directory "": open /var/lib/forgejo: permission denied= means the job is not running as root. =didn't find section in config file= means root has no =/root/.config/rclone/rclone.conf= --- see Phase 7 step 1.
+
+Do not trust the folder date in the Google Drive web interface. Drive does not change that date when the contents change. Use =rclone check= instead.

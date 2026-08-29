@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # md2org FILE...: write FILE.org beside each markdown FILE. pandoc reads GitHub
-# markdown, and --wrap=none keeps every paragraph on one line, so a later diff
-# shows a changed sentence and not a reflowed paragraph. The markdown file is
-# left in place.
+# markdown without its auto identifiers, which would put a CUSTOM_ID drawer
+# under every heading, and --wrap=none keeps every paragraph on one line, so a
+# later diff shows a changed sentence and not a reflowed paragraph. The
+# markdown file is left in place.
 set -euo pipefail
 
 if [ $# -eq 0 ]; then
@@ -12,6 +13,6 @@ fi
 
 for f in "$@"; do
     out="${f%.*}.org"
-    pandoc -f gfm -t org --wrap=none -o "$out" "$f"
+    pandoc -f gfm-gfm_auto_identifiers -t org --wrap=none -o "$out" "$f"
     echo "$out"
 done

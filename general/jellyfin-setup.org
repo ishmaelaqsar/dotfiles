@@ -1,13 +1,12 @@
-# Raspberry Pi 5 Media Stack
+* Raspberry Pi 5 Media Stack
+This configuration is for a *2GB Raspberry Pi 5*.
 
-This configuration is for a **2GB Raspberry Pi 5**.
+--------------
 
----
+** 1. Prerequisites & OS Tuning
+Install *Log2Ram* to protect the SD card. Enable *cgroups*, so that Docker can limit the RAM of a container.
 
-## 1. Prerequisites & OS Tuning
-Install **Log2Ram** to protect the SD card. Enable **cgroups**, so that Docker can limit the RAM of a container.
-
-```bash
+#+begin_src sh
 # Update system
 sudo apt update && sudo apt upgrade -y
 sudo apt install -y curl git-core
@@ -24,14 +23,14 @@ sudo nano /boot/firmware/cmdline.txt
 
 # 3. Reboot to apply kernel changes
 sudo reboot
-```
+#+end_src
 
----
+--------------
 
-## 2. Mount External HDD
-Mount your media drive to `/mnt/media`. 
+** 2. Mount External HDD
+Mount your media drive to =/mnt/media=.
 
-```bash
+#+begin_src sh
 # 1. Identify UUID
 sudo blkid
 
@@ -46,30 +45,28 @@ sudo nano /etc/fstab
 
 # 4. Mount the drive
 sudo mount -a
-```
+#+end_src
 
-### Make Docker wait for the drive
-Every container except Caddy bind-mounts `/mnt/media`. Those containers fail to
-start if Docker starts first, or if the drive is off. `restart: unless-stopped`
-does not try them again. Caddy stays up, so the site answers with a 502 error.
-The host then looks healthy.
+*** Make Docker wait for the drive
+Every container except Caddy bind-mounts =/mnt/media=. Those containers fail to start if Docker starts first, or if the drive is off. =restart: unless-stopped= does not try them again. Caddy stays up, so the site answers with a 502 error. The host then looks healthy.
 
-```bash
+#+begin_src sh
 sudo systemctl edit docker.service
-```
-```ini
+#+end_src
+
+#+begin_src ini
 [Unit]
 RequiresMountsFor=/mnt/media
-```
-`nofail` in fstab still lets the Pi boot without the drive. This drop-in only
-prevents a race between Docker and the mount.
+#+end_src
 
----
+=nofail= in fstab still lets the Pi boot without the drive. This drop-in only prevents a race between Docker and the mount.
 
-## 3. Docker & Directory Setup
+--------------
+
+** 3. Docker & Directory Setup
 Install Docker and prepare the persistence folders.
 
-```bash
+#+begin_src sh
 # Install Docker
 curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh
 sudo usermod -aG docker $USER
@@ -83,14 +80,13 @@ cd ~/media-stack
 nano .env
 # Paste: CF_API_TOKEN=<YOUR_CLOUDFLARE_TOKEN>
 chmod 600 .env
-```
+#+end_src
 
----
+--------------
 
-## 4. Configuration Files
-
-### `docker-compose.yml`
-```yaml
+** 4. Configuration Files
+*** =docker-compose.yml=
+#+begin_src yaml
 services:
   jellyfin:
     image: jellyfin/jellyfin:latest
@@ -172,10 +168,10 @@ services:
       - ./caddy-data:/data
       - ./caddy-config:/config
     restart: unless-stopped
-```
+#+end_src
 
-### `Caddyfile`
-```caddy
+*** =Caddyfile=
+#+begin_src caddy
 jellyfin.<your-domain>.dev {
     tls {
         dns cloudflare {env.CF_API_TOKEN}
@@ -205,12 +201,12 @@ jellyfin.<your-domain>.dev {
         reverse_proxy jellyfin:8096
     }
 }
-```
+#+end_src
 
----
+--------------
 
-## 5. Deployment & Permissions
-```bash
+** 5. Deployment & Permissions
+#+begin_src sh
 cd ~/media-stack
 
 # 1. Pre-initialize the FileBrowser database.
@@ -225,38 +221,32 @@ sudo chown -R $USER:$USER ~/media-stack
 # 3. Launch
 docker compose build caddy
 docker compose up -d
-```
+#+end_src
 
----
+--------------
 
-## 6. Initial Configuration Tips
+** 6. Initial Configuration Tips
+1. *FileBrowser:* Read the log with =docker logs filebrowser= to find the *initial admin password*. Change that password immediately.
+2. *qBittorrent:* Go to Advanced Settings. Set *"Physical memory usage limit"* to *128 MiB*.
+3. *Jellyfin:* Set Hardware Acceleration to *V4L2*.
+4. *ZRAM:* Run =zramctl=. Make sure the swap is in compressed RAM, for better performance.
 
-1.  **FileBrowser:** Read the log with `docker logs filebrowser` to find the **initial admin password**. Change that password immediately.
-2.  **qBittorrent:** Go to Advanced Settings. Set **"Physical memory usage limit"** to **128 MiB**.
-3.  **Jellyfin:** Set Hardware Acceleration to **V4L2**.
-4.  **ZRAM:** Run `zramctl`. Make sure the swap is in compressed RAM, for better performance.
+--------------
 
----
+** 7. Watchdog
+This stack fails quietly. The drive goes off, four containers stop, and Caddy keeps answering, so nothing looks wrong. A watchdog turns that silence into an alarm.
 
-## 7. Watchdog
+Create a check at healthchecks.io. Set the period to 15 minutes and the grace time to 30 minutes. This Pi has no msmtp relay, so healthchecks.io sends the mail.
 
-This stack fails quietly. The drive goes off, four containers stop, and Caddy
-keeps answering, so nothing looks wrong. A watchdog turns that silence into an
-alarm.
-
-Create a check at healthchecks.io. Set the period to 15 minutes and the grace
-time to 30 minutes. This Pi has no msmtp relay, so healthchecks.io sends the
-mail.
-
-```bash
+#+begin_src sh
 sudo tee /etc/media-stack-check.env >/dev/null <<'EOF'
 HC_URL=https://hc-ping.com/<your-uuid>
 EOF
 sudo chmod 600 /etc/media-stack-check.env
-```
+#+end_src
 
-### `sudo nano /usr/local/bin/media-stack-check.sh`
-```bash
+*** =sudo nano /usr/local/bin/media-stack-check.sh=
+#+begin_src sh
 #!/bin/bash
 set -euo pipefail
 
@@ -283,61 +273,58 @@ expected=$(docker compose config --services | wc -l)
 curl -fsS -m 10 -o /dev/null http://localhost/ || { hc /fail; exit 1; }
 
 hc
-```
-```bash
+#+end_src
+
+#+begin_src sh
 sudo chown root:root /usr/local/bin/media-stack-check.sh
 sudo chmod 700 /usr/local/bin/media-stack-check.sh
 sudo /usr/local/bin/media-stack-check.sh && echo OK
-```
+#+end_src
 
-Schedule it in root's crontab with `sudo crontab -e`:
-```bash
-*/15 * * * * /usr/local/bin/media-stack-check.sh
-```
+Schedule it in root's crontab with =sudo crontab -e=:
 
----
+#+begin_src sh
+,*/15 * * * * /usr/local/bin/media-stack-check.sh
+#+end_src
 
-## 8. Troubleshooting
+--------------
 
-### The site returns 502, but SSH works
-Caddy is up, and the other containers are not. Check the media drive first. It
-is the usual cause. A drive that is off looks the same as a drive that failed.
+** 8. Troubleshooting
+*** The site returns 502, but SSH works
+Caddy is up, and the other containers are not. Check the media drive first. It is the usual cause. A drive that is off looks the same as a drive that failed.
 
-```bash
+#+begin_src sh
 cd ~/media-stack
 docker compose ps -a          # `ps` alone hides stopped containers
 ls /mnt/media                 # force the automount
 findmnt /mnt/media            # must show ext4, not only autofs
-```
-`Exited (128)` on every container that mounts `/mnt/media` confirms the cause.
-Turn the drive on, then run `docker compose up -d`.
+#+end_src
 
-The 502 log line is misleading. It gives the **host** address, not a container:
-```
+=Exited (128)= on every container that mounts =/mnt/media= confirms the cause. Turn the drive on, then run =docker compose up -d=.
+
+The 502 log line is misleading. It gives the *host* address, not a container:
+
+#+begin_example
 dial tcp 192.168.1.252:8096: connect: connection refused
-```
-The embedded DNS of Docker has no record for `jellyfin` when the container is
-absent. Caddy then asks the host resolver, which is often the LAN DNS server.
-That resolver answers with the address of the Pi. No service listens on that
-port. The Caddyfile is not at fault.
+#+end_example
 
-### Do not test Jellyfin with `curl localhost:8096`
-Caddy is the only service in this stack that publishes a host port. You can
-reach Jellyfin only on the Docker network, so that test always fails. Use one
-of these commands instead:
-```bash
+The embedded DNS of Docker has no record for =jellyfin= when the container is absent. Caddy then asks the host resolver, which is often the LAN DNS server. That resolver answers with the address of the Pi. No service listens on that port. The Caddyfile is not at fault.
+
+*** Do not test Jellyfin with =curl localhost:8096=
+Caddy is the only service in this stack that publishes a host port. You can reach Jellyfin only on the Docker network, so that test always fails. Use one of these commands instead:
+
+#+begin_src sh
 curl -I http://localhost                                   # through Caddy
 docker exec caddy wget -qS -O /dev/null http://jellyfin:8096/
-```
-Wait 30-60 seconds after `up -d` before you decide. The first start on a Pi is
-slow.
+#+end_src
 
-### Containers will not start after a kernel upgrade
-Check the cgroup flags. A kernel package can rewrite `cmdline.txt`, and
-Jellyfin's memory limit needs the memory controller:
-```bash
+Wait 30-60 seconds after =up -d= before you decide. The first start on a Pi is slow.
+
+*** Containers will not start after a kernel upgrade
+Check the cgroup flags. A kernel package can rewrite =cmdline.txt=, and Jellyfin's memory limit needs the memory controller:
+
+#+begin_src sh
 grep memory /proc/cgroups     # the "enabled" column must read 1
-```
-Raspberry Pi OS ships `cgroup_disable=memory`. Remove that flag. Do not add
-`cgroup_enable=memory` after it. Both flags on one line work only because of
-the parse order.
+#+end_src
+
+Raspberry Pi OS ships =cgroup_disable=memory=. Remove that flag. Do not add =cgroup_enable=memory= after it. Both flags on one line work only because of the parse order.
