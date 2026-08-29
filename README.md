@@ -233,6 +233,9 @@ style for code with no `.clang-format` of its own: `clang-format` stops at the f
 walking up from the file, so a project's file wins. Debugging has two routes: `M-x gdb` and
 `M-x lldb` from `gud`, text only, and Dape (`C-x C-a d`), a DAP client with breakpoints in the
 margin and locals in a side window, over gdb's own DAP mode on Linux and `lldb-dap` on macOS.
+For Python, `basedpyright` from `setup-python.sh` checks and completes, `ruff format` runs on every
+save because pyright formats nothing, and Dape debugs through `debugpy-adapter`, the entry point
+the `debugpy` uv tool puts on `PATH`.
 
 Startup is measured, not guessed: `early-init.el` holds the garbage collector and the file-name
 handlers during init and turns on `package-quickstart`; the daemon starts in about 0.45 s. After

@@ -249,6 +249,30 @@ this function when every machine runs 31."
   (add-to-list 'eglot-server-programs
                '((python-mode python-ts-mode) . ("basedpyright-langserver" "--stdio"))))
 
+;;;; Python formatting: ruff
+
+;; basedpyright checks types and completes, and formats nothing: pyright never
+;; implemented textDocument/formatting. ruff is the formatter, installed as a
+;; uv tool by setup-python.sh, so run it on save. replace-buffer-contents keeps
+;; point and marks where they were.
+(defun my/ruff-format-buffer ()
+  "Format the buffer with ruff, when ruff is on PATH."
+  (when (executable-find "ruff")
+    (let ((src (current-buffer))
+          (file (or (buffer-file-name) "stdin.py")))
+      (with-temp-buffer
+        (let ((out (current-buffer)))
+          (with-current-buffer src
+            (when (zerop (call-process-region (point-min) (point-max) "ruff" nil out nil
+                                              "format" "--stdin-filename" file "-"))
+              (replace-buffer-contents out))))))))
+
+(defun my/ruff-format-on-save ()
+  "Format with ruff before this buffer is saved."
+  (add-hook 'before-save-hook #'my/ruff-format-buffer nil t))
+(add-hook 'python-ts-mode-hook #'my/ruff-format-on-save)
+(add-hook 'python-mode-hook #'my/ruff-format-on-save)
+
 ;;;; Debugging: Dape
 
 ;; A DAP client: breakpoints in the margin, locals and a REPL in side windows.
@@ -266,7 +290,13 @@ this function when every machine runs 31."
   (when (and (eq system-type 'darwin) (not (executable-find "lldb-dap")))
     (let ((cfg (alist-get 'lldb-dap dape-configs)))
       (plist-put cfg 'command "xcrun")
-      (plist-put cfg 'command-args '("lldb-dap")))))
+      (plist-put cfg 'command-args '("lldb-dap"))))
+  ;; debugpy is a uv tool in its own venv, so `python -m debugpy.adapter', the
+  ;; default, finds no module. The tool installs debugpy-adapter on PATH: run it.
+  (when (executable-find "debugpy-adapter")
+    (let ((cfg (alist-get 'debugpy dape-configs)))
+      (plist-put cfg 'command "debugpy-adapter")
+      (plist-put cfg 'command-args '("--host" "0.0.0.0" "--port" :autoport)))))
 
 ;;;; Common Lisp
 
