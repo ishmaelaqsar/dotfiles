@@ -215,7 +215,7 @@ fi
 if [ "$MODE" = "full" ]; then
     ./setup-emacs.sh || flunk "setup-emacs.sh exited non-zero"
     # The init must load with no network and no grammar installed.
-    emacs --batch -l "$HOME/.config/emacs/init.el" --eval '(kill-emacs)' >/dev/null 2>&1 \
+    emacs --batch --eval '(package-initialize)' -l "$HOME/.config/emacs/init.el" --eval '(kill-emacs)' >/dev/null 2>&1 \
         && pass "init.el loads in batch" || flunk "init.el failed to load"
 fi
 

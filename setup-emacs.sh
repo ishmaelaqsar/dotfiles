@@ -49,11 +49,12 @@ if ! command -v emacs >/dev/null 2>&1; then
 fi
 
 # init.el names the packages in package-selected-packages, so the list lives in
-# one place. --batch makes Emacs exit when the form returns.
+# one place. --batch makes Emacs exit when the form returns, and skips package
+# activation, hence the explicit package-initialize.
 INIT="$HOME/.config/emacs/init.el"
 if [ -f "$INIT" ]; then
-    echo "Installing the packages init.el selects (sly, magit)..."
-    emacs --batch -l "$INIT" \
+    echo "Installing the packages init.el selects..."
+    emacs --batch --eval '(package-initialize)' -l "$INIT" \
         --eval '(progn (package-refresh-contents) (package-install-selected-packages t))' \
         || echo "Warning: package install failed. Run it from Emacs: M-x package-install-selected-packages" >&2
 else
