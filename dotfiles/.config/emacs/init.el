@@ -3,9 +3,10 @@
 ;;; Commentary:
 
 ;; Emacs 30 ships eglot, tree-sitter and use-package. This file configures
-;; those, and adds five packages from MELPA: Sly for Common Lisp, Magit, and
-;; the Vertico + Orderless + Consult search stack, which runs the installed
-;; rg and fd from the minibuffer. setup-emacs.sh installs them from
+;; those, and adds the packages that are not in core: Sly for Common Lisp,
+;; Magit, the Vertico + Orderless + Consult search stack, which runs the
+;; installed rg and fd from the minibuffer, with Marginalia, Embark, Avy, and
+;; Corfu + Cape for completion at point. setup-emacs.sh installs them from
 ;; `package-selected-packages'.
 ;;
 ;; eglot finds the language servers on PATH. The setup-*.sh scripts put them
@@ -21,7 +22,8 @@
 
 (require 'package)
 (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
-(setopt package-selected-packages '(consult magit orderless sly vertico))
+(setopt package-selected-packages
+        '(avy cape consult corfu embark embark-consult magit marginalia orderless sly vertico))
 
 ;; use-package is built in. Nothing here uses :ensure: the setup script
 ;; installs, and a missing package logs a warning instead of stopping the load.
@@ -122,6 +124,50 @@
          ("M-s r"   . consult-ripgrep)
          ("M-s f"   . consult-fd)
          ("C-x C-r" . consult-recent-file)))
+
+;; Annotations beside every candidate: a docstring for a command, the size
+;; and date of a file.
+(use-package marginalia
+  :init (marginalia-mode 1))
+
+;; Act on the candidate or the thing at point. Any prefix followed by C-h
+;; lists its keys through the minibuffer, which is the which-key role.
+(use-package embark
+  :bind (("C-."   . embark-act)
+         ("C-;"   . embark-dwim)
+         ("C-h B" . embark-bindings))
+  :custom (prefix-help-command #'embark-prefix-help-command))
+
+(use-package embark-consult
+  :hook (embark-collect-mode . consult-preview-at-point-mode))
+
+;; Jump to a visible position: M-j, then the characters you see there.
+;; default-indent-new-line, which M-j had, stays on C-M-j.
+(use-package avy
+  :bind (("M-j"   . avy-goto-char-timer)
+         ("M-g l" . avy-goto-line)))
+
+;;;; Completion at point: Corfu + Cape
+
+;; Corfu draws a child frame at point, which a terminal frame on Emacs 30
+;; cannot show, so it runs in graphical frames only. Emacs 31 lifts the limit.
+;; A terminal frame keeps the built-in completion-at-point in the minibuffer.
+(defun my/corfu-when-graphic ()
+  "Turn on `corfu-mode' in a graphical frame."
+  (when (display-graphic-p) (corfu-mode 1)))
+(use-package corfu
+  :hook ((prog-mode text-mode) . my/corfu-when-graphic)
+  :custom
+  (corfu-auto t)
+  (corfu-auto-delay 0.15)
+  (corfu-auto-prefix 2)
+  (corfu-cycle t))
+
+;; Extra completion sources: words in open buffers, and file paths.
+(use-package cape
+  :init
+  (add-hook 'completion-at-point-functions #'cape-dabbrev)
+  (add-hook 'completion-at-point-functions #'cape-file))
 
 ;;;; Search on rg
 
