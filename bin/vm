@@ -194,7 +194,7 @@ BACKEND = VMBackend()
 def run(cmd, check=True, capture=False, dry_run=False):
     """Print a command, then run it. Return its output when capture is true."""
     if dry_run:
-        print(f"🛑 [DRY-RUN] {' '.join(cmd)}")
+        print(f"[dry-run] {' '.join(cmd)}")
         return ""
 
     if not capture:
@@ -204,7 +204,7 @@ def run(cmd, check=True, capture=False, dry_run=False):
         return result.stdout.strip() if capture else None
     except subprocess.CalledProcessError as e:
         if check:
-            print(f"❌ Command failed: {' '.join(cmd)}", file=sys.stderr)
+            print(f"Error: Command failed: {' '.join(cmd)}", file=sys.stderr)
             if capture and e.stderr:
                 print(e.stderr, file=sys.stderr)
             sys.exit(1)
@@ -253,7 +253,7 @@ def require_new_name(args):
     """
     name = get_arg_or_env(args, "name", "VM_NAME")
     if not name:
-        print("❌ Error: No VM name specified.", file=sys.stderr)
+        print("Error: No VM name specified.", file=sys.stderr)
         print("  Use -n <name> or set VM_NAME environment variable.", file=sys.stderr)
         sys.exit(1)
     return name
@@ -262,7 +262,7 @@ def require_new_name(args):
 def require_user(args):
     user = get_arg_or_env(args, "user", "VM_USER")
     if not user:
-        print("❌ Error: No VM user specified for SSH.", file=sys.stderr)
+        print("Error: No VM user specified for SSH.", file=sys.stderr)
         print("  Use -u <user> or set VM_USER environment variable.", file=sys.stderr)
         sys.exit(1)
     return user
@@ -285,9 +285,9 @@ def get_vm_ip(vm_name):
                             if "/" in part and "." in part:
                                 return part.split("/")[0]
     except subprocess.CalledProcessError as e:
-        print(f"⚠️  Guest agent query failed: {e}", file=sys.stderr)
+        print(f"Warning: Guest agent query failed: {e}", file=sys.stderr)
     except Exception as e:
-        print(f"⚠️  Unexpected error querying guest agent: {e}", file=sys.stderr)
+        print(f"Warning: Unexpected error querying guest agent: {e}", file=sys.stderr)
 
     # 2. Fall back to the DHCP lease. It fails on macOS user networking,
     #    because slirp keeps no bridge lease.
@@ -302,9 +302,9 @@ def get_vm_ip(vm_name):
                             if "/" in part and "." in part:
                                 return part.split("/")[0]
     except subprocess.CalledProcessError as e:
-        print(f"⚠️  Lease query failed: {e}", file=sys.stderr)
+        print(f"Warning: Lease query failed: {e}", file=sys.stderr)
     except Exception as e:
-        print(f"⚠️  Unexpected error querying leases: {e}", file=sys.stderr)
+        print(f"Warning: Unexpected error querying leases: {e}", file=sys.stderr)
 
     return None
 
@@ -316,7 +316,7 @@ def wait_for_ip(vm_name):
     needs one waits here. It prints a dot per try, because a silent minute
     looks like a hang.
     """
-    print(f"🔍 Waiting for {vm_name} to report IP address...", end="", flush=True)
+    print(f"Waiting for {vm_name} to report IP address...", end="", flush=True)
     for _ in range(30):  # Wait up to 60 seconds
         ip = get_vm_ip(vm_name)
         if ip:
@@ -344,7 +344,7 @@ def pick_machine():
     """
     names = list_machines()
     if not names:
-        print("❌ No machine is defined.", file=sys.stderr)
+        print("Error: No machine is defined.", file=sys.stderr)
         print("   Create one with: vm -n <name> create", file=sys.stderr)
         sys.exit(1)
 
@@ -393,30 +393,30 @@ def cmd_start(args):
     name = require_vm_name(args)
 
     if args.dry_run:
-        print(f"🛑 [DRY-RUN] Would start VM: {name}")
+        print(f"[dry-run] Would start VM: {name}")
         run(BACKEND.get_virsh_cmd(["start", name]), dry_run=True)
         return
 
     state = run(BACKEND.get_virsh_cmd(["domstate", name]), capture=True)
     if "running" in state:
-        print(f"✅ {name} is already running.")
+        print(f"{name} is already running.")
     else:
         run(BACKEND.get_virsh_cmd(["start", name]))
-        print(f"🚀 Started {name}.")
+        print(f"Started {name}.")
 
 
 def cmd_stop(args):
     name = require_vm_name(args)
     run(BACKEND.get_virsh_cmd(["shutdown", name]), dry_run=args.dry_run)
     if not args.dry_run:
-        print(f"🛑 Shutdown signal sent to {name}.")
+        print(f"Shutdown signal sent to {name}.")
 
 
 def cmd_force_stop(args):
     name = require_vm_name(args)
     run(BACKEND.get_virsh_cmd(["destroy", name]), dry_run=args.dry_run)
     if not args.dry_run:
-        print(f"💀 Forcefully stopped {name}.")
+        print(f"Stopped {name} at once.")
 
 
 def cmd_delete(args):
@@ -426,11 +426,11 @@ def cmd_delete(args):
     print(f"This deletes '{name}' and its disk images. There is no undo.")
 
     if args.dry_run:
-        print(f"🛑 [DRY-RUN] Skipping confirmation input.")
+        print(f"[dry-run] Skipping confirmation input.")
     else:
         confirm = input(f"Type '{name}' to confirm: ")
         if confirm != name:
-            print("❌ Confirmation failed. Aborting.")
+            print("Error: Confirmation failed. Aborting.")
             sys.exit(1)
 
     # The state check and the NVRAM probe only read, so they run in a dry run
@@ -441,7 +441,7 @@ def cmd_delete(args):
         print(f"Stopping {name}...")
         run(BACKEND.get_virsh_cmd(["destroy", name]), check=False, dry_run=args.dry_run)
 
-    print(f"🗑️  Deleting {name}...")
+    print(f"Deleting {name}...")
 
     # Remove the NVRAM file only when the machine has one
     delete_cmd = ["undefine", name, "--remove-all-storage"]
@@ -454,7 +454,7 @@ def cmd_delete(args):
     run(BACKEND.get_virsh_cmd(delete_cmd), dry_run=args.dry_run)
 
     if not args.dry_run:
-        print(f"✅ {name} has been deleted.")
+        print(f"{name} has been deleted.")
 
 
 def check_default_network():
@@ -475,10 +475,10 @@ def check_default_network():
         return
 
     if out:
-        print("❌ The libvirt network 'default' is inactive.", file=sys.stderr)
+        print("Error: The libvirt network 'default' is inactive.", file=sys.stderr)
     else:
         # libvirt ships the network, but a minimal install may not define it.
-        print("❌ The libvirt network 'default' is not defined.", file=sys.stderr)
+        print("Error: The libvirt network 'default' is not defined.", file=sys.stderr)
         print(
             "   sudo virsh net-define /usr/share/libvirt/networks/default.xml",
             file=sys.stderr,
@@ -495,7 +495,7 @@ def cmd_create(args):
     # Refuse when the machine already exists. A dry run skips the check.
     if not args.dry_run:
         if run(BACKEND.get_virsh_cmd(["dominfo", name]), check=False, capture=True):
-            print(f"❌ VM '{name}' already exists.", file=sys.stderr)
+            print(f"Error: VM '{name}' already exists.", file=sys.stderr)
             sys.exit(1)
         check_default_network()
 
@@ -506,7 +506,7 @@ def cmd_create(args):
     variant = args.variant or "debian13"
 
     print(
-        f"🔨 Preparing to create VM '{name}' on {BACKEND.os_type} ({BACKEND.arch})..."
+        f"Preparing to create VM '{name}' on {BACKEND.os_type} ({BACKEND.arch})..."
     )
     print(f"   Specs: {ram}MB RAM, {vcpus} CPU, {disk_size}GB Disk")
     print(f"   OS Variant: {variant}")
@@ -515,7 +515,7 @@ def cmd_create(args):
     if args.iso:
         iso_path = os.path.abspath(args.iso)
         if not os.path.isfile(iso_path):
-            print(f"❌ ISO file not found: {iso_path}", file=sys.stderr)
+            print(f"Error: ISO file not found: {iso_path}", file=sys.stderr)
             sys.exit(1)
         location_args = ["--cdrom", iso_path]
         print(f"   Source: ISO ({iso_path})")
@@ -557,19 +557,19 @@ def cmd_create(args):
     cmd += location_args
 
     if args.dry_run:
-        print("\n🛑 [DRY-RUN] The following command would be executed:")
+        print("\n[dry-run] The following command would be executed:")
         print(" ".join(cmd))
         return
 
-    print("\n🚀 Launching installer...")
+    print("\nLaunching installer...")
     try:
         subprocess.run(cmd, check=True)
-        print(f"\n✅ VM '{name}' created successfully.")
+        print(f"\nVM '{name}' created successfully.")
         print(
-            "👉 TIP: Remember to create a user during install that matches your 'vm setup' user."
+            "Note: create a user during the install that matches the 'vm setup' user."
         )
     except subprocess.CalledProcessError:
-        print("\n❌ Creation failed.", file=sys.stderr)
+        print("\nError: Creation failed.", file=sys.stderr)
         sys.exit(1)
 
 
@@ -593,7 +593,7 @@ def cmd_ip(args):
     if ip:
         print(ip)
     else:
-        print(f"❌ Could not detect IP for {name}.", file=sys.stderr)
+        print(f"Error: Could not detect IP for {name}.", file=sys.stderr)
         print(
             f"   Make sure the VM is running and has qemu-guest-agent installed.",
             file=sys.stderr,
@@ -610,13 +610,13 @@ def cmd_ssh(args):
     user = require_user(args)
 
     if args.dry_run:
-        print(f"🛑 [DRY-RUN] Resolving IP for {name}...")
+        print(f"[dry-run] Resolving IP for {name}...")
         ip = "1.2.3.4 (PLACEHOLDER)"
     else:
         ip = wait_for_ip(name)
 
     if not ip:
-        print(f"\n❌ Cannot find IP for {name}. Ensure it is running and agent is installed.", file=sys.stderr)
+        print(f"\nError: Cannot find IP for {name}. Ensure it is running and agent is installed.", file=sys.stderr)
         sys.exit(1)
 
     # argparse keeps the `--` separator in a REMAINDER, and it is not part of
@@ -635,10 +635,10 @@ def cmd_ssh(args):
     ] + extra
 
     if args.dry_run:
-        print(f"🛑 [DRY-RUN] Would exec: {' '.join(ssh_cmd)}")
+        print(f"[dry-run] Would exec: {' '.join(ssh_cmd)}")
         return
 
-    print(f"🔌 Connecting to {user}@{ip}...")
+    print(f"Connecting to {user}@{ip}...")
     os.execvp("ssh", ssh_cmd)
 
 
@@ -647,28 +647,28 @@ def cmd_deploy(args):
     user = require_user(args)
 
     if args.dry_run:
-        print(f"🛑 [DRY-RUN] Resolving IP...")
+        print(f"[dry-run] Resolving IP...")
         ip = "1.2.3.4"
     else:
         ip = wait_for_ip(name)
 
     if not ip:
-        print(f"\n❌ Cannot find IP for {name}.", file=sys.stderr)
+        print(f"\nError: Cannot find IP for {name}.", file=sys.stderr)
         sys.exit(1)
 
     script = args.script
     if not os.path.isfile(script):
-        print(f"❌ Deployment script not found: {script}", file=sys.stderr)
+        print(f"Error: Deployment script not found: {script}", file=sys.stderr)
         sys.exit(1)
 
     extra = args.extra[1:] if args.extra and args.extra[0] == "--" else args.extra
     cmd = [os.path.abspath(script), user, ip] + extra
 
     if args.dry_run:
-        print(f"🛑 [DRY-RUN] Would run script: {' '.join(cmd)}")
+        print(f"[dry-run] Would run script: {' '.join(cmd)}")
         return
 
-    print(f"📦 Running {script} against {name} ({ip})...")
+    print(f"Running {script} against {name} ({ip})...")
     
     # The script runs as a separate file, so it does not get the SSH options
     # above. The author of the script must set them.
@@ -680,13 +680,13 @@ def cmd_setup(args):
     user = require_user(args)
 
     if args.dry_run:
-        print(f"🛑 [DRY-RUN] Resolving IP for {name}...")
+        print(f"[dry-run] Resolving IP for {name}...")
         ip = "1.2.3.4 (PLACEHOLDER)"
     else:
         ip = wait_for_ip(name)
 
     if not ip:
-        print(f"\n❌ Could not detect IP for {name}.", file=sys.stderr)
+        print(f"\nError: Could not detect IP for {name}.", file=sys.stderr)
         print(f"   The VM must be running and accessible via network.", file=sys.stderr)
         print(
             f"   On macOS, you may need to configure networking or access the VM console first.",
@@ -694,7 +694,7 @@ def cmd_setup(args):
         )
         sys.exit(1)
 
-    print(f"🛠️  Installing qemu-guest-agent on {name} ({ip})...")
+    print(f"Installing qemu-guest-agent on {name} ({ip})...")
     print(f"   Detecting package manager...")
 
     # Build the detect-and-install command
@@ -716,11 +716,11 @@ def cmd_setup(args):
 
     install_script_parts.append("else")
     install_script_parts.append(
-        "  echo '❌ Unsupported package manager. Please install qemu-guest-agent manually.'"
+        "  echo 'Error: Unsupported package manager. Install qemu-guest-agent by hand.'"
     )
     install_script_parts.append("  exit 1")
     install_script_parts.append("fi")
-    install_script_parts.append("echo '✅ Agent installed successfully.'")
+    install_script_parts.append("echo 'Agent installed successfully.'")
 
     remote_cmd = "\n".join(install_script_parts)
 
@@ -735,15 +735,15 @@ def cmd_setup(args):
     ]
 
     if args.dry_run:
-        print(f"🛑 [DRY-RUN] Would run: {' '.join(ssh_cmd)}")
+        print(f"[dry-run] Would run: {' '.join(ssh_cmd)}")
         return
 
     try:
         subprocess.run(ssh_cmd, check=True)
-        print(f"\n✅ Setup complete! The VM should now report its IP address reliably.")
+        print(f"\nSetup complete. The machine now reports its address.")
         print(f"   Try: vm status -n {name}")
     except subprocess.CalledProcessError:
-        print("\n❌ Setup failed.", file=sys.stderr)
+        print("\nError: Setup failed.", file=sys.stderr)
         print(
             "   Make sure you can SSH into the VM and have sudo privileges.",
             file=sys.stderr,
@@ -847,20 +847,20 @@ if __name__ == "__main__":
 
     # Check for required tools
     if not _wants_help and not shutil.which("virsh"):
-        print("❌ Error: 'virsh' not found.", file=sys.stderr)
+        print("Error: 'virsh' not found.", file=sys.stderr)
         print(f"   {pkgconf.install_hint('virsh')}", file=sys.stderr)
         sys.exit(1)
 
     # Only `create` needs virt-install
     if not _wants_help and "create" in _argv:
         if not shutil.which("virt-install"):
-            print("❌ Error: 'virt-install' not found.", file=sys.stderr)
+            print("Error: 'virt-install' not found.", file=sys.stderr)
             print(f"   {pkgconf.install_hint('virt-install')}", file=sys.stderr)
             sys.exit(1)
 
     # Warn when the daemon does not answer, then continue anyway
     if not _wants_help and not check_libvirt_running():
-        print("⚠️  Warning: Cannot connect to libvirt daemon.", file=sys.stderr)
+        print("Warning: Cannot connect to libvirt daemon.", file=sys.stderr)
         if platform.system() == "Darwin":
             print("   brew services start libvirt", file=sys.stderr)
         else:

@@ -54,7 +54,7 @@ def git(*args, check=True, capture=True):
     )
     if check and result.returncode != 0:
         message = (result.stderr or result.stdout or "").strip()
-        print(f"❌ git {' '.join(args)} failed. {message}", file=sys.stderr)
+        print(f"Error: git {' '.join(args)} failed. {message}", file=sys.stderr)
         sys.exit(1)
     return result.stdout.strip() if capture else ""
 
@@ -174,7 +174,7 @@ def cmd_sync(args):
     if not (args.check or args.dry_run) and not args.target:
         other = home_owned_by_other()
         if other:
-            print(f"❌ {other} owns this home directory, not this checkout.", file=sys.stderr)
+            print(f"Error: {other} owns this home directory, not this checkout.", file=sys.stderr)
             print("   The sync would relink it to this repository. Nothing changed.", file=sys.stderr)
             print("   Name a target directory to sync somewhere else.", file=sys.stderr)
             return 1
@@ -188,13 +188,13 @@ def cmd_update(_args):
     # reason, but the sync engine has no such guard of its own.
     other = home_owned_by_other()
     if other:
-        print(f"❌ {other} owns this home directory, not this checkout.", file=sys.stderr)
+        print(f"Error: {other} owns this home directory, not this checkout.", file=sys.stderr)
         print("   update would relink the home directory to this repository.", file=sys.stderr)
         print("   Nothing changed.", file=sys.stderr)
         return 1
 
     if git("status", "--porcelain"):
-        print("❌ The repository has uncommitted changes.", file=sys.stderr)
+        print("Error: The repository has uncommitted changes.", file=sys.stderr)
         print("   Commit or stash them, then run update again.", file=sys.stderr)
         print("   'dotfiles status' lists them.", file=sys.stderr)
         return 1
@@ -205,7 +205,7 @@ def cmd_update(_args):
     print("Pulling...")
     sys.stdout.flush()
     if subprocess.run(["git", "-C", str(REPO), "pull", "--ff-only"]).returncode != 0:
-        print("❌ The pull failed. Resolve it by hand, then run update again.", file=sys.stderr)
+        print("Error: The pull failed. Resolve it by hand, then run update again.", file=sys.stderr)
         return 1
 
     after = git("rev-parse", "HEAD")
@@ -218,7 +218,7 @@ def cmd_update(_args):
     print()
     print("Linking the files...")
     if run_script("lib/sync-dotfiles") != 0:
-        print("❌ The sync failed.", file=sys.stderr)
+        print("Error: The sync failed.", file=sys.stderr)
         return 1
 
     # A new package or a changed installer needs a real install, which this
@@ -249,7 +249,7 @@ def cmd_edit(args):
         str(p.relative_to(DOTFILES_DIR)) for p in DOTFILES_DIR.rglob("*") if p.is_file()
     )
     if not files:
-        print(f"❌ No file under {DOTFILES_DIR}.", file=sys.stderr)
+        print(f"Error: No file under {DOTFILES_DIR}.", file=sys.stderr)
         return 1
 
     matches = (
@@ -257,7 +257,7 @@ def cmd_edit(args):
     )
 
     if not matches:
-        print(f"❌ No file matches '{args.name}'.", file=sys.stderr)
+        print(f"Error: No file matches '{args.name}'.", file=sys.stderr)
         return 1
 
     if len(matches) == 1:

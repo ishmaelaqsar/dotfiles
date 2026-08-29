@@ -73,9 +73,9 @@ def cmd_init(args):
 
     try:
         run(cmd)
-        print("✅ The environment is ready.")
+        print("The environment is ready.")
     except subprocess.CalledProcessError:
-        print("❌ Cannot create the environment.", file=sys.stderr)
+        print("Error: Cannot create the environment.", file=sys.stderr)
         sys.exit(1)
 
 
