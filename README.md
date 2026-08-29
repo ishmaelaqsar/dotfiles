@@ -408,15 +408,17 @@ Two limits are worth knowing, because both are tmux's and neither can be worked 
 `M-i` and `M-o` reorder the window, `M-[` and `M-]` cycle the layout, and `M-f` opens a shell in a
 popup. `C-x ?` lists them from tmux itself, so the list cannot go stale.
 
-### emacs in the terminal
+### Emacs in the terminal
 
-Alt and C-x both shadow keys that readline and emacs want: `M-f`, `M-b`, `M-l`, `M-k`, and the
-whole C-x map. Two ways out:
+C-x and eight Alt keys are Emacs keys, so in a pane that runs `emacs` or `emacsclient` the layer
+is off by itself. Every root binding tests `pane_current_command` and sends the key through when
+it matches; `C-x C-f` opens a file and `M-f` moves a word, with no toggle. Elsewhere the layer is
+unchanged. Two escapes remain for other programs:
 
-* `C-x C-x` sends one literal C-x to the program in the pane, so `C-x C-x C-s` saves a buffer.
-* **F12 turns the whole layer off**, which is the better answer for a long emacs session. Every
-  key then reaches the program, mouse events included. The left of the status bar turns yellow and
-  says `KEYS OFF`, because otherwise tmux looks broken. F12 turns it back on.
+* `C-x C-x` sends one literal C-x to the program in the pane, which is what readline wants.
+* **F12 turns the whole layer off** for any other full-screen program. Every key then reaches
+  it, mouse events included. The left of the status bar turns yellow and says `KEYS OFF`, because
+  otherwise tmux looks broken. F12 turns it back on.
 
 ### Sessions
 
