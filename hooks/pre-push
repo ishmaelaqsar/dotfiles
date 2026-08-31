@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Fail the push when an outgoing commit contains a cleartext secret.
+# This catches what pre-commit missed: --no-verify, amend, rebase.
+set -u
+fail() { printf 'pre-push: %s\n' "$*" >&2; exit 1; }
+
+REPO_ROOT="$(git rev-parse --show-toplevel)" || fail "cannot find the repository root"
+cd "$REPO_ROOT" || fail "cannot enter $REPO_ROOT"
+[ -x hooks/scan-added-lines ] || fail "hooks/scan-added-lines is missing; cannot scan the push"
+
+# stdin: <local ref> <local oid> <remote ref> <remote oid>, one line per ref.
+while read -r local_ref local_oid remote_ref remote_oid; do
+    # A delete pushes no commit.
+    case "$local_oid" in *[!0]*) ;; *) continue ;; esac
+    # A new remote ref has the all-zero OID: scan what no remote has yet.
+    case "$remote_oid" in
+        *[!0]*) range="$remote_oid..$local_oid" ;;
+        *)      range="$local_oid --not --remotes" ;;
+    esac
+    # $range holds more than one word on purpose: no quotes.
+    for commit in $(git rev-list $range); do
+        git show --no-color -U0 --diff-filter=ACMR --pretty=format: "$commit" -- . ':(exclude)dotfiles/.secrets' \
+            | hooks/scan-added-lines \
+            || fail "commit $commit adds what looks like a cleartext secret"
+    done
+    # The secrets file gets the stronger check, per outgoing commit that
+    # touches it. A commit that only deletes the file passes.
+    for commit in $(git rev-list $range -- dotfiles/.secrets); do
+        command -v python3 >/dev/null 2>&1 || fail "python3 is missing; cannot verify dotfiles/.secrets"
+        [ -f bin/manage-secrets ] || fail "bin/manage-secrets is missing; cannot verify dotfiles/.secrets"
+        python3 bin/manage-secrets verify --commit "$commit" \
+            || fail "commit $commit holds a cleartext entry in dotfiles/.secrets"
+    done
+done
+exit 0

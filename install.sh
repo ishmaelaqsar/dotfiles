@@ -852,36 +852,20 @@ if [ "$IS_HOME_INSTALL" -eq 1 ] && [ "$IN_CONTAINER" -eq 0 ] && [ "$IS_GRAPHICAL
 fi
 
 # -----------------------------
-# Secrets Pre-commit Hook
+# Secrets git hooks
 # -----------------------------
-# Installs the git hook to prevent committing unencrypted secrets
-HOOK_PATH="$SCRIPT_DIR/.git/hooks/pre-commit"
-
-if [ -d "$SCRIPT_DIR/.git" ] && [ "$DRY_RUN" -eq 1 ]; then
-    echo "  [dry-run] write the secrets pre-commit hook at $HOOK_PATH"
-elif [ -d "$SCRIPT_DIR/.git" ]; then
-    echo "Installing secrets pre-commit hook at $HOOK_PATH..."
-    # Ensure hooks directory exists
-    mkdir -p "$(dirname "$HOOK_PATH")"
-
-    cat <<'EOF' > "$HOOK_PATH"
-#!/usr/bin/env bash
-# Pre-commit hook to ensure no unencrypted secrets are committed
-
-REPO_ROOT="$(git rev-parse --show-toplevel)"
-MANAGE_SECRETS="$REPO_ROOT/bin/manage-secrets"
-
-if [ -x "$MANAGE_SECRETS" ]; then
-    python3 "$MANAGE_SECRETS" verify
+# The hook bodies live in hooks/, so a pull updates them. core.hooksPath is
+# relative, so each worktree runs its own checkout.
+if ! git -C "$SCRIPT_DIR" rev-parse --git-dir >/dev/null 2>&1; then
+    echo "Skipping hook setup ($SCRIPT_DIR is not a git repository)."
+elif [ "$DRY_RUN" -eq 1 ]; then
+    echo "  [dry-run] git -C $SCRIPT_DIR config core.hooksPath hooks"
 else
-    echo "Warning: bin/manage-secrets not found or not executable. Skipping verification."
-fi
-EOF
-
-    chmod +x "$HOOK_PATH"
-    echo "Hook installed."
-else
-    echo "Skipping hook installation (.git directory not found)."
+    echo "Pointing git hooks at hooks/ ..."
+    git -C "$SCRIPT_DIR" config core.hooksPath hooks
+    chmod +x "$SCRIPT_DIR/hooks/pre-commit" "$SCRIPT_DIR/hooks/pre-push" "$SCRIPT_DIR/hooks/scan-added-lines"
+    # Remove the legacy copied hook: core.hooksPath makes .git/hooks dead.
+    rm -f "$(git -C "$SCRIPT_DIR" rev-parse --path-format=absolute --git-common-dir)/hooks/pre-commit"
 fi
 
 

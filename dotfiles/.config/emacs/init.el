@@ -339,7 +339,9 @@ this function when every machine runs 31."
   (when (executable-find "debugpy-adapter")
     (let ((cfg (alist-get 'debugpy dape-configs)))
       (plist-put cfg 'command "debugpy-adapter")
-      (plist-put cfg 'command-args '("--host" "0.0.0.0" "--port" :autoport)))))
+      ;; Loopback only: the adapter evaluates arbitrary expressions in the
+      ;; debuggee, so a wildcard bind hands that to the whole network.
+      (plist-put cfg 'command-args '("--host" "127.0.0.1" "--port" :autoport)))))
 
 ;;;; Common Lisp
 

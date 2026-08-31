@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Read a unified diff on stdin. Fail when an added line holds what looks like
+# a cleartext secret. Write 'secretscan: allow' on a line to accept that line.
+# POSIX ERE only: the patterns must work with BSD grep and GNU grep.
+set -u
+
+# Strict: exact token formats. Case matters, so the match stays precise.
+STRICT='-----BEGIN [A-Z ]*PRIVATE KEY|(AKIA|ASIA)[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22}|glpat-[A-Za-z0-9_-]{20}|xox[baprs]-[0-9A-Za-z-]{10}|sk-[A-Za-z0-9_-]{32}|sk_live_[0-9A-Za-z]{24}|eyJ[A-Za-z0-9_-]{17}[A-Za-z0-9_-]*\.eyJ'
+# Loose: a secret-like name with a literal value. The value class has no
+# $ ( { / or quote, so shell expansions, command substitutions and file
+# paths do not match.
+LOOSE='(password|passwd|secret|token|api_?key)["'"'"']?[[:space:]]*[=:][[:space:]]*["'"'"']?[A-Za-z0-9_=-]{16,}'
+
+# Keep the added lines, and prefix each with its file name.
+annotated="$(
+    file='?'
+    while IFS= read -r line; do
+        case "$line" in
+            +++\ b/*) file="${line#+++ b/}" ;;
+            +++*) ;;
+            +*)
+                added="${line#+}"
+                case "$added" in *'secretscan: allow'*) ;; *) printf '%s: %s\n' "$file" "$added" ;; esac
+                ;;
+        esac
+    done
+)"
+[ -n "$annotated" ] || exit 0
+
+hits="$(printf '%s\n' "$annotated" | grep -E -e "$STRICT")" || hits=''
+loose_hits="$(printf '%s\n' "$annotated" | grep -i -E -e "$LOOSE")" || loose_hits=''
+[ -z "$hits$loose_hits" ] && exit 0
+{
+    echo "secretscan: these added lines look like cleartext secrets:"
+    [ -n "$hits" ] && printf '%s\n' "$hits"
+    [ -n "$loose_hits" ] && printf '%s\n' "$loose_hits"
+} >&2
+exit 1

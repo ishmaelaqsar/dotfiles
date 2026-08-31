@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Fail the commit when it would contain a cleartext secret.
+# The gate reads the INDEX, not the work tree: the index is what commits.
+set -u
+fail() { printf 'pre-commit: %s\n' "$*" >&2; exit 1; }
+
+REPO_ROOT="$(git rev-parse --show-toplevel)" || fail "cannot find the repository root"
+cd "$REPO_ROOT" || fail "cannot enter $REPO_ROOT"
+
+# Step 1: every staged entry of dotfiles/.secrets must be encrypted.
+# A verifier that cannot run fails the commit: the gate is closed by default.
+if git ls-files --cached --error-unmatch -- dotfiles/.secrets >/dev/null 2>&1; then
+    command -v python3 >/dev/null 2>&1 || fail "python3 is missing; cannot verify dotfiles/.secrets"
+    [ -f bin/manage-secrets ] || fail "bin/manage-secrets is missing; cannot verify dotfiles/.secrets"
+    python3 bin/manage-secrets verify --cached || fail "dotfiles/.secrets is not fully encrypted in the index"
+fi
+
+# Step 2: scan every other staged added line for secret patterns.
+# dotfiles/.secrets is excluded: its base64 can look like a token, and
+# step 1 already checks it with the stronger rule.
+[ -x hooks/scan-added-lines ] || fail "hooks/scan-added-lines is missing; cannot scan the commit"
+against="$(git rev-parse --verify -q HEAD)" || against="$(git hash-object -t tree /dev/null)"
+git diff --cached --no-color -U0 --diff-filter=ACMR "$against" -- . ':(exclude)dotfiles/.secrets' \
+    | hooks/scan-added-lines \
+    || fail "encrypt the value, or add 'secretscan: allow' to the line, or use --no-verify"
+exit 0
