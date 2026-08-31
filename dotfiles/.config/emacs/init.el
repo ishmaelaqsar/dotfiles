@@ -230,23 +230,31 @@ there and the theme's faces are computed for a dumb terminal. Every frame
                  ("\\.ya?ml\\'" . yaml-ts-mode)))
   (add-to-list 'auto-mode-alist entry))
 
+;; The mode name does not always match the grammar name (c++-ts-mode uses
+;; cpp, go-mod-ts-mode uses gomod), so the pairs are explicit rather than
+;; derived from the mode name.
+(defconst my/treesit-mode-languages
+  '((bash-ts-mode . bash) (c-ts-mode . c) (c++-ts-mode . cpp)
+    (go-ts-mode . go) (go-mod-ts-mode . gomod) (java-ts-mode . java)
+    (json-ts-mode . json) (python-ts-mode . python) (toml-ts-mode . toml)
+    (yaml-ts-mode . yaml))
+  "The grammar language of each tree-sitter mode this config uses.")
+
 (defun my/treesit-install-missing ()
   "Install the grammar of the current tree-sitter mode when it is absent.
 A fresh machine then needs no manual step: the first file of a kind
 fetches its grammar, and the mode is entered again with it in place.
 Emacs 31 does this itself through `treesit-auto-install-grammar'; delete
 this function when every machine runs 31."
-  (pcase-let ((`(,lang . ,_) (assq (intern (string-remove-suffix "-ts-mode" (symbol-name major-mode)))
-                                  treesit-language-source-alist)))
+  (let ((lang (alist-get major-mode my/treesit-mode-languages)))
     (when (and lang (not (treesit-language-available-p lang)))
       (message "Installing the %s grammar..." lang)
       (treesit-install-language-grammar lang)
       (when (treesit-language-available-p lang)
         (funcall major-mode)))))
 
-(dolist (mode '(bash-ts-mode c-ts-mode c++-ts-mode go-ts-mode go-mod-ts-mode java-ts-mode
-                json-ts-mode python-ts-mode toml-ts-mode yaml-ts-mode))
-  (add-hook (intern (format "%s-hook" mode)) #'my/treesit-install-missing))
+(dolist (pair my/treesit-mode-languages)
+  (add-hook (intern (format "%s-hook" (car pair))) #'my/treesit-install-missing))
 
 ;;;; eglot
 
@@ -273,7 +281,7 @@ this function when every machine runs 31."
 
 (defun my/eglot-format-buffer ()
   "Organize the imports where the server does that, then format the buffer."
-  (when (derived-mode-p 'go-ts-mode 'go-mode)
+  (when (derived-mode-p 'go-ts-mode)
     (ignore-errors (eglot-code-action-organize-imports (point-min) (point-max))))
   (eglot-format-buffer))
 

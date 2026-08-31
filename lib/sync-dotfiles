@@ -6,6 +6,13 @@ Each file in the repository's dotfiles/ tree becomes a symlink at the same
 relative path under the target. The directories are created as real
 directories, so an untracked file can sit beside a linked one.
 
+Files that git ignores (.DS_Store, __pycache__, …) are not linked, and a
+stale link to one is pruned. A link whose repository file is gone is pruned
+as well, but only when the link points into this checkout's dotfiles/ tree.
+A foreign link or a real file is never pruned. Known limit: a directory
+deleted wholesale from dotfiles/ leaves no mirror to walk, so links inside
+its target counterpart stay; sweep those by hand.
+
 install.sh calls this script. Run it directly to pick up a new dotfile without
 a full install.
 """
@@ -13,10 +20,13 @@ a full install.
 USAGE = """Usage: sync-dotfiles [-n|--dry-run] [-c|--check] [-b|--backup] [target-dir]
 
   -n, --dry-run   Print the plan. Change nothing.
-  -c, --check     Report the files that are missing or have drifted. Change
-                  nothing. Exit 1 when the target does not match the repository.
-  -b, --backup    Rename an existing file to <name>.bak before the link
-                  replaces it. Without this flag the file is deleted.
+  -c, --check     Report the files that are missing, have drifted, or are
+                  stale links. Change nothing. Exit 1 when the target does
+                  not match the repository.
+  -b, --backup    Accepted for compatibility. Backup is now the default: a
+                  real file or a foreign link moves to <name>.bak before a
+                  link replaces it. Only a link into this repository is
+                  removed without a backup, because it carries no data.
   -h, --help      Print this text.
 
 The target directory defaults to $HOME.
@@ -30,11 +40,12 @@ Examples:
 """
 
 import os
+import subprocess
 import sys
 from pathlib import Path
 
 # Parse arguments
-backup_flag = False
+backup_flag = False  # kept for compatibility; backup is now the default
 dry_run = False
 check = False
 target_arg = None
@@ -54,10 +65,93 @@ for arg in sys.argv[1:]:
 
 target_dir = Path(target_arg if target_arg else Path.home()).expanduser()
 dotfiles_dir = Path(__file__).resolve().parent.parent / "dotfiles"
+repo_root = dotfiles_dir.parent
 
 if not dotfiles_dir.is_dir():
     print(f"Error: dotfiles directory not found: {dotfiles_dir}")
     sys.exit(1)
+
+DOTFILES_ROOT = str(dotfiles_dir.resolve())
+
+
+def points_into_repo(link):
+    """Return True when the link resolves into this checkout's dotfiles/."""
+    real = os.path.realpath(link)
+    return real == DOTFILES_ROOT or real.startswith(DOTFILES_ROOT + os.sep)
+
+
+def ignored_paths(rel_paths):
+    """Return the set of relative paths that git ignores.
+
+    git check-ignore reads the .gitignore rules, so the skip list has one
+    source of truth. Without git (a tarball copy), a static set covers the
+    known junk.
+    """
+    if not rel_paths:
+        return set()
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(repo_root), "check-ignore", "--stdin", "-z"],
+            input=b"\0".join(f"dotfiles/{p}".encode() for p in rel_paths) + b"\0",
+            capture_output=True,
+            timeout=10,
+        )
+        if out.returncode in (0, 1):  # 0 = some ignored, 1 = none
+            prefix = "dotfiles/"
+            return {
+                p[len(prefix):]
+                for p in out.stdout.decode().split("\0")
+                if p.startswith(prefix)
+            }
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    return {
+        p
+        for p in rel_paths
+        if Path(p).name == ".DS_Store"
+        or "__pycache__" in Path(p).parts
+        or p.endswith((".pyc", ".bak"))
+    }
+
+
+def free_backup_name(dest):
+    """Return <name>.bak, or <name>.bak.N when taken. Never clobber one."""
+    candidate = dest.with_name(dest.name + ".bak")
+    n = 1
+    while candidate.exists() or candidate.is_symlink():
+        candidate = dest.with_name(f"{dest.name}.bak.{n}")
+        n += 1
+    return candidate
+
+
+all_files = [p for p in sorted(dotfiles_dir.rglob("*")) if p.is_file()]
+ignored = ignored_paths([str(p.relative_to(dotfiles_dir)) for p in all_files])
+
+
+def stale_links():
+    """Yield (link, reason) for links into this repo that should go.
+
+    The walk is bounded to the target mirrors of the directories that exist
+    under dotfiles/, so it never crawls the rest of the target tree.
+    """
+    dirs = [target_dir] + [
+        target_dir / d.relative_to(dotfiles_dir)
+        for d in sorted(dotfiles_dir.rglob("*"))
+        if d.is_dir()
+    ]
+    for d in dirs:
+        if not d.is_dir():
+            continue
+        for entry in sorted(d.iterdir()):
+            if not entry.is_symlink() or not points_into_repo(entry):
+                continue
+            real = os.path.realpath(entry)
+            rel = os.path.relpath(real, DOTFILES_ROOT)
+            if not os.path.exists(real):
+                yield entry, f"orphan link to {os.readlink(entry)}"
+            elif rel in ignored:
+                yield entry, f"link to the ignored file {rel}"
+
 
 if check:
     # Report drift only. Every repository file must be a symlink in the target
@@ -66,10 +160,10 @@ if check:
     problems = []
     linked = 0
 
-    for src in sorted(dotfiles_dir.rglob("*")):
-        if not src.is_file():
-            continue
+    for src in all_files:
         rel_path = src.relative_to(dotfiles_dir)
+        if str(rel_path) in ignored:
+            continue
         dest = target_dir / rel_path
 
         if not dest.is_symlink():
@@ -81,6 +175,9 @@ if check:
             problems.append((rel_path, f"links to {os.readlink(dest)}"))
         else:
             linked += 1
+
+    for link, reason in stale_links():
+        problems.append((link, reason))
 
     for rel_path, state in problems:
         print(f"  FAIL: {rel_path} — {state}")
@@ -95,22 +192,41 @@ for src in dotfiles_dir.rglob("*"):
     rel_path = src.relative_to(dotfiles_dir)
     dest = target_dir / rel_path
 
+    if src.is_file() and str(rel_path) in ignored:
+        continue
+    # A link that already points at the source needs no work, and touching
+    # it would rename it over a genuine backup.
+    already = (
+        src.is_file()
+        and dest.is_symlink()
+        and os.path.realpath(dest) == str(src.resolve())
+    )
+
     if dry_run:
-        if src.is_file():
+        if src.is_file() and not already:
             state = "relink" if dest.is_symlink() else "link"
             print(f"  [dry-run] {state} {rel_path}")
     elif src.is_dir():
         dest.mkdir(parents=True, exist_ok=True)
-    else:
+    elif not already:
         if dest.exists() or dest.is_symlink():
-            if backup_flag:
-                backup_path = dest.with_suffix(dest.suffix + ".bak")
-                dest.rename(backup_path)
-                print(f"  -> Backed up {rel_path} to {backup_path.name}")
-            else:
+            if dest.is_symlink() and points_into_repo(dest):
+                # An old link of ours: it carries no data, drop it.
                 dest.unlink()
+            else:
+                backup = free_backup_name(dest)
+                dest.rename(backup)
+                print(f"  -> Backed up {rel_path} to {backup.name}")
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.symlink_to(src)
         print(f"  -> Linking {rel_path}")
+
+# Prune the stale links: orphans, and links to files git now ignores.
+for link, reason in stale_links():
+    if dry_run:
+        print(f"  [dry-run] prune {link} ({reason})")
+    else:
+        link.unlink()
+        print(f"  -> Pruned {link} ({reason})")
 
 print("Dotfiles sync planned." if dry_run else "Dotfiles sync complete.")

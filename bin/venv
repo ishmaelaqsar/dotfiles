@@ -131,9 +131,11 @@ def cmd_list(args):
     print("-----------------------------------------------------")
 
     found = False
-    for bin_dir in search_dir.rglob(".venv/bin"):
-        venv_dir = bin_dir.parent
-        py = bin_dir / "python"
+    # Every virtual environment carries a pyvenv.cfg, whatever its directory
+    # name, so this also finds the ones init created under another name.
+    for cfg in sorted(search_dir.rglob("pyvenv.cfg")):
+        venv_dir = cfg.parent
+        py = venv_dir / "bin" / "python"
         pyver = (
             subprocess.run(
                 [str(py), "-V"], capture_output=True, text=True

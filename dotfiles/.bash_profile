@@ -36,9 +36,17 @@ unset -f __add_path
 # Environment & One-Time Setup
 # ============================================================
 
-# Run these commands only when running in a container
-if [[ -v CONTAINER_ID ]] || [[ -n "$REMOTE_CONTAINERS" ]]; then
-    export LC_ALL=en_US.utf8
+# Run these commands only when running in a container. -n with a default,
+# not -v: /bin/bash on macOS is 3.2, and its parser rejects -v, which kills
+# the rest of this file. The locale name must exist, or every program
+# complains: macOS spells it en_US.UTF-8, and a slim container often has
+# only C.UTF-8.
+if [[ -n "${CONTAINER_ID:-}" ]] || [[ -n "${REMOTE_CONTAINERS:-}" ]]; then
+    if locale -a 2>/dev/null | grep -qix 'en_US.UTF-8'; then
+        export LC_ALL=en_US.UTF-8
+    elif locale -a 2>/dev/null | grep -qix 'C.UTF-8'; then
+        export LC_ALL=C.UTF-8
+    fi
 fi
 
 export IDENTITY="Ishmael Aqsar <ishmael-dev@aqsar.dev>"

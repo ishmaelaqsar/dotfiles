@@ -4,3 +4,8 @@ dotfiles/.config/ghostty/config.local
 # Python byte-code cache, next to the scripts in bin/ and lib/
 __pycache__/
 *.pyc
+
+# Finder metadata, and the backups sync-dotfiles makes when a link replaces
+# a real file. sync-dotfiles skips what git ignores, so these never link.
+.DS_Store
+*.bak

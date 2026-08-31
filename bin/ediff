@@ -1,4 +1,12 @@
 #!/usr/bin/env bash
 # ediff A B: compare two files in Emacs, in the terminal. pacdiff calls it as
 # DIFFPROG, under sudo, so -q: root has no init and needs none for ediff.
-exec emacs -nw -q --eval "(ediff-files \"$1\" \"$2\")"
+#
+# The paths travel through the environment, not through the --eval string: a
+# quote or a backslash in a file name must never become elisp.
+if [ "$#" -ne 2 ]; then
+    echo "Usage: ediff FILE_A FILE_B" >&2
+    exit 2
+fi
+EDIFF_A="$1" EDIFF_B="$2" \
+    exec emacs -nw -q --eval '(ediff-files (getenv "EDIFF_A") (getenv "EDIFF_B"))'
