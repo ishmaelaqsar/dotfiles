@@ -1,7 +1,7 @@
 # systemd user units
 
 The Linux counterpart of a macOS LaunchAgent. Put `*.service`, `*.timer`, or
-`*.socket` files in this directory. `bin/sync-dotfiles` symlinks them to
+`*.socket` files in this directory. `lib/sync-dotfiles` symlinks them to
 `~/.config/systemd/user/`, then `install.sh` runs `systemctl --user
 daemon-reload` and enables every unit that has an `[Install]` section.
 `cleanup.sh` disables them again.

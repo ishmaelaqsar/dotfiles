@@ -71,12 +71,14 @@ export WORKSPACE="$HOME/workspace"
 # Editor: emacsclient, then a plain emacs, then vi
 # ------------------------------------------------------------
 # emacsclient needs a running Emacs. -t opens in the terminal, -c a new frame,
-# and -a '' starts a daemon when none runs, so a git commit never hangs on a
-# missing server. A machine with emacs but no client (a minimal install) gets
+# and --alternate-editor= (empty value) starts a daemon when none runs, so a
+# git commit never hangs on a missing server. The long flag, not -a '': a
+# consumer that splits EDITOR on whitespace turns '' into two literal
+# apostrophes. A machine with emacs but no client (a minimal install) gets
 # emacs -nw -q, and a machine with no Emacs at all keeps vi.
 if command -v emacsclient >/dev/null 2>&1; then
-    export EDITOR="emacsclient -t -a ''"
-    export VISUAL="emacsclient -c -a ''"
+    export EDITOR='emacsclient -t --alternate-editor='
+    export VISUAL='emacsclient -c --alternate-editor='
 elif command -v emacs >/dev/null 2>&1; then
     export EDITOR='emacs -nw -q'
     export VISUAL="$EDITOR"

@@ -129,7 +129,11 @@ GIT_USER_EMAIL="ishmael-dev@aqsar.dev"
 # the value keeps every character after the first `=`.
 GIT_DELTA_CONFIG="core.pager=delta
 interactive.diffFilter=delta --color-only
-delta.navigate=true"
+delta.navigate=true
+delta.side-by-side=true
+delta.line-numbers=true
+merge.conflictStyle=zdiff3
+diff.colorMoved=default"
 
 TARGET_BIN_DIR="$TARGET_DIR/bin"
 GNUPG_DIR="$TARGET_DIR/.gnupg"
@@ -513,6 +517,10 @@ elif command -v git &> /dev/null; then
     __run git config --global user.email "$GIT_USER_EMAIL"
     __run git config --global core.excludesfile "$HOME/.gitignore_global"
     __run git config --global core.attributesfile "$HOME/.gitattributes"
+
+    # clean-gone deletes every local branch whose upstream is gone.
+    __run git config --global alias.clean-gone \
+        '!git branch -vv | grep '\''\[gone\]'\'' | awk '\''{print $1}'\'' | xargs git branch -D'
 
     # delta renders the diffs, but only after git is told to use it. Guard on
     # the command: the package is best-effort, and a core.pager that is not

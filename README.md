@@ -520,7 +520,7 @@ Launch:
 | `Super+b` | The default web browser. |
 | `Super+n` | The home folder in the default file manager. |
 | `Super+Space` | The app launcher: the GNOME app grid, or `fuzzel` on Hyprland. |
-| `` Super+` `` | The drop-down terminal. See [Drop-down terminal](#drop-down-terminal). |
+| `` Super+` `` | The drop-down terminal. On GNOME the extension needs its hotkey set once by hand; see [Drop-down terminal](#drop-down-terminal). |
 | `Super+Shift+s` | Screenshot of a region: the GNOME screenshot UI, or `grim` and `slurp` to the clipboard. |
 | `Super+Escape` | Lock the screen. |
 
@@ -598,8 +598,8 @@ extra tool is necessary. `cleanup.sh` removes the extension.
 
 After the first install, **log out and back in**: the shell loads a new extension at start only.
 Then set the hotkey in the preferences of the extension. `F12` is the Guake convention, and it
-collides with nothing. For ``Super+` ``, clear the GNOME `switch-group` binding first, because
-Mutter grabs that key before any app sees it.
+collides with nothing. ``Super+` `` also works: `gnome-settings` clears the GNOME `switch-group`
+binding, which would otherwise grab that key before any app sees it.
 
 `gnome-settings` does not track the settings of the extension yet, because its schema keys have to
 be read on a machine that has the extension. To track them, set the hotkey, run

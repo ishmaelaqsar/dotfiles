@@ -16,7 +16,8 @@ __pkg_install "$PKG_MGR" zip unzip
 
 if [ ! -d "$HOME/.sdkman" ]; then
     echo "Installing sdkman..."
-    curl -s "https://get.sdkman.io?rcupdate=false" | bash
+    # -f: never pipe an HTTP error page into bash.
+    curl -fsSL "https://get.sdkman.io?rcupdate=false" | bash
 fi
 
 # sdkman's shell functions are not nounset-safe; relax set -u for all of them

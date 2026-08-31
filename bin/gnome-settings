@@ -45,8 +45,9 @@ MUTTER_KEYS = "org.gnome.mutter.keybindings"
 
 # App launchers: (slug, name, command, binding). Each one becomes a custom
 # keybinding under the relocatable schema below, at a path this repository owns.
-# dotfiles/.config/hypr/hyprland.conf binds the same keys, so the hands learn
-# one layout for both desktops. The trailing slash is part of a gsettings path.
+# dotfiles/.config/hypr/hyprland.conf follows the same Super layout, with a
+# few divergent chords — the README's keybinding table is the reference.
+# The trailing slash is part of a gsettings path.
 LAUNCHERS = [
     # Super+Return is the i3/sway/Hyprland idiom for "terminal", and GNOME
     # leaves the key free.
@@ -97,6 +98,11 @@ SETTINGS = [
     # the input-source switch, which has to go first, or the shell keeps the key.
     (WM_KEYS, "switch-input-source", "[]"),
     (WM_KEYS, "switch-input-source-backward", "[]"),
+    # Super+` belongs to the drop-down terminal (the quake-terminal
+    # extension). GNOME ships it as switch-group, which grabs the key ahead
+    # of the extension, the same way switch-input-source shadowed Super+Space.
+    (WM_KEYS, "switch-group", "[]"),
+    (WM_KEYS, "switch-group-backward", "[]"),
     (SHELL_KEYS, "toggle-application-view", "['<Super>space', '<Super>a']"),
     (SHELL_KEYS, "show-screenshot-ui", "['<Super><Shift>s', 'Print']"),
     # Super+l is the lock key by default, and tiling right wants it.

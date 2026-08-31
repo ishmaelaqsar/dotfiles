@@ -44,10 +44,14 @@ read -r -p "Proceed? [y/N] " answer
 
 removed=0
 
-# Remove a path only if it is a symlink resolving into this repo
+# Remove a path only if it is a symlink resolving into this repo. Resolve
+# the link physically before the compare: install.sh may have linked through
+# a checkout path with a symlinked component, and SELF_DIR is physical.
 __rm_if_ours() {
-    local dest=$1
-    if [ -L "$dest" ] && [[ "$(readlink "$dest")" == "$SELF_DIR"/* ]]; then
+    local dest=$1 target
+    [ -L "$dest" ] || return 0
+    target="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$dest")"
+    if [[ "$target" == "$SELF_DIR"/* ]]; then
         rm "$dest"
         removed=$((removed + 1))
     fi
