@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# tmux-sessions -- pick, create, or kill sessions from an fzf list, meant to
+# run inside a tmux display-popup (session menu s, or M-s with no leader).
+#
+# Enter on a session switches this client to it. Enter on a query that
+# matches nothing creates a detached session by that name and switches to it.
+# C-x kills the highlighted session and reloads the list; when that was the
+# session this client is on, detach-on-destroy no-detached moves the client
+# to a detached session and the popup goes with it.
+#
+# Session names pass through `-t "=$name"` so they match exactly, never as a
+# prefix or glob -- the same rule as __tmux_goto in .aliases. fzf expands {1}
+# to a single-quoted word and zsh reads a bare leading = as an equals-
+# expansion, so the preview and kill commands park the name in a variable
+# rather than writing `-t ={1}`.
+
+set -u
+
+if ! command -v fzf >/dev/null 2>&1; then
+    echo 'fzf is not installed'
+    sleep 2
+    exit 1
+fi
+
+if [ -z "${TMUX:-}" ]; then
+    echo 'tmux-sessions only works inside tmux'
+    sleep 2
+    exit 1
+fi
+
+# Exported so the reload() child shell sees it too. The separator is a tab.
+export TS_FMT='#{session_name}	#{session_windows}w#{?session_attached, (attached),}'
+
+out=$(tmux list-sessions -F "$TS_FMT" | fzf \
+    --print-query \
+    --prompt='session > ' \
+    --delimiter='	' \
+    --nth=1 \
+    --preview='n={1}; tmux list-windows -t "=$n"' \
+    --preview-window=right,55% \
+    --bind='ctrl-x:execute-silent(n={1}; tmux kill-session -t "=$n")+reload(tmux list-sessions -F "$TS_FMT")')
+status=$?
+
+query=$(printf '%s\n' "$out" | sed -n 1p)
+match=$(printf '%s\n' "$out" | sed -n 2p)
+
+case $status in
+    0)  # Enter on a session: switch this client to it.
+        tmux switch-client -t "=${match%%$'\t'*}"
+        ;;
+    1)  # Enter with no match: the query becomes a new detached session.
+        [ -n "$query" ] || exit 0
+        if ! err=$(tmux new-session -d -s "$query" 2>&1); then
+            echo "$err"      # e.g. a name with . or : -- show why, briefly
+            sleep 2
+            exit 1
+        fi
+        tmux switch-client -t "=$query"
+        ;;
+    *)  exit 0 ;;            # Escape / C-g
+esac
