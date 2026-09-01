@@ -338,10 +338,9 @@ this function when every machine runs 31."
 ;; gud's M-x gdb and M-x lldb stay for the text-only route. Adapters: gdb's own
 ;; `-i dap' on Linux (gdb 14 or newer, which setup-c.sh installs), and lldb-dap,
 ;; which Xcode ships outside PATH on macOS, hence xcrun.
-;; The keys are C-c, not C-x C-a: gud.el runs
+;; The keys live on C-c because gud.el runs
 ;; (global-set-key gud-key-prefix gud-global-map) when it loads, and its prefix
-;; is C-x C-a, so the first M-x gdb would replace the whole prefix map and take
-;; these two bindings with it.
+;; is C-x C-a. A binding there disappears with the first M-x gdb.
 (use-package dape
   :commands (dape dape-breakpoint-toggle)
   :bind (("C-c d" . dape)
@@ -374,10 +373,9 @@ this function when every machine runs 31."
 ;;;; Magit
 
 ;; C-x t g in tmux opens magit in a popup, in a frame made for that one job.
-;; `q' there buried the buffer and left the frame sitting on *scratch*, so the
-;; popup had to be closed with C-x C-c. The tools menu calls `my/magit-popup',
-;; which marks the frame, and `q' deletes a marked frame. A magit buffer
-;; reached any other way still buries, because no other frame carries the mark.
+;; The tools menu calls `my/magit-popup', which marks the frame, and `q'
+;; deletes a marked frame rather than leaving it on *scratch*. A magit buffer
+;; reached any other way buries, because no other frame carries the mark.
 (defun my/magit-popup ()
   "Open `magit-status' in a frame that `q' may close."
   (interactive)

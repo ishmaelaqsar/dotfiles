@@ -149,10 +149,9 @@ commands | tags | per-manager package overrides
 script: the compiler or runtime, the LSP server, and the debugger. Run them by hand, only on a
 machine that needs them. They are idempotent.
 
-Each takes `-h` and prints its own header. None takes a dry run: `lib/pkg.sh` would plan the
-package steps, while the installers these scripts drive (`curl | sh`, `git clone`, `go install`,
-sdkman) always act. A script therefore stops with a message when `DOTFILES_DRY_RUN` is set, rather
-than printing a plan and installing anyway.
+Each takes `-h` and prints its own header. None takes a dry run: `lib/pkg.sh` plans the package
+steps, but the installers these scripts drive (`curl | sh`, `git clone`, `go install`, sdkman)
+always act, so a script stops when `DOTFILES_DRY_RUN` is set rather than half honouring it.
 
 | Script | Toolchain | LSP | Debugger |
 | :--- | :--- | :--- | :--- |
@@ -444,22 +443,18 @@ speed whether or not you read the menu, so `C-x 2` still splits a pane. Five row
 | `C-x t` | tools | Magit, lazydocker, the `vm` picker, htop, ncdu — each in a popup |
 
 The tools rows open a popup, so a full-screen program borrows the whole terminal and gives it back
-on exit. Each row checks for its tool first and says so when it is missing, rather than flashing an
-empty frame. A popup inherits the environment of the tmux **server**, so a tool installed after the
+on exit. Each row checks its precondition first and says what is wrong, rather than flashing an
+empty frame: the tool has to be installed, and the git row has to be inside a repository. A popup inherits the environment of the tmux **server**, so a tool installed after the
 server started is not on its `PATH` until the server restarts.
 
-Every popup starts in the directory of the current pane, because each one passes
-`-d "#{pane_current_path}"`. Without that flag tmux starts the popup in the **session** directory,
-which is the directory you started tmux in. Magit then reports `Not inside Git repository`, and the
-popup closes as soon as `emacsclient` exits. A split and a new window take the same default, so
-those rows pass `-c "#{pane_current_path}"` for the same reason.
+Every popup starts in the directory of the current pane, through `-d "#{pane_current_path}"`.
+Splits and new windows take `-c "#{pane_current_path}"` for the same reason. Without those flags
+tmux uses the **session** directory, which is wherever you started tmux — rarely where you are.
 
-Every popup names the common keys of its tool in the border title, through `-T`. tmux draws the
-border, so the hint stays on screen while a full-screen program owns the inside of the popup. The
-two pickers this repository owns, `vm` and `tmux-sessions`, carry the same hint in the fzf
-`--header` instead, so it follows them outside tmux. Keep a new hint short. A title truncates at the
-popup width, which is 72 columns on an 80-column terminal, and fzf truncates a header wider than
-its list pane, which the preview window narrows to about 41 columns.
+Every popup names its tool's common keys in the border title, through `-T`. tmux draws the border,
+so the hint stays on screen while a full-screen program owns the inside. `vm` and `tmux-sessions`
+carry the same hint in the fzf `--header`, so it follows them outside tmux. Keep a new hint short:
+a title truncates at the popup width, and a header at the picker's list pane, about 41 columns.
 
 Rows that repeat hold their menu open, so `C-x C-n l l l` widens a pane three steps. A key that no
 row claims closes the menu and does nothing, which makes Escape and `C-g` the cancel keys and
@@ -590,8 +585,8 @@ machine runs.
 Three things GNOME does for free, which Hyprland does only when told:
 
 * **The screen locks itself.** `hypridle` dims the backlight at 8 minutes, locks at 10, and blanks
-  the display at 15. `Super+Escape` still locks at once. Without it the session locked only when
-  you remembered the key.
+  the display at 15. `Super+Escape` locks at once. Without hypridle the session locks on that
+  key alone.
 * **The hardware keys work.** Volume, mute, mic mute and brightness are bound to `wpctl` and
   `brightnessctl`. Mute and the volume keys keep working while the screen is locked.
 * **GTK apps are dark.** GTK3 reads `dotfiles/.config/gtk-3.0/settings.ini` directly here, because

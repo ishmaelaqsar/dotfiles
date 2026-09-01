@@ -60,8 +60,8 @@ export GPG_TTY=$(tty)
 # Link SSH to GPG
 unset SSH_AGENT_PID
 if command -v gpgconf >/dev/null; then
-    # Only export a socket that gpgconf actually named. Exporting an empty
-    # value leaves ssh with no agent and no clue why.
+    # Only export a socket that gpgconf named. An empty value leaves ssh with
+    # no agent and no error.
     __gpg_ssh_sock=$(gpgconf --list-dirs agent-ssh-socket 2>/dev/null)
     if [ -n "$__gpg_ssh_sock" ]; then
         export SSH_AUTH_SOCK="$__gpg_ssh_sock"

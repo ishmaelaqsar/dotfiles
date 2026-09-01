@@ -506,9 +506,6 @@ elif command -v git &> /dev/null; then
         __run git config --global "$key" "$value"
     done <<< "$GIT_BASE_CONFIG"
 
-    # No clean-gone alias: bin/git-gone does the same job as `git gone`, and it
-    # prunes first, skips the current branch and takes --dry-run.
-
     # delta renders the diffs, but only after git is told to use it. Guard on
     # the command: the package is best-effort, and a core.pager that is not
     # installed breaks every `git diff`.

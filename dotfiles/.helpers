@@ -234,11 +234,9 @@ add_secret() {
     fi
 
     # The value goes in on stdin, so it stays out of the argument list. eval
-    # applies the `export` line the tool prints.
-    #
-    # Capture first, and test the status. manage-secrets exits 1 with an empty
-    # stdout when GPG fails, and `eval ""` succeeds, so evaluating the output
-    # directly would report success after storing nothing.
+    # applies the `export` line the tool prints. Capture it first and test the
+    # status: manage-secrets exits 1 with an empty stdout when GPG fails, and
+    # `eval ""` succeeds, which would report a secret it never stored.
     local export_line
     export_line="$(printf '%s' "$value" | manage-secrets encrypt "$key")" || {
         echo "add_secret: $key was not stored." >&2
@@ -354,13 +352,6 @@ if command -v kubectl >/dev/null 2>&1; then
         alias kfind='kubectl get pods -A | grep -i'
     fi
 fi
-
-# ============================================================
-# Git Helpers
-# ============================================================
-# git-gone lives in bin/git-gone, so `git gone` works in every shell and in
-# a script, not only in an interactive bash. Run `git gone --help` for the
-# flags.
 
 # ============================================================
 # Second brain (Obsidian vault)

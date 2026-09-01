@@ -10,7 +10,7 @@ if [ "$#" -ne 2 ]; then
 fi
 
 # pacdiff runs this under sudo, where a bare "command not found" says nothing
-# about what to install. setup-emacs.sh installs Emacs; name it either way.
+# about what to install, so name what is missing.
 if ! command -v emacs >/dev/null 2>&1; then
     echo "ediff needs Emacs. Run setup-emacs.sh, or install the emacs package." >&2
     exit 1

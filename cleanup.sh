@@ -74,9 +74,8 @@ elif read -r -p "Proceed? [y/N] " answer; then
     # An answer arrived, from a terminal or from a pipe. Anything but y stops.
     [[ "$answer" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 0; }
 else
-    # EOF: no terminal and nothing piped in. The old code took that for an
-    # empty answer, printed "Aborted." and exited 0, so a caller could not
-    # tell it from a finished run. This script deletes, so say so and fail.
+    # EOF: no terminal, and nothing piped in. This script deletes, so an
+    # unanswered question fails rather than passing for a finished run.
     echo "No answer on stdin — pass -y to remove without the question." >&2
     exit 1
 fi
@@ -188,8 +187,8 @@ if command -v git >/dev/null 2>&1; then
     done <<< "$GIT_BASE_CONFIG
 $GIT_DELTA_CONFIG"
 
-    # An install before bin/git-gone existed left this alias behind. The value
-    # is a shell pipeline, so match a fragment of it rather than the whole.
+    # The clean-gone alias, which this repository does not write. bin/git-gone
+    # is the command. The value is a shell pipeline, so match a fragment.
     case "$(git config --global --get alias.clean-gone 2>/dev/null)" in
         *"branch -vv"*)
             __run git config --global --unset alias.clean-gone

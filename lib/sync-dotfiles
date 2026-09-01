@@ -17,17 +17,16 @@ install.sh calls this script. Run it directly to pick up a new dotfile without
 a full install.
 """
 
-USAGE = """Usage: sync-dotfiles [-n|--dry-run] [-c|--check] [-b|--backup] [target-dir]
+USAGE = """Usage: sync-dotfiles [-n|--dry-run] [-c|--check] [target-dir]
 
   -n, --dry-run   Print the plan. Change nothing.
   -c, --check     Report the files that are missing, have drifted, or are
                   stale links. Change nothing. Exit 1 when the target does
                   not match the repository.
-  -b, --backup    Accepted for compatibility. Backup is now the default: a
-                  real file or a foreign link moves to <name>.bak before a
-                  link replaces it. Only a link into this repository is
-                  removed without a backup, because it carries no data.
   -h, --help      Print this text.
+
+A real file or a foreign link moves to <name>.bak before a link replaces it.
+A link into this repository is removed without a backup: it carries no data.
 
 The target directory defaults to $HOME.
 
@@ -45,15 +44,12 @@ import sys
 from pathlib import Path
 
 # Parse arguments
-backup_flag = False  # kept for compatibility; backup is now the default
 dry_run = False
 check = False
 target_arg = None
 
 for arg in sys.argv[1:]:
-    if arg in ("--backup", "-b"):
-        backup_flag = True
-    elif arg in ("--dry-run", "-n"):
+    if arg in ("--dry-run", "-n"):
         dry_run = True
     elif arg in ("--check", "-c"):
         check = True

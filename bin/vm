@@ -432,8 +432,7 @@ def cmd_delete(args):
     elif args.yes:
         print("--yes given: deleting without a confirmation.")
     elif not sys.stdin.isatty():
-        # input() would raise EOFError here. Say what to do instead, the way
-        # pick_machine does when it cannot ask which machine.
+        # input() raises EOFError with no terminal. Say what to do instead.
         print("Error: delete needs a terminal to confirm.", file=sys.stderr)
         print("   Pass --yes to delete without the question.", file=sys.stderr)
         sys.exit(1)
@@ -742,10 +741,8 @@ def cmd_setup(args):
         f"{user}@{ip}",
         "-t",
         # ssh joins what follows into one string, and the remote login shell
-        # parses it. The script contains single quotes of its own, so quote it
-        # properly rather than wrapping it in bare `'...'`, which the remote
-        # shell would cut at the first inner quote. `-t` stays: the install
-        # commands use sudo, which needs the terminal for its prompt.
+        # parses it. The script carries single quotes of its own, so it needs
+        # shell quoting that survives them. `-t` gives sudo its terminal.
         f"bash -c {shlex.quote(remote_cmd)}",
     ]
 
