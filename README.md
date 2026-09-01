@@ -436,6 +436,12 @@ on exit. Each row checks for its tool first and says so when it is missing, rath
 empty frame. A popup inherits the environment of the tmux **server**, so a tool installed after the
 server started is not on its `PATH` until the server restarts.
 
+Every popup starts in the directory of the current pane, because each one passes
+`-d "#{pane_current_path}"`. Without that flag tmux starts the popup in the **session** directory,
+which is the directory you started tmux in. Magit then reports `Not inside Git repository`, and the
+popup closes as soon as `emacsclient` exits. A split and a new window take the same default, so
+those rows pass `-c "#{pane_current_path}"` for the same reason.
+
 Rows that repeat hold their menu open, so `C-x C-n l l l` widens a pane three steps. A key that no
 row claims closes the menu and does nothing, which makes Escape and `C-g` the cancel keys and
 means a typo cannot fire the wrong command.
