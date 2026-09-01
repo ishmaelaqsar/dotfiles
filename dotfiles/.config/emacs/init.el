@@ -141,7 +141,13 @@ there and the theme's faces are computed for a dumb terminal. Every frame
          ("M-s l"   . consult-line)
          ("M-s r"   . consult-ripgrep)
          ("M-s f"   . consult-fd)
-         ("C-x C-r" . consult-recent-file)))
+         ("C-x C-r" . consult-recent-file))
+  :custom
+  ;; Debian and Ubuntu ship the binary as fdfind, which is why .aliases wraps
+  ;; it. consult defaults to the literal "fd", so name whichever is here.
+  (consult-fd-args
+   (list (or (executable-find "fd") (executable-find "fdfind") "fd")
+         "--full-path --color=never")))
 
 ;; Annotations beside every candidate: a docstring for a command, the size
 ;; and date of a file.
@@ -330,10 +336,14 @@ this function when every machine runs 31."
 ;; gud's M-x gdb and M-x lldb stay for the text-only route. Adapters: gdb's own
 ;; `-i dap' on Linux (gdb 14 or newer, which setup-c.sh installs), and lldb-dap,
 ;; which Xcode ships outside PATH on macOS, hence xcrun.
+;; The keys are C-c, not C-x C-a: gud.el runs
+;; (global-set-key gud-key-prefix gud-global-map) when it loads, and its prefix
+;; is C-x C-a, so the first M-x gdb would replace the whole prefix map and take
+;; these two bindings with it.
 (use-package dape
   :commands (dape dape-breakpoint-toggle)
-  :bind (("C-x C-a d" . dape)
-         ("C-x C-a b" . dape-breakpoint-toggle))
+  :bind (("C-c d" . dape)
+         ("C-c b" . dape-breakpoint-toggle))
   :custom
   (dape-buffer-window-arrangement 'right)
   (dape-inlay-hints t)

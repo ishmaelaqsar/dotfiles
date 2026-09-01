@@ -11,6 +11,12 @@ macos-titlebar-style = native
 cursor-style = block
 cursor-style-blink = false
 
+# Option is Alt, whatever the keyboard layout. Ghostty leaves this to the
+# layout by default, and a non-US layout (British is enabled here) then sends
+# Unicode instead: M-f, M-s, M-x and M-h/j/k/l in tmux, and M-j in Emacs, all
+# stop working. Unicode input through Option goes with it.
+macos-option-as-alt = true
+
 # `clipboard` = copy selections to the system clipboard too, not only the
 # primary selection (`true` never reaches ctrl+shift+v on Linux)
 copy-on-select = clipboard
