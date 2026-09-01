@@ -5,6 +5,26 @@ set -euo pipefail
 # gpg as its only dependency, so it is a clone and a link, not a package. The
 # first shell of each day runs `yk remind` from .bashrc. Idempotent.
 
+# A dry run is all or nothing. lib/pkg.sh honours DOTFILES_DRY_RUN for the
+# package steps, but the installers below (curl | sh, git clone, go install,
+# sdkman) always act, so a half-planned run would install anyway. -h prints
+# the header above.
+case "${1:-}" in
+    -h|--help)
+        sed -n '3,/^$/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+        exit 0
+        ;;
+    -*)
+        echo "Unknown option: $1" >&2
+        echo "Usage: $(basename "${BASH_SOURCE[0]}") [-h]" >&2
+        exit 2
+        ;;
+esac
+if [ "${DOTFILES_DRY_RUN:-0}" = "1" ]; then
+    echo "$(basename "${BASH_SOURCE[0]}"): no dry run. It installs, or it does not run." >&2
+    exit 2
+fi
+
 YK_REPO="https://github.com/ishmaelaqsar/yk"
 YK_DIR="$HOME/.local/share/yk"
 

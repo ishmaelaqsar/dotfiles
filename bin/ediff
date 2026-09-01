@@ -8,5 +8,12 @@ if [ "$#" -ne 2 ]; then
     echo "Usage: ediff FILE_A FILE_B" >&2
     exit 2
 fi
+
+# pacdiff runs this under sudo, where a bare "command not found" says nothing
+# about what to install. setup-emacs.sh installs Emacs; name it either way.
+if ! command -v emacs >/dev/null 2>&1; then
+    echo "ediff needs Emacs. Run setup-emacs.sh, or install the emacs package." >&2
+    exit 1
+fi
 EDIFF_A="$1" EDIFF_B="$2" \
     exec emacs -nw -q --eval '(ediff-files (getenv "EDIFF_A") (getenv "EDIFF_B"))'

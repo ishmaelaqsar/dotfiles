@@ -11,6 +11,16 @@ if [ $# -eq 0 ]; then
     exit 2
 fi
 
+# Name the package rather than leaving the shell to say "command not found".
+# lib/pkgconf.py resolves the name for this host's package manager, and
+# resolve() follows the symlink install.sh puts in $HOME/bin.
+if ! command -v pandoc >/dev/null 2>&1; then
+    repo="$(cd "$(dirname "$(readlink "${BASH_SOURCE[0]}" || echo "${BASH_SOURCE[0]}")")/.." && pwd)"
+    hint="$(python3 -c 'import sys; sys.path.insert(0, sys.argv[1] + "/lib"); import pkgconf; print(pkgconf.install_hint("pandoc"))' "$repo" 2>/dev/null)"
+    echo "md2org needs pandoc. ${hint:-Install pandoc with your package manager.}" >&2
+    exit 1
+fi
+
 for f in "$@"; do
     out="${f%.*}.org"
     pandoc -f gfm-gfm_auto_identifiers -t org --wrap=none -o "$out" "$f"

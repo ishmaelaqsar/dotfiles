@@ -60,7 +60,15 @@ export GPG_TTY=$(tty)
 # Link SSH to GPG
 unset SSH_AGENT_PID
 if command -v gpgconf >/dev/null; then
-    export SSH_AUTH_SOCK=$(gpgconf --list-dirs agent-ssh-socket)
+    # Only export a socket that gpgconf actually named. Exporting an empty
+    # value leaves ssh with no agent and no clue why.
+    __gpg_ssh_sock=$(gpgconf --list-dirs agent-ssh-socket 2>/dev/null)
+    if [ -n "$__gpg_ssh_sock" ]; then
+        export SSH_AUTH_SOCK="$__gpg_ssh_sock"
+    else
+        echo "gpg-agent named no ssh socket; ssh has no agent." >&2
+    fi
+    unset __gpg_ssh_sock
 fi
 
 # Tell a running agent which terminal to draw the PIN prompt on. The test

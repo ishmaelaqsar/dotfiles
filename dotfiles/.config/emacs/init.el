@@ -373,8 +373,26 @@ this function when every machine runs 31."
 
 ;;;; Magit
 
+;; C-x t g in tmux opens magit in a popup, in a frame made for that one job.
+;; `q' there buried the buffer and left the frame sitting on *scratch*, so the
+;; popup had to be closed with C-x C-c. The tools menu calls `my/magit-popup',
+;; which marks the frame, and `q' deletes a marked frame. A magit buffer
+;; reached any other way still buries, because no other frame carries the mark.
+(defun my/magit-popup ()
+  "Open `magit-status' in a frame that `q' may close."
+  (interactive)
+  (set-frame-parameter nil 'my-magit-popup t)
+  (magit-status))
+
+(defun my/magit-bury-buffer (kill-buffer)
+  "Close the tmux popup frame, or bury the buffer as magit normally does."
+  (if (frame-parameter nil 'my-magit-popup)
+      (delete-frame)
+    (magit-mode-quit-window kill-buffer)))
+
 (use-package magit
-  :bind ("C-x g" . magit-status))
+  :bind ("C-x g" . magit-status)
+  :custom (magit-bury-buffer-function #'my/magit-bury-buffer))
 
 ;;;; Org
 

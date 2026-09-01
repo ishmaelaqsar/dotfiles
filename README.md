@@ -149,6 +149,11 @@ commands | tags | per-manager package overrides
 script: the compiler or runtime, the LSP server, and the debugger. Run them by hand, only on a
 machine that needs them. They are idempotent.
 
+Each takes `-h` and prints its own header. None takes a dry run: `lib/pkg.sh` would plan the
+package steps, while the installers these scripts drive (`curl | sh`, `git clone`, `go install`,
+sdkman) always act. A script therefore stops with a message when `DOTFILES_DRY_RUN` is set, rather
+than printing a plan and installing anyway.
+
 | Script | Toolchain | LSP | Debugger |
 | :--- | :--- | :--- | :--- |
 | `setup-c.sh` | C/C++ (CLT / build-essential / base-devel), cmake | clangd | lldb, gdb + valgrind (Linux); Dape in Emacs |
@@ -553,6 +558,7 @@ Windows and workspaces:
 | `Super+1…4` | Jump to that workspace. | The same, and 5 and 6. |
 | `Super+Shift+1…4` | Move the window to that workspace. | The same. |
 | `Super+Alt+Left/Right` | Previous or next workspace. | The same. |
+| `Super+Shift+e` | — | **End the session.** It asks nothing, and it sits one Shift from `Super+e`, which opens an Emacs frame. |
 
 GNOME has no directional focus, so `h j k l` tile and maximise there. The arrow keys keep their
 GNOME defaults next to the letters.

@@ -17,8 +17,12 @@
 set -u
 
 if ! command -v fzf >/dev/null 2>&1; then
-    echo 'fzf is not installed'
-    sleep 2
+    # The popup closes when this exits, so the message has to name the package
+    # while it is still on screen.
+    repo="$(cd "$(dirname "$(readlink "${BASH_SOURCE[0]}" || echo "${BASH_SOURCE[0]}")")/.." && pwd)"
+    hint="$(python3 -c 'import sys; sys.path.insert(0, sys.argv[1] + "/lib"); import pkgconf; print(pkgconf.install_hint("fzf"))' "$repo" 2>/dev/null)"
+    echo "tmux-sessions needs fzf. ${hint:-Install fzf with your package manager.}"
+    sleep 3
     exit 1
 fi
 
