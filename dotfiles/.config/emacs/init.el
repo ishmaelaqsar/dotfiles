@@ -113,8 +113,10 @@ there and the theme's faces are computed for a dumb terminal. Every frame
 ;; term/xterm.el loads when the first terminal frame opens, and reads these
 ;; right after. setSelection makes a kill reach the system clipboard through
 ;; OSC 52, which tmux (set-clipboard on) and ssh both forward. modifyOtherKeys
-;; lets C-; and C-M-x reach Emacs. The default `check' asks the terminal, and
-;; a terminal inside tmux does not answer.
+;; is what asks for C-; and C-M-x. The default `check' asks the terminal, and a
+;; terminal inside tmux does not answer, hence the explicit list. Asking is only
+;; half of it: tmux drops the modifier unless `extended-keys' is on, which
+;; tmux.conf sets.
 (with-eval-after-load 'xterm
   (setopt xterm-set-window-title t
           xterm-extra-capabilities '(modifyOtherKeys setSelection)))
