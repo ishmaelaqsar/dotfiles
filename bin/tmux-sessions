@@ -34,6 +34,7 @@ export TS_FMT='#{session_name}	#{session_windows}w#{?session_attached, (attached
 out=$(tmux list-sessions -F "$TS_FMT" | fzf \
     --print-query \
     --prompt='session > ' \
+    --header='enter picks or creates, C-x kills' \
     --delimiter='	' \
     --nth=1 \
     --preview='n={1}; tmux list-windows -t "=$n"' \

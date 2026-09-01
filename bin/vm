@@ -365,6 +365,7 @@ def pick_machine():
             "--height", "40%",
             "--reverse",
             "--prompt", "machine > ",
+            "--header", "enter picks, esc cancels",
             "--preview", f"{os.path.abspath(sys.argv[0])} -n {{}} status",
             "--preview-window", "right,50%",
         ],

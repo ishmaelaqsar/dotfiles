@@ -442,6 +442,13 @@ which is the directory you started tmux in. Magit then reports `Not inside Git r
 popup closes as soon as `emacsclient` exits. A split and a new window take the same default, so
 those rows pass `-c "#{pane_current_path}"` for the same reason.
 
+Every popup names the common keys of its tool in the border title, through `-T`. tmux draws the
+border, so the hint stays on screen while a full-screen program owns the inside of the popup. The
+two pickers this repository owns, `vm` and `tmux-sessions`, carry the same hint in the fzf
+`--header` instead, so it follows them outside tmux. Keep a new hint short. A title truncates at the
+popup width, which is 72 columns on an 80-column terminal, and fzf truncates a header wider than
+its list pane, which the preview window narrows to about 41 columns.
+
 Rows that repeat hold their menu open, so `C-x C-n l l l` widens a pane three steps. A key that no
 row claims closes the menu and does nothing, which makes Escape and `C-g` the cancel keys and
 means a typo cannot fire the wrong command.
