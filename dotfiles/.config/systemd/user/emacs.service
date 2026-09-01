@@ -1,0 +1,27 @@
+[Unit]
+# The Emacs daemon, so the first Super+e or git commit of a session does not
+# pay the whole init cost. EDITOR is `emacsclient -t -a ''`, which starts a
+# daemon when none runs; without this unit that first client waits for the
+# full startup.
+#
+# This follows the unit Emacs ships in etc/emacs.service. A unit here shadows
+# the distro copy in /usr/lib/systemd/user/, which is the point: install.sh
+# enables what this directory holds, and cleanup.sh disables it again.
+Description=Emacs text editor daemon
+Documentation=info:emacs man:emacs(1) https://gnu.org/software/emacs/
+
+[Service]
+Type=notify
+# systemd tracks a foreground process, hence --fg-daemon rather than --daemon.
+# `emacs` unqualified: the distro packages put it in /usr/bin, which is on the
+# PATH of a systemd user session. A build elsewhere needs the full path here.
+ExecStart=emacs --fg-daemon
+
+# Emacs exits with status 15 after SIGTERM, which is what systemd sends to
+# stop a service. Without this line a normal stop counts as a failure, and
+# Restart=on-failure then brings the daemon straight back.
+SuccessExitStatus=15
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

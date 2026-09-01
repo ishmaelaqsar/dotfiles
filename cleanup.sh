@@ -70,15 +70,15 @@ fi
 echo "This removes dotfiles symlinks, generated config, fonts$( [ "$ALL" -eq 1 ] && echo ', and language toolchains (sdkman, quicklisp, uv, yk, Emacs packages)')."
 if [ "$DRY_RUN" -eq 1 ] || [ "$ASSUME_YES" -eq 1 ]; then
     :
-elif [ ! -t 0 ]; then
-    # `read` would take EOF for an empty answer here, and the old code then
-    # printed "Aborted." and exited 0 — a caller could not tell the difference
-    # from a finished run. This script deletes, so no terminal is not a yes.
-    echo "No terminal on stdin — pass -y to remove without the question." >&2
-    exit 1
-else
-    read -r -p "Proceed? [y/N] " answer
+elif read -r -p "Proceed? [y/N] " answer; then
+    # An answer arrived, from a terminal or from a pipe. Anything but y stops.
     [[ "$answer" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 0; }
+else
+    # EOF: no terminal and nothing piped in. The old code took that for an
+    # empty answer, printed "Aborted." and exited 0, so a caller could not
+    # tell it from a finished run. This script deletes, so say so and fail.
+    echo "No answer on stdin — pass -y to remove without the question." >&2
+    exit 1
 fi
 
 removed=0

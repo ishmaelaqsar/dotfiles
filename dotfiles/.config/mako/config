@@ -1,0 +1,31 @@
+# mako — notifications under Hyprland, which starts it from hyprland.conf.
+#
+# The palette is the one waybar (style.css), fuzzel (fuzzel.ini) and ghostty
+# share: #1a1a17 ground, #fdfdfb ink, #1f5fa8 for the accent and the border.
+# Square corners, because nothing else on this desktop has rounded ones.
+
+font=0xProto Nerd Font Mono 10
+background-color=#1a1a17
+text-color=#fdfdfb
+border-color=#1f5fa8
+border-size=2
+border-radius=0
+
+padding=10
+margin=8
+width=380
+default-timeout=6000
+
+# Anchor under the bar, on the side the clock sits.
+anchor=top-right
+layer=overlay
+
+# A notification that asks for attention keeps the accent and stays put until
+# it is dismissed. urgency=low dims instead.
+[urgency=low]
+text-color=#8a877e
+default-timeout=4000
+
+[urgency=critical]
+border-color=#c04a1d
+default-timeout=0

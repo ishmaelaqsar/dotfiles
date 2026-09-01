@@ -88,7 +88,7 @@ apply to the machine:
 | :--- | :--- |
 | Install the packages via the detected manager? | Skips the package table, and the AUR helper on Arch. |
 | Desktop steps? (Linux with a display) | Skips `wl-clipboard`, the GNOME settings and keys, and the Quake Terminal extension. |
-| Install the Hyprland session helpers? (`Hyprland` on `PATH`) | Skips `fuzzel`, `waybar`, `mako`, `hyprlock`, `grim`, `slurp`, the portal, and `local.conf`. |
+| Install the Hyprland session helpers? (`Hyprland` on `PATH`) | Skips `fuzzel`, `waybar`, `mako`, `hyprlock`, `hypridle`, `grim`, `slurp`, `brightnessctl`, the two portals, and `local.conf`. |
 | Install OpenCode? (when absent) | Skips it. |
 | Install Ghostty? (when absent) | Skips it. |
 
@@ -236,7 +236,14 @@ Two details are deliberate:
 Emacs, where `setup-emacs.sh` has installed it. `.bash_profile` then sets `EDITOR` to
 `emacsclient -t -a ''` and `VISUAL` to `emacsclient -c -a ''`: the terminal for a git commit, a
 frame for a large edit, and `-a ''` starts the daemon when none runs. A machine with `emacs` but
-no client gets `emacs -nw -q`; a machine with no Emacs keeps vi. Two openers: `ce` picks a
+no client gets `emacs -nw -q`; a machine with no Emacs keeps vi.
+
+`setup-emacs.sh` keeps a daemon warm, so `-a ''` is the fallback rather than the normal path:
+Linux enables the systemd user unit in `dotfiles/.config/systemd/user/emacs.service`, and macOS
+gets `brew services start emacs-plus@30`. Restart it after an init change:
+`emacsclient -e '(kill-emacs)'`, then let the service start it again. Note that plain `emacs` on
+macOS opens the **GUI** app and holds the terminal; use `emacsclient -t` or `emacs -nw` for a
+terminal frame. Two openers: `ce` picks a
 directory under `$WORKSPACE` with fzf and opens it in a frame, and `alt+shift+o` in Ghostty does
 the same for the current directory.
 
@@ -574,10 +581,22 @@ count has nothing to jump to when the desktop is quiet.
 `dotfiles/.config/hypr/hyprland.conf` is the tiling counterpart of the GNOME keys. When
 `Hyprland` is on `PATH`, `install.sh` activates the `hyprland` tag in the package table (and asks
 first, in a terminal), which
-brings `fuzzel` (launcher), `waybar` (bar), `mako` (notifications), `hyprlock`, `grim` and `slurp`,
-and `xdg-desktop-portal-hyprland`. Their configs are `dotfiles/.config/fuzzel/` and
-`dotfiles/.config/waybar/`. It does not install Hyprland itself: the package is the one thing that
-decides which desktop a machine runs.
+brings `fuzzel` (launcher), `waybar` (bar), `mako` (notifications), `hyprlock`, `hypridle`,
+`grim` and `slurp`, `brightnessctl`, and two portals. Their configs are `dotfiles/.config/fuzzel/`,
+`dotfiles/.config/waybar/`, `dotfiles/.config/mako/` and `dotfiles/.config/hypr/hypridle.conf`.
+It does not install Hyprland itself: the package is the one thing that decides which desktop a
+machine runs.
+
+Three things GNOME does for free, which Hyprland does only when told:
+
+* **The screen locks itself.** `hypridle` dims the backlight at 8 minutes, locks at 10, and blanks
+  the display at 15. `Super+Escape` still locks at once. Without it the session locked only when
+  you remembered the key.
+* **The hardware keys work.** Volume, mute, mic mute and brightness are bound to `wpctl` and
+  `brightnessctl`. Mute and the volume keys keep working while the screen is locked.
+* **GTK apps are dark.** GTK3 reads `dotfiles/.config/gtk-3.0/settings.ini` directly here, because
+  no settings daemon runs. `xdg-desktop-portal-gtk` comes too: the Hyprland portal carries screen
+  sharing and global shortcuts, but no file picker and no settings.
 
 Machine-local settings — monitors, scale, a wallpaper — go in `~/.config/hypr/local.conf`, which
 `install.sh` creates empty and the repo does not track. The main config sources it last, so a line

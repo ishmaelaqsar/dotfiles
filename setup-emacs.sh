@@ -84,6 +84,20 @@ else
     echo "Note: $INIT is missing. Run ./install.sh to link it, then run this script again." >&2
 fi
 
+# Keep the daemon warm across logins. Linux gets it from the systemd user unit
+# in dotfiles/.config/systemd/user/emacs.service, which install.sh enables.
+# macOS has no such unit, so hand the job to brew services, which writes its
+# own LaunchAgent. Both are idempotent, and neither restarts a running daemon.
+if [[ "$OSTYPE" == darwin* ]] && command -v brew >/dev/null 2>&1; then
+    if brew services list 2>/dev/null | grep -qE "^emacs-plus@30\s+started"; then
+        echo "The Emacs daemon is already a brew service."
+    else
+        echo "Starting the Emacs daemon as a brew service..."
+        brew services start emacs-plus@30 \
+            || echo "Warning: could not start the service. Start a daemon with 'emacs --daemon'." >&2
+    fi
+fi
+
 echo "Done. $(emacs --version | head -1)"
-echo "emacsclient needs a server. The init starts one in the first graphical Emacs,"
-echo "and \`emacsclient -a ''\` starts a daemon when none runs."
+echo "emacsclient needs a server. On Linux the systemd user unit starts one, on"
+echo "macOS the brew service does, and \`emacsclient -a ''\` starts one when neither has."

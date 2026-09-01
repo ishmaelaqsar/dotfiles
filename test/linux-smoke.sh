@@ -153,6 +153,16 @@ dotfiles sync --check >/dev/null 2>&1 \
 [ ! -e "$HOME/bin/sync-dotfiles" ] \
     && pass "the sync engine is not linked into ~/bin" || flunk "\$HOME/bin/sync-dotfiles still exists"
 
+say "parser parity (lib/pkg.sh vs lib/pkgconf.py)"
+bash test/pkg-parity.sh > /tmp/parity.log 2>&1 \
+    && pass "both parsers read packages.conf the same way" \
+    || { flunk "the parsers disagree"; tail -20 /tmp/parity.log; }
+
+say "setup-*.sh refuse a dry run rather than half honouring it"
+DOTFILES_DRY_RUN=1 ./setup-go.sh >/dev/null 2>&1 \
+    && flunk "setup-go.sh ran under DOTFILES_DRY_RUN" \
+    || pass "setup-go.sh stops under DOTFILES_DRY_RUN"
+
 say "setup-c.sh"
 ./setup-c.sh || flunk "setup-c.sh exited non-zero"
 for t in cc gdb cmake; do check "$t"; done
