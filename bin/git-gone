@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# git-gone — delete local branches whose upstream on the remote is gone.
+#
+# install.sh links bin/ into ~/bin, and git runs any `git-<name>` on PATH as a
+# subcommand, so this is `git gone` as well as `git-gone`.
+#
+# It prunes the remote-tracking refs first, then deletes every local branch
+# that `git branch -vv` marks as '[<remote>: gone]'. The current branch is
+# always skipped, and an unmerged branch survives without --force.
+set -uo pipefail
+
+usage() {
+    cat <<'EOF'
+Usage: git gone [-n|--dry-run] [-f|--force]
+
+  -n, --dry-run  List what would be deleted. Delete nothing.
+  -f, --force    Delete an unmerged branch too (git branch -D).
+  -h             Print this text. `git gone --help` opens the man page that
+                 this script does not have, so ask git for `-h` instead.
+EOF
+}
+
+if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    echo "git-gone: not inside a git repository." >&2
+    exit 1
+fi
+
+dry_run=0
+force=0
+for arg in "$@"; do
+    case "$arg" in
+        -n|--dry-run) dry_run=1 ;;
+        -f|--force)   force=1 ;;
+        -h|--help)    usage; exit 0 ;;
+        *)
+            echo "git-gone: unknown option: $arg" >&2
+            usage >&2
+            exit 2
+            ;;
+    esac
+done
+
+echo "Pruning remote-tracking refs..."
+git fetch --prune >/dev/null 2>&1
+
+# Branches whose upstream is gone. $1 is the '*' or '+' marker for a branch
+# that is checked out here or in a worktree, so the name moves to $2 there.
+branches=$(git branch -vv | awk '/: gone\]/ { if ($1 == "*" || $1 == "+") print $2; else print $1 }')
+
+if [ -z "$branches" ]; then
+    echo "No gone branches to clean up."
+    exit 0
+fi
+
+current=$(git symbolic-ref --short HEAD 2>/dev/null)
+
+flag="-d"
+[ "$force" -eq 1 ] && flag="-D"
+
+while IFS= read -r branch; do
+    [ -z "$branch" ] && continue
+    if [ "$branch" = "$current" ]; then
+        echo "Skipping the current branch: $branch"
+        continue
+    fi
+    if [ "$dry_run" -eq 1 ]; then
+        echo "Would delete: $branch"
+    else
+        git branch "$flag" "$branch"
+    fi
+done <<< "$branches"

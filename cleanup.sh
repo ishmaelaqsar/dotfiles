@@ -3,24 +3,49 @@ set -euo pipefail
 
 # Undo what install.sh / setup-*.sh put on this machine.
 #
-# Usage: ./cleanup.sh [-f] [-a]
-#   -f  skip the foreign-checkout guard
-#   -a  also remove language toolchains installed by setup-*.sh
-#       (sdkman, quicklisp, uv, yk, Emacs packages). ~/go is never touched —
-#       it may hold code.
-#
 # System packages are never uninstalled (shared dependencies); the list to
 # remove by hand is printed at the end.
 
 FORCE=0
 ALL=0
-while getopts ":fa" opt; do
-    case "$opt" in
-        f)  FORCE=1 ;;
-        a)  ALL=1 ;;
-        \?) echo "Usage: $0 [-f] [-a]" >&2; exit 2 ;;
+ASSUME_YES=0
+DRY_RUN=0
+
+__usage() {
+    cat <<'EOF'
+Usage: ./cleanup.sh [-f] [-a] [-y] [-n]
+
+  -f             Skip the foreign-checkout guard.
+  -a             Also remove the language toolchains setup-*.sh installed
+                 (sdkman, quicklisp, uv, yk, Emacs packages). ~/go is never
+                 touched, because it may hold your code.
+  -y, --yes      Do not ask before removing anything.
+  -n, --dry-run  Print what would be removed. Change nothing.
+  -h, --help     Print this text.
+
+The script asks once before it removes anything. Without a terminal it stops
+instead, because it deletes: pass -y to run it from a script.
+EOF
+}
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -f)            FORCE=1 ;;
+        -a)            ALL=1 ;;
+        -y|--yes)      ASSUME_YES=1 ;;
+        -n|--dry-run)  DRY_RUN=1 ;;
+        -h|--help)     __usage; exit 0 ;;
+        -*)            echo "Unknown option: $1" >&2; __usage >&2; exit 2 ;;
+        *)             echo "cleanup.sh takes no argument: $1" >&2; __usage >&2; exit 2 ;;
     esac
+    shift
 done
+
+# Exported, so the shared helpers in lib/pkg.sh plan instead of removing.
+export DOTFILES_DRY_RUN="$DRY_RUN"
+if [ "$DRY_RUN" -eq 1 ]; then
+    echo "=== Dry run: nothing on this machine changes. ==="
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SELF_DIR="$(cd "$SCRIPT_DIR" && pwd -P)"
@@ -28,6 +53,10 @@ SELF_DIR="$(cd "$SCRIPT_DIR" && pwd -P)"
 # The package table, so the summary at the end names what install.sh installs
 # today rather than a list that drifts.
 source "$SCRIPT_DIR/lib/pkg.sh"
+
+# The global git keys install.sh writes. Sourced rather than repeated, so a key
+# added there is unset here as well.
+source "$SCRIPT_DIR/lib/gitconfig.sh"
 
 # Same guard as install.sh: if a different checkout owns this home, nothing
 # here was installed by this repository, and removing fonts or config would break that setup.
@@ -39,8 +68,18 @@ if [ -n "$OTHER_DIR" ] && [ "$OTHER_DIR" != "$SELF_DIR" ] && [ "$FORCE" -ne 1 ];
 fi
 
 echo "This removes dotfiles symlinks, generated config, fonts$( [ "$ALL" -eq 1 ] && echo ', and language toolchains (sdkman, quicklisp, uv, yk, Emacs packages)')."
-read -r -p "Proceed? [y/N] " answer
-[[ "$answer" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 0; }
+if [ "$DRY_RUN" -eq 1 ] || [ "$ASSUME_YES" -eq 1 ]; then
+    :
+elif [ ! -t 0 ]; then
+    # `read` would take EOF for an empty answer here, and the old code then
+    # printed "Aborted." and exited 0 — a caller could not tell the difference
+    # from a finished run. This script deletes, so no terminal is not a yes.
+    echo "No terminal on stdin — pass -y to remove without the question." >&2
+    exit 1
+else
+    read -r -p "Proceed? [y/N] " answer
+    [[ "$answer" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 0; }
+fi
 
 removed=0
 
@@ -52,7 +91,7 @@ __rm_if_ours() {
     [ -L "$dest" ] || return 0
     target="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$dest")"
     if [[ "$target" == "$SELF_DIR"/* ]]; then
-        rm "$dest"
+        __run rm "$dest"
         removed=$((removed + 1))
     fi
 }
@@ -60,7 +99,7 @@ __rm_if_ours() {
 # GNOME desktop settings — put the saved pre-dotfiles values back
 if command -v gsettings >/dev/null 2>&1; then
     echo "Restoring GNOME settings..."
-    python3 "$SCRIPT_DIR/bin/gnome-settings" restore || true
+    __run python3 "$SCRIPT_DIR/bin/gnome-settings" restore || true
 fi
 
 # GNOME Shell extension installed by install.sh
@@ -68,7 +107,7 @@ QUAKE_UUID="quake-terminal@diegodario88.github.io"
 if command -v gnome-extensions >/dev/null 2>&1 \
    && gnome-extensions list 2>/dev/null | grep -qx "$QUAKE_UUID"; then
     echo "Removing the Quake Terminal GNOME extension..."
-    gnome-extensions uninstall "$QUAKE_UUID" >/dev/null 2>&1 || true
+    __run gnome-extensions uninstall "$QUAKE_UUID" >/dev/null 2>&1 || true
     removed=$((removed + 1))
 fi
 
@@ -80,17 +119,17 @@ if command -v systemctl >/dev/null 2>&1 && [ -d "/run/user/$(id -u)" ]; then
     for unit_path in "$UNIT_SRC_DIR"/*.service "$UNIT_SRC_DIR"/*.timer "$UNIT_SRC_DIR"/*.socket; do
         [ -e "$unit_path" ] || continue
         grep -q '^\[Install\]' "$unit_path" || continue
-        systemctl --user disable --now "$(basename "$unit_path")" >/dev/null 2>&1 || true
+        __run systemctl --user disable --now "$(basename "$unit_path")" >/dev/null 2>&1 || true
     done
 
-    systemctl --user disable --now gpg-agent-ssh.socket >/dev/null 2>&1 || true
+    __run systemctl --user disable --now gpg-agent-ssh.socket >/dev/null 2>&1 || true
     for unit in gcr-ssh-agent.socket gcr-ssh-agent.service gnome-keyring-ssh.service; do
         if [ "$(systemctl --user is-enabled "$unit" 2>/dev/null)" = "masked" ]; then
             echo "  -> Unmasking $unit"
-            systemctl --user unmask "$unit" >/dev/null 2>&1 || true
+            __run systemctl --user unmask "$unit" >/dev/null 2>&1 || true
         fi
     done
-    systemctl --user daemon-reload >/dev/null 2>&1 || true
+    __run systemctl --user daemon-reload >/dev/null 2>&1 || true
 fi
 
 echo "Removing symlinks into $SELF_DIR..."
@@ -106,7 +145,7 @@ echo "Removing managed ~/.bashrc.d files..."
 if [ -d "$HOME/.bashrc.d" ]; then
     for rc in "$HOME/.bashrc.d"/*; do
         if [ -f "$rc" ] && grep -q '^# managed-by-dotfiles' "$rc"; then
-            rm "$rc"
+            __run rm "$rc"
             removed=$((removed + 1))
         fi
     done
@@ -116,44 +155,52 @@ echo "Removing 0xProto fonts..."
 if [[ "$OSTYPE" == darwin* ]]; then FONT_DIR="$HOME/Library/Fonts"; else FONT_DIR="$HOME/.local/share/fonts"; fi
 for f in "$SCRIPT_DIR"/general/0xProto/*.ttf; do
     dest="$FONT_DIR/$(basename "$f")"
-    [ -f "$dest" ] && rm "$dest" && removed=$((removed + 1))
+    [ -f "$dest" ] && __run rm "$dest" && removed=$((removed + 1))
 done
-[[ "$OSTYPE" != darwin* ]] && command -v fc-cache >/dev/null 2>&1 && fc-cache -f "$FONT_DIR" || true
+[[ "$OSTYPE" != darwin* ]] && command -v fc-cache >/dev/null 2>&1 && __run fc-cache -f "$FONT_DIR" || true
 
 # Generated (non-symlink) config
 if [ -f "$HOME/.config/ghostty/config.local" ]; then
-    rm "$HOME/.config/ghostty/config.local"
+    __run rm "$HOME/.config/ghostty/config.local"
     removed=$((removed + 1))
 fi
 if [ -f "$HOME/.gnupg/gpg-agent.conf" ] && grep -q 'Generated by dotfiles/install' "$HOME/.gnupg/gpg-agent.conf"; then
-    rm "$HOME/.gnupg/gpg-agent.conf"
+    __run rm "$HOME/.gnupg/gpg-agent.conf"
     removed=$((removed + 1))
-    command -v gpg-connect-agent >/dev/null 2>&1 && gpg-connect-agent reloadagent /bye >/dev/null 2>&1 || true
+    command -v gpg-connect-agent >/dev/null 2>&1 && __run gpg-connect-agent reloadagent /bye >/dev/null 2>&1 || true
 fi
 
 # Unset global git config keys, but only if they still hold the values install.sh sets
 __git_unset_if() {
     local key=$1 expect=$2
     if [ "$(git config --global --get "$key" 2>/dev/null)" = "$expect" ]; then
-        git config --global --unset "$key"
+        __run git config --global --unset "$key"
         removed=$((removed + 1))
     fi
 }
 if command -v git >/dev/null 2>&1; then
     echo "Unsetting global git config set by install.sh..."
-    __git_unset_if user.name "Ishmael Aqsar"
-    __git_unset_if user.email "ishmael-dev@aqsar.dev"
-    __git_unset_if core.excludesfile "$HOME/.gitignore_global"
-    __git_unset_if core.attributesfile "$HOME/.gitattributes"
-    # The delta wiring. Leaving core.pager behind would break `git diff` on a
-    # machine where the package is later removed.
-    __git_unset_if core.pager "delta"
-    __git_unset_if interactive.diffFilter "delta --color-only"
-    __git_unset_if delta.navigate "true"
+    # Both lists, so every key install.sh writes comes back out. Leaving
+    # core.pager behind would break `git diff` on a machine where the delta
+    # package is later removed.
+    while IFS='=' read -r key value; do
+        __git_unset_if "$key" "$value"
+    done <<< "$GIT_BASE_CONFIG
+$GIT_DELTA_CONFIG"
+
+    # An install before bin/git-gone existed left this alias behind. The value
+    # is a shell pipeline, so match a fragment of it rather than the whole.
+    case "$(git config --global --get alias.clean-gone 2>/dev/null)" in
+        *"branch -vv"*)
+            __run git config --global --unset alias.clean-gone
+            removed=$((removed + 1))
+            ;;
+    esac
+
     # The path varies by distro, so match on the helper name
     case "$(git config --global --get credential.helper 2>/dev/null)" in
         */git-credential-libsecret)
-            git config --global --unset credential.helper
+            __run git config --global --unset credential.helper
             removed=$((removed + 1))
             ;;
     esac
@@ -161,25 +208,25 @@ fi
 
 if [ "$ALL" -eq 1 ]; then
     echo "Removing language toolchains..."
-    rm -rf "$HOME/.sdkman" "$HOME/quicklisp" "$HOME/.local/share/uv"
+    __run rm -rf "$HOME/.sdkman" "$HOME/quicklisp" "$HOME/.local/share/uv"
     # yk is a clone plus a link into it. __rm_if_ours skips the link, because
     # it does not point into this repository.
-    rm -rf "$HOME/.local/share/yk"
+    __run rm -rf "$HOME/.local/share/yk"
     case "$(readlink "$HOME/bin/yk" 2>/dev/null)" in
-        *"/.local/share/yk/"*) rm -f "$HOME/bin/yk" ;;
+        *"/.local/share/yk/"*) __run rm -f "$HOME/bin/yk" ;;
     esac
-    rm -f "${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/yk-remind"
+    __run rm -f "${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/yk-remind"
     # Emacs: the packages and the state. init.el itself is a symlink, and the
     # symlink pass above removed it. The emacs-plus tap stays.
-    rm -rf "$HOME/.config/emacs/elpa" "${XDG_STATE_HOME:-$HOME/.local/state}/emacs"
-    rm -f "$HOME/.local/bin/uv" "$HOME/.local/bin/uvx"
+    __run rm -rf "$HOME/.config/emacs/elpa" "${XDG_STATE_HOME:-$HOME/.local/state}/emacs"
+    __run rm -f "$HOME/.local/bin/uv" "$HOME/.local/bin/uvx"
     # uv tool shims are symlinks into ~/.local/share/uv, and the line above
     # left them dangling. Match on the target: deleting every dangling link in
     # ~/.local/bin would take the ones other tools own as well.
     for shim in "$HOME/.local/bin"/*; do
         [ -L "$shim" ] || continue
         case "$(readlink "$shim")" in
-            *"/.local/share/uv/"*) rm -f "$shim" ;;
+            *"/.local/share/uv/"*) __run rm -f "$shim" ;;
         esac
     done
     echo "Note: ~/go left alone (may contain your code) — remove gopls/dlv from ~/go/bin yourself."
@@ -187,7 +234,11 @@ if [ "$ALL" -eq 1 ]; then
 fi
 
 echo
-echo "Done: $removed item(s) removed."
+if [ "$DRY_RUN" -eq 1 ]; then
+    echo "Dry run: $removed item(s) would be removed."
+else
+    echo "Done: $removed item(s) removed."
+fi
 echo "System packages are not uninstalled. Installed by these scripts (remove manually if wanted):"
 # Every row that install.sh can select on some machine, by its first name.
 TABLE_TOOLS="$(while IFS= read -r commands; do printf '%s ' "$(__pkg_primary "$commands")"; done < <(__pkg_select base linux desktop arch))"

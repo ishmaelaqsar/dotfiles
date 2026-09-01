@@ -165,8 +165,6 @@ def cmd_sync(args):
         engine_args.append("--dry-run")
     if args.check:
         engine_args.append("--check")
-    if args.backup:
-        engine_args.append("--backup")
     if args.target:
         engine_args.append(args.target)
 
@@ -342,12 +340,6 @@ def main():
         "--check",
         action="store_true",
         help="Report the files that are missing or have drifted",
-    )
-    p_sync.add_argument(
-        "-b",
-        "--backup",
-        action="store_true",
-        help="Rename an existing file to <name>.bak before the link replaces it",
     )
     p_sync.add_argument(
         "target", nargs="?", help="Where to link. It defaults to the home directory."

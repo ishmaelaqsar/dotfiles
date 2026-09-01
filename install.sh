@@ -120,20 +120,9 @@ DOTFILES_DIR="$SCRIPT_DIR/dotfiles"
 # -----------------------------
 # What a finished install looks like
 # -----------------------------
-# --check tests these, and the steps below write them. Keep one copy of each.
-GIT_USER_NAME="Ishmael Aqsar"
-GIT_USER_EMAIL="ishmael-dev@aqsar.dev"
-
-# git needs these three keys before it uses delta to render a diff. One list,
-# so the install step and --check cannot drift apart. `key=value` per line;
-# the value keeps every character after the first `=`.
-GIT_DELTA_CONFIG="core.pager=delta
-interactive.diffFilter=delta --color-only
-delta.navigate=true
-delta.side-by-side=true
-delta.line-numbers=true
-merge.conflictStyle=zdiff3
-diff.colorMoved=default"
+# The global git keys. --check tests them, the steps below write them, and
+# cleanup.sh unsets them, all from this one list.
+source "$SCRIPT_DIR/lib/gitconfig.sh"
 
 TARGET_BIN_DIR="$TARGET_DIR/bin"
 GNUPG_DIR="$TARGET_DIR/.gnupg"
@@ -299,11 +288,11 @@ __check_install() {
     elif command -v git >/dev/null 2>&1; then
         echo "Global git config:"
         before="$CHECK_FAILURES"
-        [ "$(git config --global --get user.name 2>/dev/null)" = "$GIT_USER_NAME" ] \
-            || __check_fail "git user.name is not '$GIT_USER_NAME'"
-        [ "$(git config --global --get user.email 2>/dev/null)" = "$GIT_USER_EMAIL" ] \
-            || __check_fail "git user.email is not '$GIT_USER_EMAIL'"
-        [ "$CHECK_FAILURES" -eq "$before" ] && echo "  ok: identity set"
+        while IFS='=' read -r key value; do
+            [ "$(git config --global --get "$key" 2>/dev/null)" = "$value" ] \
+                || __check_fail "git $key is not '$value'"
+        done <<< "$GIT_BASE_CONFIG"
+        [ "$CHECK_FAILURES" -eq "$before" ] && echo "  ok: identity and ignore files set"
 
         # Only when delta is installed: without it, install.sh leaves the
         # default pager alone on purpose.
@@ -513,14 +502,12 @@ if [ "$IS_HOME_INSTALL" -eq 0 ]; then
 elif command -v git &> /dev/null; then
     echo "Configuring global Git settings..."
 
-    __run git config --global user.name "$GIT_USER_NAME"
-    __run git config --global user.email "$GIT_USER_EMAIL"
-    __run git config --global core.excludesfile "$HOME/.gitignore_global"
-    __run git config --global core.attributesfile "$HOME/.gitattributes"
+    while IFS='=' read -r key value; do
+        __run git config --global "$key" "$value"
+    done <<< "$GIT_BASE_CONFIG"
 
-    # clean-gone deletes every local branch whose upstream is gone.
-    __run git config --global alias.clean-gone \
-        '!git branch -vv | grep '\''\[gone\]'\'' | awk '\''{print $1}'\'' | xargs git branch -D'
+    # No clean-gone alias: bin/git-gone does the same job as `git gone`, and it
+    # prunes first, skips the current branch and takes --dry-run.
 
     # delta renders the diffs, but only after git is told to use it. Guard on
     # the command: the package is best-effort, and a core.pager that is not

@@ -235,7 +235,16 @@ add_secret() {
 
     # The value goes in on stdin, so it stays out of the argument list. eval
     # applies the `export` line the tool prints.
-    eval "$(printf '%s' "$value" | manage-secrets encrypt "$key")"
+    #
+    # Capture first, and test the status. manage-secrets exits 1 with an empty
+    # stdout when GPG fails, and `eval ""` succeeds, so evaluating the output
+    # directly would report success after storing nothing.
+    local export_line
+    export_line="$(printf '%s' "$value" | manage-secrets encrypt "$key")" || {
+        echo "add_secret: $key was not stored." >&2
+        return 1
+    }
+    eval "$export_line"
 }
 
 # Usage: load_secrets [KEY...]
@@ -243,8 +252,14 @@ add_secret() {
 # ones.
 load_secrets() {
     echo "Loading secrets from YubiKey..."
-    # Pass every argument (for example, named keys) down to the Python script
-    eval "$(manage-secrets decrypt "$@")"
+    # Pass every argument (for example, named keys) down to the Python script.
+    # Capture before the eval, for the reason add_secret gives above.
+    local export_lines
+    export_lines="$(manage-secrets decrypt "$@")" || {
+        echo "load_secrets: nothing was exported." >&2
+        return 1
+    }
+    eval "$export_lines"
 }
 
 # ============================================================
@@ -343,63 +358,9 @@ fi
 # ============================================================
 # Git Helpers
 # ============================================================
-# git-gone: delete local branches whose upstream on the remote is gone.
-# Prunes remote-tracking refs first, then deletes any local branch that
-# `git branch -vv` marks as '[<remote>: gone]'. Skips the current branch.
-# Usage: git-gone [-n|--dry-run] [-f|--force]
-#   -n, --dry-run  list what would be deleted without deleting
-#   -f, --force    force-delete (git branch -D) unmerged branches too
-git-gone() {
-    if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-        echo "Error: not inside a git repository." >&2
-        return 1
-    fi
-
-    local dry_run=0 force=0
-    for arg in "$@"; do
-        case "$arg" in
-            -n|--dry-run) dry_run=1 ;;
-            -f|--force)   force=1 ;;
-            *)
-                echo "Unknown option: $arg" >&2
-                echo "Usage: git-gone [-n|--dry-run] [-f|--force]" >&2
-                return 1
-                ;;
-        esac
-    done
-
-    echo "Pruning remote-tracking refs..."
-    git fetch --prune >/dev/null 2>&1
-
-    # Branches whose upstream is gone. Handle the '*'/'+' checked-out markers.
-    local branches
-    branches=$(git branch -vv | awk '/: gone\]/ { if ($1 == "*" || $1 == "+") print $2; else print $1 }')
-
-    if [[ -z "$branches" ]]; then
-        echo "No gone branches to clean up."
-        return 0
-    fi
-
-    local current
-    current=$(git symbolic-ref --short HEAD 2>/dev/null)
-
-    local flag="-d"
-    [[ $force -eq 1 ]] && flag="-D"
-
-    local b
-    while IFS= read -r b; do
-        [[ -z "$b" ]] && continue
-        if [[ "$b" == "$current" ]]; then
-            echo "Skipping current branch: $b"
-            continue
-        fi
-        if [[ $dry_run -eq 1 ]]; then
-            echo "Would delete: $b"
-        else
-            git branch "$flag" "$b"
-        fi
-    done <<< "$branches"
-}
+# git-gone lives in bin/git-gone, so `git gone` works in every shell and in
+# a script, not only in an interactive bash. Run `git gone --help` for the
+# flags.
 
 # ============================================================
 # Second brain (Obsidian vault)

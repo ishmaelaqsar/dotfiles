@@ -13,6 +13,7 @@ import os
 import sys
 import subprocess
 import argparse
+import shlex
 import shutil
 import platform
 import time
@@ -427,7 +428,15 @@ def cmd_delete(args):
     print(f"This deletes '{name}' and its disk images. There is no undo.")
 
     if args.dry_run:
-        print(f"[dry-run] Skipping confirmation input.")
+        print("[dry-run] Skipping confirmation input.")
+    elif args.yes:
+        print("--yes given: deleting without a confirmation.")
+    elif not sys.stdin.isatty():
+        # input() would raise EOFError here. Say what to do instead, the way
+        # pick_machine does when it cannot ask which machine.
+        print("Error: delete needs a terminal to confirm.", file=sys.stderr)
+        print("   Pass --yes to delete without the question.", file=sys.stderr)
+        sys.exit(1)
     else:
         confirm = input(f"Type '{name}' to confirm: ")
         if confirm != name:
@@ -730,9 +739,14 @@ def cmd_setup(args):
         "-o", "StrictHostKeyChecking=no", 
         "-o", "UserKnownHostsFile=/dev/null",
         "-o", "LogLevel=ERROR",
-        f"{user}@{ip}", 
-        "-t", 
-        f"bash -c '{remote_cmd}'"
+        f"{user}@{ip}",
+        "-t",
+        # ssh joins what follows into one string, and the remote login shell
+        # parses it. The script contains single quotes of its own, so quote it
+        # properly rather than wrapping it in bare `'...'`, which the remote
+        # shell would cut at the first inner quote. `-t` stays: the install
+        # commands use sudo, which needs the terminal for its prompt.
+        f"bash -c {shlex.quote(remote_cmd)}",
     ]
 
     if args.dry_run:
@@ -770,6 +784,11 @@ def main():
         "--dry-run",
         action="store_true",
         help="Print each command that would change something, and run none of them",
+    )
+    parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="Skip the confirmation that delete asks for",
     )
 
     subparsers = parser.add_subparsers(dest="command", metavar="<command>")

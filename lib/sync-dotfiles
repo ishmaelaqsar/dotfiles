@@ -60,6 +60,15 @@ for arg in sys.argv[1:]:
     elif arg in ("--help", "-h"):
         print(USAGE, end="")
         sys.exit(0)
+    elif arg.startswith("-"):
+        # Never treat an unknown flag as the target: `--dryrun` once created a
+        # directory by that name and linked the whole tree into it.
+        print(f"Unknown option: {arg}", file=sys.stderr)
+        print(USAGE, end="", file=sys.stderr)
+        sys.exit(2)
+    elif target_arg is not None:
+        print(f"Only one target directory: got '{target_arg}' and '{arg}'", file=sys.stderr)
+        sys.exit(2)
     else:
         target_arg = arg
 
