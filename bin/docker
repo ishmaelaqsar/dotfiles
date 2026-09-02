@@ -1,0 +1,6 @@
+#!/bin/sh
+# docker -> podman. lazydocker runs a literal `docker attach`, and its compose
+# command is `docker compose`, which podman routes to podman-compose. Linux
+# distributions ship this shim as podman-docker; brew does not, so one script
+# serves every OS. It shadows a real docker on PATH by design.
+exec podman "$@"

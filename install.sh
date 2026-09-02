@@ -391,6 +391,23 @@ elif [ "$IS_HOME_INSTALL" -eq 1 ] && [ "$PKG_MGR" != "none" ]; then
             __pkg_sudo systemctl enable --now paccache.timer \
                 || __warn "could not enable paccache.timer — enable it manually."
         fi
+
+        # podman's API socket is what lazydocker connects to. The podman
+        # package ships it as a user unit, so no sudo, but it needs a user
+        # session to enable into.
+        if command -v podman >/dev/null 2>&1 && [ -d "/run/user/$(id -u)" ]; then
+            echo "  -> Enabling podman.socket"
+            __run systemctl --user enable --now podman.socket \
+                || __warn "could not enable podman.socket — enable it manually."
+        fi
+    fi
+
+    # podman on macOS runs in a VM. Create it once; starting it is a manual
+    # `podman machine start`, because the VM costs memory while it runs.
+    if [[ "$OSTYPE" == darwin* ]] && command -v podman >/dev/null 2>&1 \
+       && [ -z "$(podman machine list --format '{{.Name}}' 2>/dev/null)" ]; then
+        echo "  -> Creating the podman machine (start it with: podman machine start)"
+        __run podman machine init || __warn "podman machine init failed — run it by hand."
     fi
 elif [ "$IS_HOME_INSTALL" -eq 0 ]; then
     echo "[probe] Skipping package installation."

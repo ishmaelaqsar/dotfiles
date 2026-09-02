@@ -117,9 +117,16 @@ if command -v kubectl >/dev/null 2>&1; then
     source <(kubectl completion bash)
 fi
 
-# podman completion
+# podman completion. bin/docker is a shell script that runs podman, so the
+# same completer serves `docker`. head reads the first lines of the shim, and
+# never scans a binary.
 if command -v podman >/dev/null 2>&1; then
     source <(podman completion bash)
+    __docker_bin="$(command -v docker)"
+    if [[ -n "$__docker_bin" ]] && head -c 512 "$__docker_bin" | grep -q podman; then
+        complete -o default -F __start_podman docker
+    fi
+    unset __docker_bin
 fi
 
 # FNM setup

@@ -87,6 +87,9 @@ else
 fi
 
 for t in eza rg fzf delta starship tmux; do check "$t"; done
+for t in podman podman-compose; do check "$t"; done
+# bin/docker is the shim lazydocker shells out to; it must answer as podman.
+docker --version 2>/dev/null | grep -q podman && pass "docker is the podman shim" || flunk "docker is not the podman shim"
 { command -v fd || command -v fdfind; } >/dev/null 2>&1 && pass "fd/fdfind" || flunk "fd/fdfind missing"
 # Arch upkeep tools. wl-clipboard is desktop-only and a container is headless,
 # so check the package name instead of the binary.

@@ -31,7 +31,7 @@ git clone https://github.com/ishmaelaqsar/dotfiles.git ~/.dotfiles
 `install.sh` does these steps:
 
 1. **Install the packages** with the manager it finds (brew, apt, yay, paru, pacman or dnf):
-   `eza`, `fd`, `ripgrep`, `fzf`, `git-delta`, `tmux` and more. The list is data —
+   `eza`, `fd`, `ripgrep`, `fzf`, `git-delta`, `tmux`, `podman` and more. The list is data —
    see [The package table](#the-package-table). Some packages are best-effort: `lazydocker` is
    not in Debian's repos. It also installs
    [OpenCode](https://opencode.ai) and [Ghostty](https://ghostty.org), which can fail without
@@ -195,6 +195,7 @@ links them into `$HOME/bin`: `lib/sync-dotfiles` writes the symlinks, and `lib/p
 | `gnome-settings` | Apply, dump or restore the managed GNOME keys. | It prints the help |
 | `ediff` | Compare two files in Emacs, in the terminal. `pacnew` runs it as `DIFFPROG`. | It prints an Emacs error |
 | `md2org` | Convert markdown files to Org with `pandoc`, one `.org` beside each. | It prints the usage |
+| `docker` | Run `podman` under the name lazydocker and compose files call. See [Containers](#containers-podman). | It prints the podman help |
 
 None of them is a TUI, and **none of them needs a terminal**. `vm` and `manage-secrets get` offer
 an `fzf` picker when a name is missing and a terminal is there, because looking a name up and
@@ -657,6 +658,22 @@ would claim the variable, and never ask the YubiKey. Three parts fix it:
 
 HTTPS git remotes use `git-credential-libsecret`, the GNOME keyring, when the helper is present.
 They do not use a cleartext `~/.git-credentials`.
+
+### Containers: podman
+
+podman is the container engine, rootless, on Linux and macOS. `install.sh` installs `podman` and
+`podman-compose` from the package table. On Linux it enables `podman.socket`, the user unit that
+serves the API. On macOS podman runs in a VM: `install.sh` creates it with `podman machine init`,
+and you start it by hand with `podman machine start`, because the VM costs memory while it runs.
+
+`bin/docker` is a shim that runs `podman`. lazydocker runs a literal `docker attach`, and its
+compose command is `docker compose`, which podman routes to `podman-compose`. So lazydocker, the
+`lzd` alias, and the `C-x t d` tmux row work with no lazydocker config. When the engine is down,
+the popup holds the error until you press Enter.
+
+`.bash_profile` exports `DOCKER_HOST` when a podman socket exists, and leaves it unset otherwise.
+lazydocker reads that variable first. podman itself needs no variable. `.bashrc` gives `docker` the
+podman completion.
 
 ### systemd user units
 

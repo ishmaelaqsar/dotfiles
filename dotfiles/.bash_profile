@@ -67,6 +67,20 @@ export ORG_DIR="$HOME/org"
 # configuration, and does not build the home directory.
 export WORKSPACE="$HOME/workspace"
 
+# podman's API socket, for lazydocker and every docker Go client; podman
+# itself needs nothing. Linux: the rootless socket that podman.socket creates
+# at login. macOS: the link that `podman machine start` publishes, which
+# dangles while the VM is off, so -S fails and DOCKER_HOST stays unset.
+for __podman_sock in \
+    "${XDG_RUNTIME_DIR:-/run/user/$UID}/podman/podman.sock" \
+    "${XDG_DATA_HOME:-$HOME/.local/share}/containers/podman/machine/podman.sock"; do
+    if [[ -S "$__podman_sock" ]]; then
+        export DOCKER_HOST="unix://$__podman_sock"
+        break
+    fi
+done
+unset __podman_sock
+
 # ------------------------------------------------------------
 # Editor: emacsclient, then a plain emacs, then vi
 # ------------------------------------------------------------

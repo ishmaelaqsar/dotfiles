@@ -111,7 +111,7 @@ if command -v gnome-extensions >/dev/null 2>&1 \
 fi
 
 # systemd user units — disable ours while the unit files still exist, and undo
-# the SSH-agent handover install.sh set up
+# the SSH-agent handover and the podman socket install.sh set up
 if command -v systemctl >/dev/null 2>&1 && [ -d "/run/user/$(id -u)" ]; then
     echo "Disabling systemd user units..."
     UNIT_SRC_DIR="$SCRIPT_DIR/dotfiles/.config/systemd/user"
@@ -122,6 +122,7 @@ if command -v systemctl >/dev/null 2>&1 && [ -d "/run/user/$(id -u)" ]; then
     done
 
     __run systemctl --user disable --now gpg-agent-ssh.socket >/dev/null 2>&1 || true
+    __run systemctl --user disable --now podman.socket >/dev/null 2>&1 || true
     for unit in gcr-ssh-agent.socket gcr-ssh-agent.service gnome-keyring-ssh.service; do
         if [ "$(systemctl --user is-enabled "$unit" 2>/dev/null)" = "masked" ]; then
             echo "  -> Unmasking $unit"
@@ -243,6 +244,7 @@ echo "System packages are not uninstalled. Installed by these scripts (remove ma
 TABLE_TOOLS="$(while IFS= read -r commands; do printf '%s ' "$(__pkg_primary "$commands")"; done < <(__pkg_select base linux desktop arch))"
 echo "  install.sh:    ${TABLE_TOOLS}opencode ghostty, and yay on Arch"
 echo "  System units left enabled (disable by hand): pcscd.socket, paccache.timer"
+echo "  The podman machine on macOS stays: podman machine rm"
 echo "  setup-c.sh:    build-essential/base-devel gdb lldb clangd cmake valgrind"
 echo "  setup-go.sh:   go"
 echo "  setup-sbcl.sh: sbcl"
