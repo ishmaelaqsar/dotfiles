@@ -135,6 +135,13 @@ if command -v fnm >/dev/null 2>&1; then
     source <(fnm completions --shell bash)
 fi
 
+# gcloud completion, from the SDK tarball under $HOME. The SDK ships the
+# completer as a file, so the file test is the direct check. A package install
+# lands its own where bash-completion already looks.
+if [[ -f "$HOME/google-cloud-sdk/completion.bash.inc" ]]; then
+    . "$HOME/google-cloud-sdk/completion.bash.inc"
+fi
+
 # ============================================================
 # User-Specific Extensions
 # ============================================================

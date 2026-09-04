@@ -112,6 +112,18 @@ esac
 # Debian ships fd as fdfind, so the fuzzy-find helpers call __fd
 bash -lic '__fd --version' >/dev/null 2>&1 \
     && pass "__fd resolves on this distro" || flunk "__fd does not resolve"
+# The gcloud wiring is guarded on an SDK directory that this repo never
+# installs, so a stub stands in for it. It proves both halves: the PATH entry
+# in .bash_profile, and the completer that .bashrc sources.
+mkdir -p "$HOME/google-cloud-sdk/bin"
+printf '#!/bin/sh\necho stub\n' > "$HOME/google-cloud-sdk/bin/gcloud"
+chmod +x "$HOME/google-cloud-sdk/bin/gcloud"
+printf 'complete -W stub gcloud\n' > "$HOME/google-cloud-sdk/completion.bash.inc"
+[ "$(bash -lic 'command -v gcloud' 2>/dev/null | tr -d '\r')" = "$HOME/google-cloud-sdk/bin/gcloud" ] \
+    && pass "gcloud SDK bin on PATH" || flunk "gcloud SDK bin missing from PATH"
+bash -lic 'complete -p gcloud' >/dev/null 2>&1 \
+    && pass "gcloud completion loads" || flunk "gcloud completion did not load"
+rm -rf "$HOME/google-cloud-sdk"
 [ -L "$HOME/.config/fontconfig/fonts.conf" ] && pass "fontconfig symlinked" || flunk "fontconfig missing"
 python3 ./bin/gnome-settings dump >/dev/null 2>&1 && pass "gnome-settings runs without GNOME" || flunk "gnome-settings failed on a non-GNOME box"
 [ -f "$HOME/.local/share/fonts/0xProtoNerdFont-Regular.ttf" ] && pass "fonts installed" || flunk "fonts missing"

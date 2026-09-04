@@ -29,6 +29,10 @@ __add_path "$HOME/.local/bin"
 __add_path "$HOME/.cargo/bin"
 __add_path "$HOME/go/bin"
 
+# The gcloud SDK tarball installs under $HOME. A package install puts gcloud in
+# a system directory instead, and this line then finds nothing.
+__add_path "$HOME/google-cloud-sdk/bin"
+
 # Clean up helper
 unset -f __add_path
 
