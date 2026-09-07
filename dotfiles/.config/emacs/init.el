@@ -483,15 +483,10 @@ this function when every machine runs 31."
 (use-package q-mode
   :defer t)
 
-;; kdb.el, in lisp/, starts a local q that holds a handle to a remote kdb
-;; server picked from `kdb-targets', so the q-mode eval keys run remotely and
-;; results print at a wide console. The targets are site data: a kdb-site.el
-;; in lisp/ provides them on a machine that has some, and the require is a
-;; no-op elsewhere.
-;; C-c k c connects, C-c k s saves the region as a dated query file. In a .q
-;; buffer, kdb-mode sends the q-mode eval keys as written: q-mode's own
-;; commands drop blank lines and fold indented lines, which breaks a
-;; multi-line select.
+;; kdb.el, in lisp/, runs q buffers against a remote kdb server from
+;; `kdb-targets': a local q holds the handle, results print at a wide console
+;; and open in a grid, and completion offers the server's tables and columns.
+;; The targets are site data: lisp/kdb-site.el sets them where it exists.
 (use-package kdb
   :load-path "lisp"
   :hook (q-mode . kdb-mode)
