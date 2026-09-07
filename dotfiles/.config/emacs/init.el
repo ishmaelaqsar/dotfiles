@@ -24,7 +24,7 @@
 (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
 (setopt package-selected-packages
         '(avy cape consult corfu dape embark embark-consult exec-path-from-shell
-          magit marginalia orderless sly vertico))
+          magit marginalia orderless q-mode sly vertico))
 
 ;; use-package is built in. Nothing here uses :ensure: the setup script
 ;; installs, and a missing package logs a warning instead of stopping the load.
@@ -473,6 +473,30 @@ this function when every machine runs 31."
                             (buffer-list))))
     (my/org-babel-kill-sessions)))
 (add-hook 'kill-buffer-hook #'my/org-kill-sessions-when-last)
+
+;;;; KDB
+
+;; q-mode edits .q files and runs a q shell in comint. Its flymake backend
+;; evaluates the file in a local q, so a query file would flag every remote
+;; table as unknown; flymake stays off in .q buffers, and nothing here turns
+;; it on.
+(use-package q-mode
+  :defer t)
+
+;; kdb.el, in lisp/, starts a local q that holds a handle to a remote kdb
+;; server picked from `kdb-targets', so the q-mode eval keys run remotely and
+;; results print at a wide console. The targets are site data: a kdb-site.el
+;; in lisp/ provides them on a machine that has some, and the require is a
+;; no-op elsewhere.
+;; C-c k c connects, C-c k s saves the region as a dated query file. In a .q
+;; buffer, kdb-mode sends the q-mode eval keys as written: q-mode's own
+;; commands drop blank lines and fold indented lines, which breaks a
+;; multi-line select.
+(use-package kdb
+  :load-path "lisp"
+  :hook (q-mode . kdb-mode)
+  :bind-keymap ("C-c k" . kdb-map)
+  :config (require 'kdb-site nil t))
 
 ;;;; Server
 

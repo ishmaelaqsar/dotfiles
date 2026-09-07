@@ -73,11 +73,15 @@ fi
 
 # init.el names the packages in package-selected-packages, so the list lives in
 # one place. --batch makes Emacs exit when the form returns, and skips package
-# activation, hence the explicit package-initialize.
+# activation, hence the explicit package-initialize. --batch also skips
+# early-init.el, which sets package-quickstart-file; without it the refresh
+# writes a quickstart that a normal start never reads, and a package missing
+# from the stale one fails to load.
 INIT="$HOME/.config/emacs/init.el"
+EARLY_INIT="$HOME/.config/emacs/early-init.el"
 if [ -f "$INIT" ]; then
     echo "Installing the packages init.el selects..."
-    emacs --batch --eval '(package-initialize)' -l "$INIT" \
+    emacs --batch -l "$EARLY_INIT" --eval '(package-initialize)' -l "$INIT" \
         --eval '(progn (package-refresh-contents) (package-install-selected-packages t) (package-quickstart-refresh))' \
         || echo "Warning: package install failed. Run it from Emacs: M-x package-install-selected-packages" >&2
 else

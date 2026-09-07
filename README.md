@@ -160,7 +160,7 @@ always act, so a script stops when `DOTFILES_DRY_RUN` is set rather than half ho
 | `setup-go.sh` | go | gopls | delve |
 | `setup-java.sh` | sdkman → Temurin LTS, maven, gradle | jdtls (brew/AUR) | JDWP/jdb (in the JDK) |
 | `setup-sbcl.sh` | SBCL + Quicklisp | none — CL uses Swank/Slynk via the editor | SBCL built-in |
-| `setup-emacs.sh` | Emacs 30 (`emacs-plus@30` on macOS, the pgtk package on Linux) and the packages `init.el` selects: Sly, Magit, Vertico, Orderless, Consult, Marginalia, Embark, Avy, Corfu, Cape, Dape | `eglot`, built in, over the servers the rows above install | none |
+| `setup-emacs.sh` | Emacs 30 (`emacs-plus@30` on macOS, the pgtk package on Linux) and the packages `init.el` selects: Sly, Magit, Vertico, Orderless, Consult, Marginalia, Embark, Avy, Corfu, Cape, Dape, q-mode | `eglot`, built in, over the servers the rows above install | none |
 | `setup-yk.sh` | [yk](https://github.com/ishmaelaqsar/yk), the YubiKey maintenance tool | none | none |
 
 These scripts share the package-manager logic in `lib/pkg.sh`, and the name mappings in
@@ -237,6 +237,11 @@ Emacs, where `setup-emacs.sh` has installed it. `.bash_profile` then sets `EDITO
 `emacsclient -t -a ''` and `VISUAL` to `emacsclient -c -a ''`: the terminal for a git commit, a
 frame for a large edit, and `-a ''` starts the daemon when none runs. A machine with `emacs` but
 no client gets `emacs -nw -q`; a machine with no Emacs keeps vi.
+
+`dotfiles/.config/emacs/lisp/kdb.el` queries a remote kdb server from a local q shell, on top
+of the `q-mode` package. It needs a licensed `q` on `PATH`, and a list of servers in
+`kdb-targets`. Put that list in `~/.config/emacs/lisp/kdb-site.el`, which `init.el` loads when
+it exists; the file is machine-local and untracked.
 
 `setup-emacs.sh` keeps a daemon warm, so `-a ''` is the fallback rather than the normal path:
 Linux enables the systemd user unit in `dotfiles/.config/systemd/user/emacs.service`, and macOS
