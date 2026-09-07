@@ -25,8 +25,9 @@
 ;; when a buffer is bound to a target; `C-c k R' loads it again.
 ;;
 ;; `kdb-targets' is empty here.  A site file, kdb-site.el, sets it, with
-;; `kdb-query-directory' and `kdb-qhome' when the machine needs them.  With
-;; no targets, the eval keys call q-mode's own commands.
+;; `kdb-qhome' when the machine needs it.  `kdb-query-directory' comes from
+;; the KDB_QUERY_DIR environment variable.  With no targets, the eval keys
+;; call q-mode's own commands.
 
 ;;; Code:
 
@@ -51,9 +52,10 @@ The prefix is stripped before the text is sent."
   :type 'string
   :group 'kdb)
 
-(defcustom kdb-query-directory nil
+(defcustom kdb-query-directory (getenv "KDB_QUERY_DIR")
   "Directory where `kdb-save-query' writes files.
-Nil prompts for the directory on every save."
+The default is the KDB_QUERY_DIR environment variable.  Nil prompts for
+the directory on every save."
   :type '(choice (const nil) directory)
   :group 'kdb)
 
