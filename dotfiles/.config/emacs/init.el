@@ -83,7 +83,11 @@
 ;; Modus ships with Emacs: dark, to match Ghostty and the GNOME colour scheme,
 ;; and every face pair clears WCAG AAA contrast. modus-operandi is its light
 ;; twin, and M-x modus-themes-toggle switches between the two.
-(setopt modus-themes-to-toggle '(modus-vivendi modus-operandi))
+;; Prose runs proportional, so org tables and source blocks lose their
+;; alignment unless those faces keep a fixed pitch. Modus reads the option when
+;; the theme loads, hence the order here.
+(setopt modus-themes-to-toggle '(modus-vivendi modus-operandi)
+        modus-themes-mixed-fonts t)
 (load-theme 'modus-vivendi :no-confirm)
 
 (defun my/apply-frame-settings (&optional frame)
@@ -95,15 +99,26 @@ there and the theme's faces are computed for a dumb terminal. Every frame
     (when (display-graphic-p)
       (tool-bar-mode -1)
       (scroll-bar-mode -1)
-      ;; The family the terminal uses, and install.sh installs.
+      ;; The family the terminal uses, and install.sh installs. `fixed-pitch'
+      ;; needs it too: org tables and source blocks inherit that face, and its
+      ;; own default asks for the generic "Monospace", which macOS answers with
+      ;; Courier. Leave the height off, so it tracks `default'.
       (when (member "0xProto Nerd Font Mono" (font-family-list))
-        (set-face-attribute 'default nil :family "0xProto Nerd Font Mono" :height 130)))
+        (set-face-attribute 'default nil :family "0xProto Nerd Font Mono" :height 130)
+        (set-face-attribute 'fixed-pitch nil :family "0xProto Nerd Font Mono")))
     (when (daemonp)
       (enable-theme 'modus-vivendi))))
 
 (if (daemonp)
     (add-hook 'server-after-make-frame-hook #'my/apply-frame-settings)
   (my/apply-frame-settings))
+
+;; Prose reads better in a proportional face. `variable-pitch' asks for the
+;; generic family "Sans Serif", and each platform resolves that itself: macOS
+;; answers Helvetica, Linux the fontconfig sans alias. So no font name belongs
+;; here, and the two machines need no branch. A code buffer keeps the `default'
+;; face, and stays 0xProto.
+(add-hook 'text-mode-hook #'variable-pitch-mode)
 
 ;;;; Terminal frames
 
