@@ -23,7 +23,7 @@
 (require 'package)
 (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
 (setopt package-selected-packages
-        '(avy cape consult corfu dape embark embark-consult exec-path-from-shell
+        '(avy bazel cape consult corfu dape embark embark-consult exec-path-from-shell
           magit marginalia orderless q-mode sly vertico))
 
 ;; use-package is built in. Nothing here uses :ensure: the setup script
@@ -493,6 +493,20 @@ this function when every machine runs 31."
   :hook (q-mode . kdb-mode)
   :bind-keymap ("C-c k" . kdb-map)
   :config (require 'kdb-site nil t))
+
+;;;; Bazel
+
+;; bazel.el edits BUILD, MODULE and .bzl files, runs buildifier, and gives
+;; project.el the workspace root. bazel-tui.el does not need it.
+(use-package bazel
+  :defer t)
+
+;; bazel-tui.el, in lisp/, drives the bazel-tui engine: targets from the
+;; minibuffer, a jobs list, logs and results, saved invocations. It needs the
+;; bazel-tui binary on PATH (make install in its repo), and says so otherwise.
+(use-package bazel-tui
+  :load-path "lisp"
+  :bind-keymap ("C-c B" . bazel-tui-map))
 
 ;;;; Server
 
