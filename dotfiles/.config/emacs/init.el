@@ -23,7 +23,8 @@
 (require 'package)
 (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
 (setopt package-selected-packages
-        '(avy cape consult corfu dape embark embark-consult magit marginalia orderless sly vertico))
+        '(avy cape consult corfu dape embark embark-consult exec-path-from-shell
+          magit marginalia orderless sly vertico))
 
 ;; use-package is built in. Nothing here uses :ensure: the setup script
 ;; installs, and a missing package logs a warning instead of stopping the load.
@@ -31,6 +32,14 @@
 ;; early-init.el turns package-quickstart on. M-x use-package-report measures
 ;; load times when a package feels slow.
 (require 'use-package)
+
+;; A daemon under launchd starts from launchd's environment, not the login
+;; shell's, so eglot finds no language server and consult no rg or fd. This
+;; copies PATH across, which is the default set and all that is missing here. A
+;; terminal frame inherits the shell already, hence the guard.
+(use-package exec-path-from-shell
+  :if (or (daemonp) (memq window-system '(ns mac)))
+  :config (exec-path-from-shell-initialize))
 
 ;;;; Generated files
 
