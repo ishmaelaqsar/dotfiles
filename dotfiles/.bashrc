@@ -112,6 +112,19 @@ if ! shopt -oq posix; then
     fi
 fi
 
+# fzf keys: C-r searches the history, C-t picks a file, M-c picks a directory
+# and enters it. The pickers walk with fd where it exists. `fzf --bash` prints
+# the key bindings; an old fzf has no such flag, hence the second test.
+if command -v fzf >/dev/null 2>&1 && fzf --bash >/dev/null 2>&1; then
+    eval "$(fzf --bash)"
+    __fd_bin="$(command -v fd || command -v fdfind)"
+    if [[ -n "$__fd_bin" ]]; then
+        export FZF_CTRL_T_COMMAND="$__fd_bin --type f --hidden --exclude .git"
+        export FZF_ALT_C_COMMAND="$__fd_bin --type d --hidden --exclude .git"
+    fi
+    unset __fd_bin
+fi
+
 # kubectl completion
 if command -v kubectl >/dev/null 2>&1; then
     source <(kubectl completion bash)
@@ -140,6 +153,12 @@ fi
 # lands its own where bash-completion already looks.
 if [[ -f "$HOME/google-cloud-sdk/completion.bash.inc" ]]; then
     . "$HOME/google-cloud-sdk/completion.bash.inc"
+fi
+
+# direnv loads a directory's .envrc on cd. Last, so its hook wraps the prompt
+# command starship set.
+if command -v direnv >/dev/null 2>&1; then
+    eval "$(direnv hook bash)"
 fi
 
 # ============================================================

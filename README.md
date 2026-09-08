@@ -196,6 +196,8 @@ links them into `$HOME/bin`: `lib/sync-dotfiles` writes the symlinks, and `lib/p
 | `ediff` | Compare two files in Emacs, in the terminal. `pacnew` runs it as `DIFFPROG`. | It prints an Emacs error |
 | `md2org` | Convert markdown files to Org with `pandoc`, one `.org` beside each. | It prints the usage |
 | `docker` | Run `podman` under the name lazydocker and compose files call. See [Containers](#containers-podman). | It prints the podman help |
+| `git-gone` | Prune the remote-tracking refs, then delete every local branch whose upstream is gone. `git gone` runs it too. | It deletes the merged gone branches; `--force` takes the unmerged ones |
+| `tmux-sessions` | Pick, create or kill tmux sessions from an `fzf` list, inside a `display-popup`. `M-s` opens it. | It lists the sessions; Enter switches, C-x kills |
 
 None of them is a TUI, and **none of them needs a terminal**. `vm` and `manage-secrets get` offer
 an `fzf` picker when a name is missing and a terminal is there, because looking a name up and
@@ -216,7 +218,7 @@ interfaces.
 | `dotfiles update` | Pull, link the files, then check this machine. It names the files that need a full `./install.sh`, such as a new package or a new script in `bin/`. |
 | `dotfiles status` | The branch, the gap to the upstream, the uncommitted edits, and one line on the health of the machine. |
 | `dotfiles doctor` | Every check for this machine, in full. The same report as `./install.sh --check`. |
-| `dotfiles sync` | Link the files, and nothing else. It passes `-n`, `--check`, `--backup` and a target directory to the engine. |
+| `dotfiles sync` | Link the files, and nothing else. It passes `-n`, `--check` and a target directory to the engine. |
 | `dotfiles edit [name]` | Find one tracked dotfile and open it in `$VISUAL` or `$EDITOR`. `fzf` picks between several matches. |
 | `dotfiles path` | Print the repository root. The shell function reads it. |
 
@@ -228,6 +230,30 @@ Two details are deliberate:
   an alias instead; `install.sh` removes it, because an alias would hide the function.
 * **`update` refuses to run when a different checkout owns `$HOME`.** It would otherwise relink the
   home directory to this repository. `install.sh` refuses for the same reason.
+
+---
+
+## Testing
+
+CI runs on every push to `main` and on every pull request, from `.github/workflows/ci.yml`:
+
+* **parity**: `test/pkg-parity.sh` proves that `lib/pkg.sh` and `lib/pkgconf.py` read every row of
+  `lib/packages.conf` the same way.
+* **shellcheck**: every tracked file with a `sh` or `bash` shebang, at warning level and up.
+* **python**: every Python entry point byte-compiles.
+* **elisp**: in a Debian container, the selected packages install, `lisp/*.el` byte-compiles with
+  warnings as errors, and `init.el` loads in batch.
+* **smoke**: `test/linux-smoke.sh quick` in a Debian container. A dry run changes nothing,
+  `install.sh` runs with no terminal, the doctor passes, and `cleanup.sh -a` removes it all.
+
+The same checks run locally:
+
+```bash
+bash test/pkg-parity.sh
+docker run --rm -v "$PWD":/repo:ro debian:stable bash /repo/test/linux-smoke.sh quick
+emacs --batch -l dotfiles/.config/emacs/early-init.el --eval '(package-initialize)' \
+  -l dotfiles/.config/emacs/init.el --eval '(kill-emacs)'
+```
 
 ---
 
@@ -259,11 +285,12 @@ The init is `dotfiles/.config/emacs/init.el`, written in the built-in `use-packa
 and 31: `eglot` over the language servers the other `setup-*.sh` scripts install, the tree-sitter
 modes with a grammar fetched on first use, terminal polish for `emacsclient -t` (mouse, OSC 52
 clipboard, 24-bit colour), and generated files under `~/.local/state/emacs/` (`early-init.el`
-sends the native-compilation cache there too). Six packages come from MELPA: Sly for Common
-Lisp, Magit on `C-x g`, markdown-mode, and Vertico, Orderless and Consult, which make the
+sends the native-compilation cache there too). Seven packages come from MELPA: Sly and paredit
+for Lisp, Magit on `C-x g`, markdown-mode, and Vertico, Orderless and Consult, which make the
 minibuffer the fuzzy picker. `consult-ripgrep` and `consult-fd` run the installed `rg` and `fd`
-with a live preview, and `xref` searches with `rg` as well. fzf stays in the shell. No framework,
-and no vim keys: the point is the Emacs keys the rest of the repository already uses.
+with a live preview, `xref` searches with `rg` as well, and `M-.` picks between several
+definitions in the minibuffer. fzf stays in the shell. No framework, and no vim keys: the point is
+the Emacs keys the rest of the repository already uses.
 
 Five more packages, all from GNU ELPA: Marginalia annotates every candidate; Embark acts on the
 candidate or the thing at point (`C-.`, `C-;`), and a prefix key followed by a one-second pause
@@ -280,10 +307,13 @@ Any buffer whose language server can format does so on save — Go through `gopl
 organizes the imports, Java through `jdtls` with the 4-space indent Emacs sends it, C and C++
 through `clangd` and the `.clang-format` rule. For Python, `basedpyright` from `setup-python.sh` checks and completes, `ruff` sorts the imports and formats on every
 save because pyright formats nothing, and Dape debugs through `debugpy-adapter`, the entry point
-the `debugpy` uv tool puts on `PATH`.
+the `debugpy` uv tool puts on `PATH`. `C-c f` formats the buffer on demand. A directory class in
+`~/.config/emacs/lisp/site.el`, a machine-local file, turns the save-time formatting off under a
+shared repository, so its diffs stay small. A diagnostic shows at the end of its line, `M-n` and
+`M-p` walk them, and `M-g f` lists them.
 
 Startup is measured, not guessed: `early-init.el` holds the garbage collector and the file-name
-handlers during init and turns on `package-quickstart`; the daemon starts in about 0.45 s. After
+handlers during init and turns on `package-quickstart`; the daemon starts in about a second. After
 `M-x package-install`, run `M-x package-quickstart-refresh`. `M-x use-package-report` shows the
 load time of each package when one feels slow.
 

@@ -3,7 +3,7 @@
 ;;; Commentary:
 
 ;; Emacs 30 and 31 ship eglot, tree-sitter and use-package. This file configures
-;; those, and adds the packages that are not in core: Sly for Common Lisp,
+;; those, and adds the packages that are not in core: Sly and paredit for Lisp,
 ;; Magit, markdown-mode, the Vertico + Orderless + Consult search stack, which
 ;; runs the installed rg and fd from the minibuffer, with Marginalia, Embark,
 ;; Avy, and Corfu + Cape for completion at point. setup-emacs.sh installs them
@@ -48,8 +48,8 @@
 ;; not, so its value would not survive the first `enable-theme'.
 (customize-set-variable
  'package-selected-packages
- '(avy bazel cape consult corfu dape embark embark-consult exec-path-from-shell
-   magit marginalia markdown-mode orderless q-mode sly vertico))
+ '(avy cape consult corfu dape embark embark-consult exec-path-from-shell
+   magit marginalia markdown-mode orderless paredit q-mode sly vertico))
 
 ;; use-package is built in. Nothing here uses :ensure: the setup script
 ;; installs, and a missing package logs a warning instead of stopping the load.
@@ -64,7 +64,11 @@
 ;; inherits the shell already, hence the guard.
 (use-package exec-path-from-shell
   :if (or (daemonp) (memq window-system '(ns mac)))
-  :custom (exec-path-from-shell-variables '("PATH" "MANPATH" "KDB_QUERY_DIR"))
+  :custom
+  (exec-path-from-shell-variables '("PATH" "MANPATH" "KDB_QUERY_DIR"))
+  ;; A login shell, not an interactive one: .bash_profile sets the variables,
+  ;; and .bashrc would add two seconds to the start.
+  (exec-path-from-shell-arguments '("-l"))
   :config (exec-path-from-shell-initialize))
 
 ;;;; Defaults
@@ -108,7 +112,12 @@
         mouse-wheel-tilt-scroll t
         mouse-wheel-flip-direction t
         ;; The project name in the mode line.
-        project-mode-line t)
+        project-mode-line t
+        recentf-max-saved-items 200
+        ;; With the *eldoc* buffer shown (C-h .), the echo area stays quiet.
+        eldoc-echo-area-prefer-doc-buffer t
+        ;; Compile output follows until the first error.
+        compilation-scroll-output 'first-error)
 
 ;; Left-to-right text in every buffer: redisplay skips the bidirectional
 ;; analysis, which matters on long lines such as logs and JSON.
@@ -125,6 +134,8 @@
 (minibuffer-depth-indicate-mode 1)
 ;; C-x o o o cycles windows, and C-x { { { resizes: the built-in repeat maps.
 (repeat-mode 1)
+;; C-c <left> restores the window layout a Magit or compile window replaced.
+(winner-mode 1)
 (global-hl-line-mode 1)
 ;; Grey text at point shows the first completion, and TAB accepts it. It is
 ;; the completion UI of a frame that cannot draw Corfu.
@@ -138,7 +149,14 @@
 ;; Emacs.
 (windmove-default-keybindings 'control)
 (add-hook 'prog-mode-hook #'display-line-numbers-mode)
-(add-hook 'before-save-hook #'delete-trailing-whitespace)
+;; Trailing whitespace shows in code, and M-x delete-trailing-whitespace
+;; strips it. A save changes only the lines you edit.
+(defun my/show-trailing-whitespace ()
+  "Highlight trailing whitespace in this buffer."
+  (setq show-trailing-whitespace t))
+(add-hook 'prog-mode-hook #'my/show-trailing-whitespace)
+;; Go, Bazel and cargo colour their output.
+(add-hook 'compilation-filter-hook #'ansi-color-compilation-filter)
 
 ;; A terminal frame draws a menu-bar line otherwise, so this is not GUI-only.
 (menu-bar-mode -1)
@@ -203,6 +221,16 @@ there and the theme's faces are computed for a dumb terminal. Every frame
   (setopt xterm-set-window-title t
           xterm-extra-capabilities '(modifyOtherKeys setSelection)))
 
+;;;; Dired
+
+;; A copy or rename in one Dired window targets the other; a directory opens
+;; in the same buffer; a revisit shows the current listing.
+(use-package dired
+  :custom
+  (dired-dwim-target t)
+  (dired-kill-when-opening-new-dired-buffer t)
+  (dired-auto-revert-buffer t))
+
 ;;;; isearch
 
 ;; A match count in the prompt, and a search that survives C-a, C-e and a
@@ -244,10 +272,12 @@ there and the theme's faces are computed for a dumb terminal. Every frame
 
 (use-package consult
   :bind (("C-x b"   . consult-buffer)
+         ("C-x p b" . consult-project-buffer)
          ("M-y"     . consult-yank-pop)
          ("M-g g"   . consult-goto-line)
          ("M-g i"   . consult-imenu)
          ("M-g o"   . consult-outline)
+         ("M-g f"   . consult-flymake)
          ("M-s l"   . consult-line)
          ("M-s L"   . consult-line-multi)
          ("M-s r"   . consult-ripgrep)
@@ -348,8 +378,11 @@ there and the theme's faces are computed for a dumb terminal. Every frame
 ;;;; Search on rg
 
 ;; xref and M-x grep shell out to grep by default. install.sh puts rg on every
-;; machine, so use it.
-(setopt xref-search-program 'ripgrep)
+;; machine, so use it. Definitions and references pick in the minibuffer, with
+;; a preview; consult-xref is autoloaded, so this holds before consult loads.
+(setopt xref-search-program 'ripgrep
+        xref-show-xrefs-function #'consult-xref
+        xref-show-definitions-function #'consult-xref)
 (use-package grep
   :custom (grep-command "rg -nS --no-heading "))
 
@@ -431,6 +464,16 @@ then enter the mode again with the grammar in place."
   (add-to-list 'eglot-server-programs
                '((python-mode python-ts-mode) . ("basedpyright-langserver" "--stdio"))))
 
+;;;; Diagnostics
+
+;; A diagnostic shows at the end of its line, M-n and M-p walk them, and
+;; M-g f lists them. The end-of-line option takes t on Emacs 30 and 31 both.
+(use-package flymake
+  :bind (:map flymake-mode-map
+              ("M-n" . flymake-goto-next-error)
+              ("M-p" . flymake-goto-prev-error))
+  :custom (flymake-show-diagnostics-at-end-of-line t))
+
 ;;;; Format on save through the language server
 
 ;; gopls, jdtls and clangd implement textDocument/formatting, so any buffer
@@ -445,17 +488,28 @@ then enter the mode again with the grammar in place."
 (declare-function eglot-format-buffer "eglot")
 (declare-function eglot-code-action-organize-imports "eglot")
 
+;; A directory-local nil turns the save hooks off, for a shared repository
+;; whose diffs must stay small. lisp/site.el sets it per directory, and C-c f
+;; formats on demand either way.
+(defvar-local my/format-on-save t
+  "Whether a save formats this buffer through eglot or ruff.")
+(put 'my/format-on-save 'safe-local-variable #'booleanp)
+
 (defun my/eglot-format-buffer ()
   "Organize the imports where the server does that, then format the buffer."
   (when (derived-mode-p 'go-ts-mode)
     (ignore-errors (eglot-code-action-organize-imports (point-min) (point-max))))
   (eglot-format-buffer))
 
+(defun my/eglot-format-before-save ()
+  "Format the buffer through eglot when `my/format-on-save' is on."
+  (when my/format-on-save (my/eglot-format-buffer)))
+
 (defun my/eglot-format-on-save ()
   "Add or remove the save hook as eglot starts or stops managing this buffer."
   (if (and (eglot-managed-p) (eglot-server-capable :documentFormattingProvider))
-      (add-hook 'before-save-hook #'my/eglot-format-buffer nil t)
-    (remove-hook 'before-save-hook #'my/eglot-format-buffer t)))
+      (add-hook 'before-save-hook #'my/eglot-format-before-save nil t)
+    (remove-hook 'before-save-hook #'my/eglot-format-before-save t)))
 (add-hook 'eglot-managed-mode-hook #'my/eglot-format-on-save)
 
 ;;;; Python formatting: ruff
@@ -484,11 +538,28 @@ then enter the mode again with the grammar in place."
             (replace-buffer-contents out)
             (kill-buffer out)))))))
 
+(defun my/ruff-format-before-save ()
+  "Format the buffer with ruff when `my/format-on-save' is on."
+  (when my/format-on-save (my/ruff-format-buffer)))
+
 (defun my/ruff-format-on-save ()
   "Format with ruff before this buffer is saved."
-  (add-hook 'before-save-hook #'my/ruff-format-buffer nil t))
+  (add-hook 'before-save-hook #'my/ruff-format-before-save nil t))
 (add-hook 'python-ts-mode-hook #'my/ruff-format-on-save)
 (add-hook 'python-mode-hook #'my/ruff-format-on-save)
+
+;; C-c f formats the buffer now: through eglot where the server formats,
+;; through ruff in a Python buffer.
+(defun my/format-buffer ()
+  "Format this buffer through eglot or ruff."
+  (interactive)
+  (cond ((and (featurep 'eglot) (eglot-managed-p)
+              (eglot-server-capable :documentFormattingProvider))
+         (my/eglot-format-buffer))
+        ((derived-mode-p 'python-mode 'python-ts-mode)
+         (my/ruff-format-buffer))
+        (t (message "No formatter for %s" major-mode))))
+(keymap-global-set "C-c f" #'my/format-buffer)
 
 ;;;; Debugging: Dape
 
@@ -527,6 +598,27 @@ then enter the mode again with the grammar in place."
 (use-package sly
   :commands (sly sly-connect)
   :custom (inferior-lisp-program "sbcl"))
+
+;; Structural editing for Lisp: a delimiter always has its pair, and the sexp
+;; commands slurp, barf and raise. M-s stays the search prefix, and C-c s
+;; splices. paredit inserts its own pairs, so electric-pair is off in these
+;; buffers.
+(defvar paredit-mode-map)
+(declare-function paredit-splice-sexp "paredit")
+
+(defun my/paredit-no-electric-pair ()
+  "Turn `electric-pair-local-mode' off; paredit pairs the delimiters."
+  (electric-pair-local-mode -1))
+(use-package paredit
+  ;; Only once installed: package.el opens paredit's own files in
+  ;; emacs-lisp-mode while it generates their autoloads, and the hook below
+  ;; would call a paredit that is not loadable yet.
+  :if (locate-library "paredit")
+  :hook (((lisp-mode emacs-lisp-mode lisp-interaction-mode sly-mrepl-mode) . paredit-mode)
+         (paredit-mode . my/paredit-no-electric-pair))
+  :config
+  (keymap-unset paredit-mode-map "M-s" t)
+  (keymap-set paredit-mode-map "C-c s" #'paredit-splice-sexp))
 
 ;;;; Magit
 
@@ -633,19 +725,14 @@ then enter the mode again with the grammar in place."
   :bind-keymap ("C-c k" . kdb-map)
   :config (require 'kdb-site nil t))
 
-;;;; Bazel
+;;;; Site
 
-;; bazel.el edits BUILD, MODULE and .bzl files, runs buildifier, and gives
-;; project.el the workspace root. bazel-tui.el does not need it.
-(use-package bazel
-  :defer t)
-
-;; bazel-tui.el, in lisp/, drives the bazel-tui engine: targets from the
-;; minibuffer, a jobs list, logs and results, saved invocations. It needs the
-;; bazel-tui binary on PATH (make install in its repo), and says so otherwise.
-(use-package bazel-tui
-  :load-path "lisp"
-  :bind-keymap ("C-c B" . bazel-tui-map))
+;; ~/.config/emacs/lisp/site.el is machine-local, outside the repository, like
+;; kdb-site.el. It holds directory classes for shared repositories, whose
+;; diffs must stay small, and adds no file to them. For example:
+;;   (dir-locals-set-class-variables 'shared '((nil . ((my/format-on-save . nil)))))
+;;   (dir-locals-set-directory-class "~/work/shared-repo/" 'shared)
+(load (locate-user-emacs-file "lisp/site.el") 'noerror 'nomessage)
 
 ;;;; Server
 
