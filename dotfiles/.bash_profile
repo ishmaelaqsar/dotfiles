@@ -89,11 +89,10 @@ unset __podman_sock
 # Editor: emacsclient, then a plain emacs, then vi
 # ------------------------------------------------------------
 # emacsclient needs a running Emacs. -t opens in the terminal, -c a new frame,
-# and --alternate-editor= (empty value) starts a daemon when none runs, so a
-# git commit never hangs on a missing server. The long flag, not -a '': a
-# consumer that splits EDITOR on whitespace turns '' into two literal
-# apostrophes. A machine with emacs but no client (a minimal install) gets
-# emacs -nw -q, and a machine with no Emacs at all keeps vi.
+# and --alternate-editor= (empty value) starts a daemon when none runs. The
+# long flag, not -a '': a consumer that splits EDITOR on whitespace turns ''
+# into two literal apostrophes. A machine with emacs but no client (a minimal
+# install) gets emacs -nw -q, and a machine with no Emacs at all keeps vi.
 if command -v emacsclient >/dev/null 2>&1; then
     export EDITOR='emacsclient -t --alternate-editor='
     export VISUAL='emacsclient -c --alternate-editor='
@@ -104,7 +103,13 @@ else
     export EDITOR='vi'
     export VISUAL="$EDITOR"
 fi
-export GIT_EDITOR="$EDITOR"
+# git runs its own Emacs, so a commit does not depend on the daemon. -q skips
+# the init: a commit message needs no packages, and the buffer opens at once.
+if command -v emacs >/dev/null 2>&1; then
+    export GIT_EDITOR='emacs -nw -q'
+else
+    export GIT_EDITOR="$EDITOR"
+fi
 
 
 # ============================================================

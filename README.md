@@ -234,9 +234,12 @@ Two details are deliberate:
 ## Editor
 
 Emacs, where `setup-emacs.sh` has installed it. `.bash_profile` then sets `EDITOR` to
-`emacsclient -t -a ''` and `VISUAL` to `emacsclient -c -a ''`: the terminal for a git commit, a
-frame for a large edit, and `-a ''` starts the daemon when none runs. A machine with `emacs` but
-no client gets `emacs -nw -q`; a machine with no Emacs keeps vi.
+`emacsclient -t --alternate-editor=` and `VISUAL` to `emacsclient -c --alternate-editor=`: the
+terminal for a quick edit, a frame for a large one, and the empty alternate editor starts the
+daemon when none runs. `GIT_EDITOR` is `emacs -nw -q`, a plain Emacs with no init, so a commit
+does not depend on the daemon. In the shell, `e file` opens a file in the running Emacs, in the
+terminal. A machine with `emacs` but no client gets `emacs -nw -q`; a machine with no Emacs keeps
+vi.
 
 `dotfiles/.config/emacs/lisp/kdb.el` queries a remote kdb server from a local q shell, on top
 of the `q-mode` package. It needs a licensed `q` on `PATH`, and a list of servers in

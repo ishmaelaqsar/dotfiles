@@ -59,6 +59,11 @@ else
     __FZF_DIR_PREVIEW='ls -A {}'
 fi
 
+# Usage: e [file...]
+# Open in the running Emacs, in this terminal. --alternate-editor= with an empty
+# value starts a daemon when none runs. emacs and emacsclient stay unaliased.
+alias e='emacsclient -t --alternate-editor='
+
 # Usage: ce some-project-name
 # Fuzzy find a directory under $WORKSPACE, and open it in an Emacs frame (Dired).
 # --alternate-editor= with an empty value starts a daemon when none runs, and
