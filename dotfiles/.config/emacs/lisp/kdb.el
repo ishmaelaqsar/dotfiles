@@ -17,7 +17,9 @@
 ;; is stripped.  `.kdb.last' in the local q holds the last remote result.
 ;;
 ;; A table result opens in a `kdb-grid-mode' buffer: a `tabulated-list' with
-;; a frozen header and sortable columns; `f' filters the rows.
+;; a frozen header and sortable columns; `f' filters the rows.  The window
+;; opens under the frame; `kdb-grid-window' moves it, and `C-c k q' closes it
+;; from any window.
 ;;
 ;; Completion at point offers the target's table names anywhere, and the
 ;; columns of each table named in the statement at point, together with
@@ -75,6 +77,19 @@ q reads its licence from QHOME.  Set this when the shell does not export it."
   "Most rows the grid loads from one result.
 The mode line shows how many rows the result had."
   :type 'natnum
+  :group 'kdb)
+
+(defcustom kdb-grid-window 'bottom
+  "Where the grid buffer opens.
+`bottom' is a full-width window under the frame, `right' a window beside
+the selected one, and nil leaves the choice to `display-buffer-alist'."
+  :type '(choice (const bottom) (const right) (const nil))
+  :group 'kdb)
+
+(defcustom kdb-grid-window-size 0.4
+  "Fraction of the frame the grid window takes.
+Its height when at the bottom, its width when at the right."
+  :type 'number
   :group 'kdb)
 
 (defcustom kdb-hints t
@@ -312,6 +327,16 @@ The target's shell starts, so its schema is loaded for completion."
   (interactive)
   (kdb--send (concat kdb-local-prefix ".kdb.grid .kdb.last")))
 
+(defun kdb-grid-quit ()
+  "Close the grid window of the current buffer's target, from any window."
+  (interactive)
+  (let* ((name (or kdb-buffer-target (car kdb--target)))
+         (buffer (and name (get-buffer (format "*kdb grid: %s*" name))))
+         (window (and buffer (get-buffer-window buffer))))
+    (if window
+        (quit-window nil window)
+      (message "No grid window for %s" (or name "this buffer")))))
+
 ;;;; Eval commands
 
 ;; `q-eval-region' strips comments and blank lines and folds indented lines
@@ -547,7 +572,17 @@ The file is deleted after it is read."
         (tabulated-list-init-header)
         (kdb--grid-print)
         (goto-char (point-min)))
-      (display-buffer buffer))))
+      (display-buffer buffer (kdb--grid-display-action)))))
+
+(defun kdb--grid-display-action ()
+  "Return the `display-buffer' action for `kdb-grid-window'."
+  (pcase kdb-grid-window
+    ('bottom `((display-buffer-reuse-window display-buffer-at-bottom)
+               (window-height . ,kdb-grid-window-size)))
+    ('right `((display-buffer-reuse-window display-buffer-in-direction)
+              (direction . right)
+              (window-width . ,kdb-grid-window-size)))
+    (_ nil)))
 
 ;;;; Schema and completion
 
@@ -672,6 +707,7 @@ target, which `kdb--header-target' reads back when the file is opened."
 (define-key kdb-map "t" #'kdb-set-target)
 (define-key kdb-map "r" #'kdb-reconnect)
 (define-key kdb-map "g" #'kdb-grid)
+(define-key kdb-map "q" #'kdb-grid-quit)
 (define-key kdb-map "T" #'kdb-describe-table)
 (define-key kdb-map "R" #'kdb-refresh-schema)
 (define-key kdb-map "s" #'kdb-save-query)
