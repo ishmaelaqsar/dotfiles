@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Emacs 30 with the two packages that are not in core: Sly for Common Lisp and
-# Magit. eglot, tree-sitter and use-package ship with Emacs, and eglot talks to
-# the servers the other setup-*.sh scripts install. The init is
+# Emacs, and the packages init.el selects: emacs-plus@31 on macOS, the distro
+# package on Linux. eglot, tree-sitter and use-package ship with Emacs, and
+# eglot talks to the servers the other setup-*.sh scripts install. The init is
 # dotfiles/.config/emacs/init.el, linked by install.sh. Idempotent.
 
 # A dry run is all or nothing. lib/pkg.sh honours DOTFILES_DRY_RUN for the
@@ -32,8 +32,7 @@ PKG_MGR="$(__detect_pkg_mgr)"
 __pkg_refresh "$PKG_MGR"
 
 if [[ "$OSTYPE" == darwin* ]]; then
-    # emacs-plus builds a real Emacs.app. The core formula is a daemon build with
-    # no proper bundle, and one major version ahead of every Linux package.
+    # emacs-plus builds a real Emacs.app. The core formula has no bundle.
     if ! brew tap | grep -qx 'd12frosted/emacs-plus'; then
         echo "Adding the emacs-plus tap..."
         brew tap d12frosted/emacs-plus
@@ -43,15 +42,13 @@ if [[ "$OSTYPE" == darwin* ]]; then
     if brew trust --help >/dev/null 2>&1; then
         brew trust d12frosted/emacs-plus >/dev/null 2>&1 || true
     fi
-    # Native compilation is the default of this formula, so no option. 31 is in
-    # the tap as emacs-plus@31; bump when Debian carries it, and delete the
-    # grammar hook in init.el, which treesit-auto-install-grammar replaces.
+    # Native compilation is the default of this formula, so no option.
     if ! command -v emacs >/dev/null 2>&1; then
-        __pkg_raw brew emacs-plus@30
+        __pkg_raw brew emacs-plus@31
     fi
     # Spotlight indexes both /Applications and ~/Applications. A user outside
     # the admin group cannot write the first, so fall back to the second.
-    APP="$(brew --prefix emacs-plus@30 2>/dev/null)/Emacs.app"
+    APP="$(brew --prefix emacs-plus@31 2>/dev/null)/Emacs.app"
     APP_DIR=/Applications
     [ -w "$APP_DIR" ] || APP_DIR="$HOME/Applications"
     if [ -d "$APP" ] && [ ! -e "$APP_DIR/Emacs.app" ]; then
@@ -93,11 +90,11 @@ fi
 # macOS has no such unit, so hand the job to brew services, which writes its
 # own LaunchAgent. Both are idempotent, and neither restarts a running daemon.
 if [[ "$OSTYPE" == darwin* ]] && command -v brew >/dev/null 2>&1; then
-    if brew services list 2>/dev/null | grep -qE "^emacs-plus@30\s+started"; then
+    if brew services list 2>/dev/null | grep -qE "^emacs-plus@31\s+started"; then
         echo "The Emacs daemon is already a brew service."
     else
         echo "Starting the Emacs daemon as a brew service..."
-        brew services start emacs-plus@30 \
+        brew services start emacs-plus@31 \
             || echo "Warning: could not start the service. Start a daemon with 'emacs --daemon'." >&2
     fi
 fi

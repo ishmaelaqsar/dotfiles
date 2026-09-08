@@ -160,7 +160,7 @@ always act, so a script stops when `DOTFILES_DRY_RUN` is set rather than half ho
 | `setup-go.sh` | go | gopls | delve |
 | `setup-java.sh` | sdkman → Temurin LTS, maven, gradle | jdtls (brew/AUR) | JDWP/jdb (in the JDK) |
 | `setup-sbcl.sh` | SBCL + Quicklisp | none — CL uses Swank/Slynk via the editor | SBCL built-in |
-| `setup-emacs.sh` | Emacs 30 (`emacs-plus@30` on macOS, the pgtk package on Linux) and the packages `init.el` selects: Sly, Magit, Vertico, Orderless, Consult, Marginalia, Embark, Avy, Corfu, Cape, Dape, q-mode | `eglot`, built in, over the servers the rows above install | none |
+| `setup-emacs.sh` | Emacs (`emacs-plus@31` on macOS, the pgtk package on Linux) and the packages `init.el` selects: Sly, Magit, markdown-mode, Vertico, Orderless, Consult, Marginalia, Embark, Avy, Corfu, Cape, Dape, q-mode | `eglot`, built in, over the servers the rows above install | none |
 | `setup-yk.sh` | [yk](https://github.com/ishmaelaqsar/yk), the YubiKey maintenance tool | none | none |
 
 These scripts share the package-manager logic in `lib/pkg.sh`, and the name mappings in
@@ -245,28 +245,28 @@ it exists; the file is machine-local and untracked.
 
 `setup-emacs.sh` keeps a daemon warm, so `-a ''` is the fallback rather than the normal path:
 Linux enables the systemd user unit in `dotfiles/.config/systemd/user/emacs.service`, and macOS
-gets `brew services start emacs-plus@30`. Restart it after an init change:
+gets `brew services start emacs-plus@31`. Restart it after an init change:
 `emacsclient -e '(kill-emacs)'`, then let the service start it again. Note that plain `emacs` on
 macOS opens the **GUI** app and holds the terminal; use `emacsclient -t` or `emacs -nw` for a
 terminal frame. Two openers: `ce` picks a
 directory under `$WORKSPACE` with fzf and opens it in a frame, and `alt+shift+o` in Ghostty does
 the same for the current directory.
 
-The init is `dotfiles/.config/emacs/init.el`, written in the built-in `use-package` on Emacs 30:
-`eglot` over the language servers the other `setup-*.sh` scripts install, the tree-sitter modes
-with a grammar fetched on first use, terminal polish for `emacsclient -t` (mouse, OSC 52
+The init is `dotfiles/.config/emacs/init.el`, written in the built-in `use-package` on Emacs 30
+and 31: `eglot` over the language servers the other `setup-*.sh` scripts install, the tree-sitter
+modes with a grammar fetched on first use, terminal polish for `emacsclient -t` (mouse, OSC 52
 clipboard, 24-bit colour), and generated files under `~/.local/state/emacs/` (`early-init.el`
-sends the native-compilation cache there too). Five packages come from MELPA: Sly for Common
-Lisp, Magit on `C-x g`, and Vertico, Orderless and Consult, which make the minibuffer the fuzzy
-picker. `consult-ripgrep` and `consult-fd` run the installed `rg` and `fd` with a live preview,
-and `xref` searches with `rg` as well. fzf stays in the shell. No framework, and no vim keys: the
-point is the Emacs keys the rest of the repository already uses.
+sends the native-compilation cache there too). Six packages come from MELPA: Sly for Common
+Lisp, Magit on `C-x g`, markdown-mode, and Vertico, Orderless and Consult, which make the
+minibuffer the fuzzy picker. `consult-ripgrep` and `consult-fd` run the installed `rg` and `fd`
+with a live preview, and `xref` searches with `rg` as well. fzf stays in the shell. No framework,
+and no vim keys: the point is the Emacs keys the rest of the repository already uses.
 
 Five more packages, all from GNU ELPA: Marginalia annotates every candidate; Embark acts on the
-candidate or the thing at point (`C-.`, `C-;`), and any prefix followed by `C-h` lists its keys;
-Avy jumps to a visible position (`M-j`, then the characters you see); Corfu completes at point
-in a graphical frame, with Cape adding buffer words and file paths. A terminal frame on Emacs 30
-cannot draw Corfu's child frame, so it keeps the built-in completion there.
+candidate or the thing at point (`C-.`, `C-;`), and a prefix key followed by a one-second pause
+lists its keys; Avy jumps to a visible position (`M-j`, then the characters you see); Corfu
+completes at point, with Cape adding buffer words and file paths. A terminal frame draws Corfu's
+popup on Emacs 31; on 30 it keeps the built-in completion.
 
 For C and C++, `clangd` from `setup-c.sh` is the language server, and `~/.clang-format` is the
 style for code with no `.clang-format` of its own: `clang-format` stops at the first one it meets

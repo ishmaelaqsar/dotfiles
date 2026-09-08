@@ -2,12 +2,12 @@
 
 ;;; Commentary:
 
-;; Emacs 30 ships eglot, tree-sitter and use-package. This file configures
+;; Emacs 30 and 31 ship eglot, tree-sitter and use-package. This file configures
 ;; those, and adds the packages that are not in core: Sly for Common Lisp,
-;; Magit, the Vertico + Orderless + Consult search stack, which runs the
-;; installed rg and fd from the minibuffer, with Marginalia, Embark, Avy, and
-;; Corfu + Cape for completion at point. setup-emacs.sh installs them from
-;; `package-selected-packages'.
+;; Magit, markdown-mode, the Vertico + Orderless + Consult search stack, which
+;; runs the installed rg and fd from the minibuffer, with Marginalia, Embark,
+;; Avy, and Corfu + Cape for completion at point. setup-emacs.sh installs them
+;; from `package-selected-packages'.
 ;;
 ;; eglot finds the language servers on PATH. The setup-*.sh scripts put them
 ;; there: clangd, basedpyright, gopls, jdtls. Nothing here names a server path.
@@ -18,13 +18,38 @@
 
 ;;; Code:
 
+;;;; Generated files
+
+(defconst my/state-dir
+  (expand-file-name "emacs/" (or (getenv "XDG_STATE_HOME") "~/.local/state/"))
+  "Where Emacs writes what it generates: backups, auto-saves, custom-file.")
+(make-directory my/state-dir t)
+
+;; custom.el loads before the Packages section, which then overrides the one
+;; value package.el saves there: `package-selected-packages'.
+(setopt custom-file (expand-file-name "custom.el" my/state-dir))
+(load custom-file 'noerror 'nomessage)
+
+(setopt backup-directory-alist `(("." . ,(expand-file-name "backup/" my/state-dir)))
+        auto-save-file-name-transforms `((".*" ,(expand-file-name "auto-save/" my/state-dir) t))
+        auto-save-list-file-prefix (expand-file-name "auto-save-list/" my/state-dir)
+        create-lockfiles nil
+        recentf-save-file (expand-file-name "recentf" my/state-dir)
+        savehist-file (expand-file-name "history" my/state-dir)
+        save-place-file (expand-file-name "places" my/state-dir))
+
 ;;;; Packages
 
 (require 'package)
 (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
-(setopt package-selected-packages
-        '(avy bazel cape consult corfu dape embark embark-consult exec-path-from-shell
-          magit marginalia orderless q-mode sly vertico))
+;; Through Custom, not setopt: custom.el holds its saved value in the `user'
+;; theme, and every `enable-theme' call (use-package and Modus both make one)
+;; re-applies that theme. A Custom set replaces the theme value; setopt does
+;; not, so its value would not survive the first `enable-theme'.
+(customize-set-variable
+ 'package-selected-packages
+ '(avy bazel cape consult corfu dape embark embark-consult exec-path-from-shell
+   magit marginalia markdown-mode orderless q-mode sly vertico))
 
 ;; use-package is built in. Nothing here uses :ensure: the setup script
 ;; installs, and a missing package logs a warning instead of stopping the load.
@@ -42,24 +67,6 @@
   :custom (exec-path-from-shell-variables '("PATH" "MANPATH" "KDB_QUERY_DIR"))
   :config (exec-path-from-shell-initialize))
 
-;;;; Generated files
-
-(defconst my/state-dir
-  (expand-file-name "emacs/" (or (getenv "XDG_STATE_HOME") "~/.local/state/"))
-  "Where Emacs writes what it generates: backups, auto-saves, custom-file.")
-(make-directory my/state-dir t)
-
-(setopt custom-file (expand-file-name "custom.el" my/state-dir))
-(load custom-file 'noerror 'nomessage)
-
-(setopt backup-directory-alist `(("." . ,(expand-file-name "backup/" my/state-dir)))
-        auto-save-file-name-transforms `((".*" ,(expand-file-name "auto-save/" my/state-dir) t))
-        auto-save-list-file-prefix (expand-file-name "auto-save-list/" my/state-dir)
-        create-lockfiles nil
-        recentf-save-file (expand-file-name "recentf" my/state-dir)
-        savehist-file (expand-file-name "history" my/state-dir)
-        save-place-file (expand-file-name "places" my/state-dir))
-
 ;;;; Defaults
 
 (setopt inhibit-startup-screen t
@@ -75,7 +82,38 @@
         ;; A language server answers in one chunk, not sixteen.
         read-process-output-max (* 1024 1024)
         ;; The async compiler logs its warnings instead of raising a window.
-        native-comp-async-report-warnings-errors 'silent)
+        native-comp-async-report-warnings-errors 'silent
+        ;; A kill saves the clipboard to the ring first, so a copy from another
+        ;; program survives it, and a kill never adds a duplicate entry.
+        save-interprogram-paste-before-kill t
+        kill-do-not-save-duplicates t
+        ;; File notifications, not a poll every five seconds.
+        auto-revert-avoid-polling t
+        ;; find-file does not ping a word that looks like a host name.
+        ffap-machine-p-known 'reject
+        ;; A split rebalances its siblings.
+        window-combination-resize t
+        ;; Embark and Consult commands run from inside the minibuffer.
+        enable-recursive-minibuffers t
+        ;; TAB completes at point once the line is indented.
+        tab-always-indent 'complete
+        ;; The gutter does not jump at line 100.
+        display-line-numbers-width 3
+        show-paren-delay 0
+        ;; The opening paren of an off-screen pair shows in an overlay.
+        show-paren-context-when-offscreen 'overlay
+        ;; Marks in the fringe at the top and the bottom of the buffer.
+        indicate-buffer-boundaries 'left
+        ;; Horizontal scroll from a trackpad tilt, in a graphical frame.
+        mouse-wheel-tilt-scroll t
+        mouse-wheel-flip-direction t
+        ;; The project name in the mode line.
+        project-mode-line t)
+
+;; Left-to-right text in every buffer: redisplay skips the bidirectional
+;; analysis, which matters on long lines such as logs and JSON.
+(setq-default bidi-paragraph-direction 'left-to-right)
+(setq bidi-inhibit-bpa t)
 
 (savehist-mode 1)
 (recentf-mode 1)
@@ -84,6 +122,21 @@
 (delete-selection-mode 1)
 (column-number-mode 1)
 (electric-pair-mode 1)
+(minibuffer-depth-indicate-mode 1)
+;; C-x o o o cycles windows, and C-x { { { resizes: the built-in repeat maps.
+(repeat-mode 1)
+(global-hl-line-mode 1)
+;; Grey text at point shows the first completion, and TAB accepts it. It is
+;; the completion UI of a frame that cannot draw Corfu.
+(global-completion-preview-mode 1)
+;; Both are inert on a tty.
+(pixel-scroll-precision-mode 1)
+(context-menu-mode 1)
+(blink-cursor-mode -1)
+;; C-<arrows> move between windows, so C-<left> and C-<right> move windows, not
+;; words; M-b and M-f move by word. tmux binds no C-<arrow>, so the keys reach
+;; Emacs.
+(windmove-default-keybindings 'control)
 (add-hook 'prog-mode-hook #'display-line-numbers-mode)
 (add-hook 'before-save-hook #'delete-trailing-whitespace)
 
@@ -129,12 +182,16 @@ there and the theme's faces are computed for a dumb terminal. Every frame
 ;; here, and the two machines need no branch. A code buffer keeps the `default'
 ;; face, and stays 0xProto.
 (add-hook 'text-mode-hook #'variable-pitch-mode)
+;; Prose wraps at the window edge, and a wrapped line keeps the indent of its
+;; list marker.
+(add-hook 'text-mode-hook #'visual-line-mode)
+(add-hook 'text-mode-hook #'visual-wrap-prefix-mode)
 
 ;;;; Terminal frames
 
 ;; emacsclient -t and emacs -nw. Ghostty and tmux both speak xterm, so the
 ;; xterm terminal init applies.
-(xterm-mouse-mode 1)                    ; the default from Emacs 31
+(xterm-mouse-mode 1)
 ;; term/xterm.el loads when the first terminal frame opens, and reads these
 ;; right after. setSelection makes a kill reach the system clipboard through
 ;; OSC 52, which tmux (set-clipboard on) and ssh both forward. modifyOtherKeys
@@ -146,6 +203,21 @@ there and the theme's faces are computed for a dumb terminal. Every frame
   (setopt xterm-set-window-title t
           xterm-extra-capabilities '(modifyOtherKeys setSelection)))
 
+;;;; isearch
+
+;; A match count in the prompt, and a search that survives C-a, C-e and a
+;; scroll. C-r during a forward search goes to the previous match at once.
+(use-package isearch
+  :bind (:map isearch-mode-map
+              ("C-." . isearch-forward-thing-at-point))
+  :custom
+  (isearch-lazy-count t)
+  (lazy-count-prefix-format "(%s/%s) ")
+  (isearch-allow-motion t)
+  (isearch-allow-scroll t)
+  (isearch-repeat-on-direction-change t)
+  (isearch-wrap-pause 'no-ding))
+
 ;;;; Completion: Vertico + Orderless + Consult
 
 ;; The minibuffer is the fuzzy picker, so fzf stays in the shell. Consult runs
@@ -153,6 +225,16 @@ there and the theme's faces are computed for a dumb terminal. Every frame
 ;; for Neovim.
 (use-package vertico
   :init (vertico-mode 1))
+
+;; Edit a path by component: DEL deletes a whole directory at the end, and a
+;; `~/' or `/' typed mid-path clears what it shadows.
+(use-package vertico-directory
+  :after vertico
+  :bind (:map vertico-map
+              ("RET"   . vertico-directory-enter)
+              ("DEL"   . vertico-directory-delete-char)
+              ("M-DEL" . vertico-directory-delete-word))
+  :hook (rfn-eshadow-update-overlay . vertico-directory-tidy))
 
 (use-package orderless
   :custom
@@ -165,11 +247,21 @@ there and the theme's faces are computed for a dumb terminal. Every frame
          ("M-y"     . consult-yank-pop)
          ("M-g g"   . consult-goto-line)
          ("M-g i"   . consult-imenu)
+         ("M-g o"   . consult-outline)
          ("M-s l"   . consult-line)
+         ("M-s L"   . consult-line-multi)
          ("M-s r"   . consult-ripgrep)
          ("M-s f"   . consult-fd)
-         ("C-x C-r" . consult-recent-file))
+         ("C-x C-r" . consult-recent-file)
+         ;; From isearch: M-e edits the search through its history, and M-s l
+         ;; carries the search string into consult-line.
+         :map isearch-mode-map
+         ("M-e"   . consult-isearch-history)
+         ("M-s l" . consult-line)
+         ("M-s L" . consult-line-multi))
   :custom
+  ;; < narrows the candidates to one group: b for buffers, f for files.
+  (consult-narrow-key "<")
   ;; Debian and Ubuntu ship the binary as fdfind, which is why .aliases wraps
   ;; it. consult defaults to the literal "fd", so name whichever is here.
   (consult-fd-args
@@ -181,38 +273,71 @@ there and the theme's faces are computed for a dumb terminal. Every frame
 (use-package marginalia
   :init (marginalia-mode 1))
 
-;; Act on the candidate or the thing at point. Any prefix followed by C-h
-;; lists its keys through the minibuffer, which is the which-key role.
+;; Act on the candidate or the thing at point. A prefix key, and a one-second
+;; pause, lists the commands under it through the minibuffer; C-h after the
+;; prefix lists them at once.
 (use-package embark
+  :demand t
   :bind (("C-."   . embark-act)
          ("C-;"   . embark-dwim)
          ("C-h B" . embark-bindings))
-  :custom (prefix-help-command #'embark-prefix-help-command))
+  :custom
+  (prefix-help-command #'embark-prefix-help-command)
+  (embark-auto-prefix-help-delay 1.0)
+  :config (embark-auto-prefix-help-mode 1))
 
 (use-package embark-consult
   :hook (embark-collect-mode . consult-preview-at-point-mode))
 
-;; Jump to a visible position: M-j, then the characters you see there.
-;; default-indent-new-line, which M-j had, stays on C-M-j.
+;; Jump to a visible position: M-j, then the characters you see there. In
+;; isearch, M-j jumps to one of the matches. After M-j, `.' on a target runs
+;; Embark there and leaves point where it is. C-M-j keeps
+;; default-indent-new-line.
+(defvar avy-ring)
+(declare-function embark-act "embark")
+(declare-function ring-ref "ring")
+
+(defun my/avy-action-embark (pt)
+  "Run `embark-act' at PT, then return to the window avy started from."
+  (unwind-protect
+      (save-excursion
+        (goto-char pt)
+        (embark-act))
+    (select-window (cdr (ring-ref avy-ring 0))))
+  t)
+
 (use-package avy
   :bind (("M-j"   . avy-goto-char-timer)
-         ("M-g l" . avy-goto-line)))
+         ("M-g l" . avy-goto-line)
+         :map isearch-mode-map
+         ("M-j" . avy-isearch))
+  :config (setf (alist-get ?. avy-dispatch-alist) #'my/avy-action-embark))
 
 ;;;; Completion at point: Corfu + Cape
 
-;; Corfu draws a child frame at point, which a terminal frame on Emacs 30
-;; cannot show, so it runs in graphical frames only. Emacs 31 lifts the limit.
-;; A terminal frame keeps the built-in completion-at-point in the minibuffer.
-(defun my/corfu-when-graphic ()
-  "Turn on `corfu-mode' in a graphical frame."
-  (when (display-graphic-p) (corfu-mode 1)))
+;; Corfu draws a child frame at point. A tty draws child frames from Emacs 31,
+;; so on 30 a terminal frame keeps the built-in completion-at-point in the
+;; minibuffer.
+(defun my/corfu-maybe ()
+  "Turn on `corfu-mode' where this frame can draw a child frame."
+  (when (or (display-graphic-p) (>= emacs-major-version 31))
+    (corfu-mode 1)))
 (use-package corfu
-  :hook ((prog-mode text-mode) . my/corfu-when-graphic)
+  :hook ((prog-mode text-mode) . my/corfu-maybe)
+  :bind (:map corfu-map
+              ;; A space inside the popup separates Orderless terms.
+              ("SPC" . corfu-insert-separator))
   :custom
   (corfu-auto t)
   (corfu-auto-delay 0.15)
   (corfu-auto-prefix 2)
   (corfu-cycle t))
+
+;; The docstring of the selected candidate, beside the popup.
+(use-package corfu-popupinfo
+  :after corfu
+  :hook (corfu-mode . corfu-popupinfo-mode)
+  :custom (corfu-popupinfo-delay '(0.25 . 0.1)))
 
 ;; Extra completion sources: words in open buffers, and file paths.
 (use-package cape
@@ -273,12 +398,12 @@ there and the theme's faces are computed for a dumb terminal. Every frame
     (yaml-ts-mode . yaml))
   "The grammar language of each tree-sitter mode this config uses.")
 
+;; A missing grammar installs itself on the first file of its kind, so a fresh
+;; machine needs no manual step. Emacs 31 does this through
+;; `treesit-auto-install-grammar'; on 30 the hook below does it.
 (defun my/treesit-install-missing ()
-  "Install the grammar of the current tree-sitter mode when it is absent.
-A fresh machine then needs no manual step: the first file of a kind
-fetches its grammar, and the mode is entered again with it in place.
-Emacs 31 does this itself through `treesit-auto-install-grammar'; delete
-this function when every machine runs 31."
+  "Install the grammar of the current tree-sitter mode when it is absent,
+then enter the mode again with the grammar in place."
   (let ((lang (alist-get major-mode my/treesit-mode-languages)))
     (when (and lang (not (treesit-language-available-p lang)))
       (message "Installing the %s grammar..." lang)
@@ -286,13 +411,21 @@ this function when every machine runs 31."
       (when (treesit-language-available-p lang)
         (funcall major-mode)))))
 
-(dolist (pair my/treesit-mode-languages)
-  (add-hook (intern (format "%s-hook" (car pair))) #'my/treesit-install-missing))
+(if (boundp 'treesit-auto-install-grammar)
+    (setopt treesit-auto-install-grammar 'always)
+  (dolist (pair my/treesit-mode-languages)
+    (add-hook (intern (format "%s-hook" (car pair))) #'my/treesit-install-missing)))
 
 ;;;; eglot
 
 (use-package eglot
   :hook ((c-ts-mode c++-ts-mode python-ts-mode go-ts-mode java-ts-mode) . eglot-ensure)
+  :custom
+  ;; eglot manages a file that xref opens outside the project, such as a
+  ;; header under /usr/include.
+  (eglot-extend-to-xref t)
+  ;; No events log. Set :size to a number to debug a server.
+  (eglot-events-buffer-config '(:size 0))
   :config
   ;; basedpyright is not in eglot's default table.
   (add-to-list 'eglot-server-programs
@@ -427,7 +560,6 @@ this function when every machine runs 31."
   :bind (("C-c a" . org-agenda)
          ("C-c c" . org-capture)
          ("C-c l" . org-store-link))
-  :hook (org-mode . visual-line-mode)
   :custom
   (org-directory (file-name-as-directory (or (getenv "ORG_DIR") "~/org")))
   (org-agenda-files (list org-directory))
@@ -474,6 +606,13 @@ this function when every machine runs 31."
                             (buffer-list))))
     (my/org-babel-kill-sessions)))
 (add-hook 'kill-buffer-hook #'my/org-kill-sessions-when-last)
+
+;;;; Markdown
+
+;; The Obsidian vault and every README. text-mode-hook gives the buffer its
+;; proportional face and its wrapping.
+(use-package markdown-mode
+  :defer t)
 
 ;;;; KDB
 

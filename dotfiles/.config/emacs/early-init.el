@@ -36,8 +36,14 @@
                   file-name-handler-alist my/file-name-handler-alist)))
 
 ;; The init changes faces and bars, and each change would resize the frame.
-(setopt frame-inhibit-implied-resize t)
+;; A frame resizes by the pixel, not by the character cell.
+(setopt frame-inhibit-implied-resize t
+        frame-resize-pixelwise t)
 (push '(vertical-scroll-bars) default-frame-alist)
 (push '(tool-bar-lines . 0) default-frame-alist)
+;; A dark title bar, to match modus-vivendi. A tty frame ignores ns parameters.
+(when (eq system-type 'darwin)
+  (push '(ns-appearance . dark) default-frame-alist)
+  (push '(ns-transparent-titlebar . t) default-frame-alist))
 
 ;;; early-init.el ends here
