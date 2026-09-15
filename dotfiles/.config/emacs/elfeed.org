@@ -1,0 +1,16 @@
+#+title: Feeds
+
+A headline that starts with =http= is a feed, and it takes the tags of its
+ancestors. The tree needs the =:elfeed:= tag for elfeed-org to read it. Text
+under a headline is a note, and elfeed ignores it.
+
+* Feeds                                                              :elfeed:
+** Emacs                                                              :emacs:
+*** https://planet.emacslife.com/atom.xml
+*** https://sachachua.com/blog/category/emacs-news/feed/
+*** https://emacsredux.com/atom.xml
+** Linux                                                              :linux:
+*** https://lwn.net/headlines/newrss
+** Tech                                                                :tech:
+*** https://news.ycombinator.com/rss
+*** https://lobste.rs/rss

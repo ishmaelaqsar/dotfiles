@@ -6,7 +6,8 @@
 ;; those, and adds the packages that are not in core: Sly and paredit for Lisp,
 ;; Magit, markdown-mode, the Vertico + Orderless + Consult search stack, which
 ;; runs the installed rg and fd from the minibuffer, with Marginalia, Embark,
-;; Avy, Corfu + Cape for completion at point, and eat for a bash inside a frame.
+;; Avy, Corfu + Cape for completion at point, eat for a bash inside a frame, and
+;; elfeed with elfeed-org for the feeds in elfeed.org.
 ;; setup-emacs.sh installs them from `package-selected-packages'.
 ;;
 ;; eglot finds the language servers on PATH. The setup-*.sh scripts put them
@@ -37,7 +38,11 @@
         recentf-save-file (expand-file-name "recentf" my/state-dir)
         savehist-file (expand-file-name "history" my/state-dir)
         save-place-file (expand-file-name "places" my/state-dir)
-        eshell-directory-name (expand-file-name "eshell/" my/state-dir))
+        eshell-directory-name (expand-file-name "eshell/" my/state-dir)
+        bookmark-default-file (expand-file-name "bookmarks.eld" my/state-dir)
+        eww-bookmarks-directory my/state-dir
+        ;; Cookies, the cache, and the history of every URL Emacs fetches.
+        url-configuration-directory (expand-file-name "url/" my/state-dir))
 
 ;;;; Packages
 
@@ -49,8 +54,9 @@
 ;; not, so its value would not survive the first `enable-theme'.
 (customize-set-variable
  'package-selected-packages
- '(avy cape consult corfu dape eat embark embark-consult exec-path-from-shell
-   magit marginalia markdown-mode orderless paredit q-mode sly vertico))
+ '(avy cape consult corfu dape eat elfeed elfeed-org embark embark-consult
+   exec-path-from-shell magit marginalia markdown-mode orderless paredit q-mode
+   sly vertico))
 
 ;; use-package is built in. Nothing here uses :ensure: the setup script
 ;; installs, and a missing package logs a warning instead of stopping the load.
@@ -732,6 +738,52 @@ then enter the mode again with the grammar in place."
 ;; proportional face and its wrapping.
 (use-package markdown-mode
   :defer t)
+
+;;;; Reading
+
+;; EWW renders a page as text, which is what an article is, so it takes every
+;; link Emacs opens. C-c w opens a URL, and offers the one at point. In the
+;; page, R renders it readable, & sends it to the system browser, and a
+;; bookmark returns to it.
+(use-package eww
+  :bind ("C-c w" . eww)
+  ;; The title names the buffer, so several pages stay apart.
+  :custom (eww-auto-rename-buffer 'title))
+
+(use-package shr
+  :defer t
+  :custom
+  ;; The page takes the colours of the theme, which Modus holds at AAA
+  ;; contrast, rather than the ones its author chose.
+  (shr-use-colors nil)
+  (shr-max-image-proportion 0.6))
+
+;; Four kinds of page need a JavaScript engine or a session that EWW has
+;; neither of, so they go straight to the system browser. A page reached any
+;; other way opens in EWW, and & sends it on from there. Site data belongs in
+;; lisp/site.el, which adds a host of its own to this list.
+(setopt browse-url-browser-function #'eww-browse-url
+        browse-url-secondary-browser-function #'browse-url-default-browser
+        browse-url-handlers
+        '(("\\`https?://\\(www\\.\\)?youtu\\(be\\.com\\|\\.be\\)/" . browse-url-default-browser)
+          ("\\`https?://[a-z]+\\.google\\.com/" . browse-url-default-browser)
+          ("\\`https?://\\([^/]*\\.\\)?github\\.com/" . browse-url-default-browser)
+          ("\\`https?://\\(localhost\\|127\\.0\\.0\\.1\\)[:/]" . browse-url-default-browser)))
+
+;; An RSS reader on C-c e. elfeed.org holds the feeds, so every machine reads
+;; the same list; the database is generated state, and stays on the machine
+;; that read it.
+(use-package elfeed
+  :bind ("C-c e" . elfeed)
+  :custom
+  (elfeed-db-directory (expand-file-name "elfeed/" my/state-dir))
+  (elfeed-search-filter "@2-weeks-ago +unread"))
+
+;; A headline of elfeed.org that starts with http is a feed, and it takes the
+;; tags of its ancestors. The default file is the one install.sh links.
+(use-package elfeed-org
+  :after elfeed
+  :config (elfeed-org))
 
 ;;;; KDB
 

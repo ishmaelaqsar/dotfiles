@@ -219,6 +219,19 @@ and `<s TAB` inserts a source block. A file with the header
 interpreter. `C-c C-c` runs the block under point and asks once. Closing the last Org buffer kills
 the interpreters. `md2org FILE.md` writes `FILE.org` beside it.
 
+### Reading
+
+EWW is the browser for a page of text, and Emacs opens every link in it. `C-c w` opens a URL, and
+offers the one at point. In the page, `R` renders an article readable, `&` sends it to the system
+browser, and `C-x r m` bookmarks it. Video, the Google apps, GitHub, and a local server keep the
+system browser, because each needs JavaScript or a session.
+
+`C-c e` opens [elfeed](https://github.com/emacs-elfeed/elfeed), the feed reader. `G` fetches, `s`
+filters, and `RET` opens an entry. The feed list is `dotfiles/.config/emacs/elfeed.org`, where a
+headline that starts with `http` is a feed and takes the tags of its ancestors. The repository
+tracks that file, so every machine reads the same feeds. The database is generated state under
+`~/.local/state/emacs/elfeed/`, so what you have read stays on the machine that read it.
+
 ---
 
 ## Secrets
