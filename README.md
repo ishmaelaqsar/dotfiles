@@ -207,6 +207,8 @@ frame, tmux stays the terminal.
 `dotfiles/.config/emacs/lisp/kdb.el` runs q buffers against a remote kdb server from a local `q`.
 It needs `q` on `PATH` and a list of servers in `kdb-targets`. Put that list in
 `~/.config/emacs/lisp/kdb-site.el`, a machine-local file that `init.el` loads when it exists.
+`C-c k n` opens a scratch buffer on a target, where each result shows under its statement, and
+`C-c k i` toggles that in any buffer.
 
 ### Org
 

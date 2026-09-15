@@ -10,6 +10,11 @@
 ;; keys send the text as written.  `C-c k n' opens a scratch q buffer bound
 ;; to a target, and `C-c k s' saves the region as a dated query file.
 ;;
+;; In a scratch buffer each result also shows under its statement, as in a
+;; REPL, up to `kdb-inline-max-lines' lines.  `C-c k i' turns that on or off
+;; in any buffer, `C-c k .' shows a whole reply, and `C-c k k' clears the
+;; one at point.
+;;
 ;; Each target has a `kdb-shell-mode' buffer: a local q process, started
 ;; with kdb-driver.q, that holds one handle to the remote server.  Text sent
 ;; to it runs remotely and prints at a wide console.  Two prefixes stay
@@ -116,6 +121,10 @@ Its height when at the bottom, its width when at the right."
 (defvar-local kdb-buffer-target nil
   "In a `.q' buffer, the name of the `kdb-targets' entry it runs against.")
 (put 'kdb-buffer-target 'safe-local-variable #'stringp)
+
+(defvar-local kdb-inline-results nil
+  "When non-nil, a reply renders under the statement that produced it.
+`kdb-scratch' turns it on in the buffers it creates.")
 
 (defvar kdb--schemas (make-hash-table :test #'equal)
   "Schema of each target: its name to an alist of (TABLE . COLUMNS), all strings.")
@@ -280,6 +289,7 @@ The buffer is `*kdb scratch: NAME*', in `q-mode' with `kdb-mode' on."
       (unless (derived-mode-p 'q-mode)
         (q-mode))
       (kdb-mode 1)
+      (setq kdb-inline-results t)
       (kdb-set-target name))
     (pop-to-buffer buffer)))
 
@@ -448,6 +458,73 @@ With a prefix argument ASK, choose the target first."
     (cancel-timer kdb--hint-timer))
   (setq kdb--hint-timer
         (run-with-idle-timer 0.3 nil #'kdb--hints-refresh (current-buffer))))
+
+;;;; Inline results
+
+;; A REPL shows the answer under the question.  `q-send-string' queues each
+;; send with its source span, and q-mode's reply filter runs
+;; `q-reply-functions' when the next prompt arrives.  This handler renders
+;; the whole reply under the statement, where q-mode's own `q-inline-mode'
+;; shows only the first line.  The reply holds no marker line, because
+;; `kdb--output-filter' is the later-added local hook and so runs first.
+
+(defcustom kdb-inline-max-lines 40
+  "Most lines of a reply that show under its statement.
+`q-inline-show-full' shows the whole reply."
+  :type 'natnum
+  :group 'kdb)
+
+(defface kdb-inline-face
+  '((t :inherit default))
+  "Face of a reply shown under its statement."
+  :group 'kdb)
+
+(defun kdb-inline-toggle ()
+  "Turn the results under statements on or off in this buffer."
+  (interactive)
+  (setq kdb-inline-results (not kdb-inline-results))
+  (message "kdb: inline results %s" (if kdb-inline-results "on" "off")))
+
+(defun kdb--inline-text (reply)
+  "Return REPLY as the display text of a result overlay."
+  (let* ((lines (split-string reply "\n"))
+         (extra (- (length lines) kdb-inline-max-lines))
+         (shown (if (> extra 0) (seq-take lines kdb-inline-max-lines) lines))
+         (text (concat "=> " (mapconcat #'identity shown "\n   "))))
+    (when (> extra 0)
+      (setq text (format "%s\n   … %d more lines.  C-c k . shows all; C-c k g opens the grid."
+                         text extra)))
+    (propertize (concat "\n" text) 'face 'kdb-inline-face)))
+
+(defun kdb--inline-invalidate (overlay after-p &rest _)
+  "Delete OVERLAY once its statement is edited.
+The hooks run before and after a change; AFTER-P marks the second call."
+  (when after-p (delete-overlay overlay)))
+
+(defun kdb--inline-reply (reply source-beg source-end)
+  "Show REPLY under the statement between SOURCE-BEG and SOURCE-END.
+A `q-reply-functions' member.  It acts in a `kdb-mode' buffer with
+`kdb-inline-results' on.  The overlay carries the properties of a
+`q-inline-mode' result, so q-mode's show and clear commands work on it."
+  (let ((buf (and source-beg (marker-buffer source-beg))))
+    (when (and buf (buffer-live-p buf)
+               (buffer-local-value 'kdb-mode buf)
+               (buffer-local-value 'kdb-inline-results buf)
+               (not (string-empty-p reply)))
+      (with-current-buffer buf
+        (let ((beg (marker-position source-beg))
+              (end (marker-position source-end)))
+          (dolist (ov (overlays-in beg end))
+            (when (overlay-get ov 'q-inline-result) (delete-overlay ov)))
+          (let ((ov (make-overlay beg end)))
+            (overlay-put ov 'q-inline-result t)
+            (overlay-put ov 'q-eval-full-reply reply)
+            (overlay-put ov 'evaporate t)
+            (overlay-put ov 'after-string (kdb--inline-text reply))
+            (overlay-put ov 'modification-hooks '(kdb--inline-invalidate))
+            (overlay-put ov 'insert-in-front-hooks '(kdb--inline-invalidate))))))))
+
+(add-hook 'q-reply-functions #'kdb--inline-reply)
 
 ;;;; Grid
 
@@ -711,6 +788,10 @@ target, which `kdb--header-target' reads back when the file is opened."
 (define-key kdb-map "T" #'kdb-describe-table)
 (define-key kdb-map "R" #'kdb-refresh-schema)
 (define-key kdb-map "s" #'kdb-save-query)
+(define-key kdb-map "i" #'kdb-inline-toggle)
+(define-key kdb-map "." #'q-inline-show-full)
+(define-key kdb-map "k" #'q-inline-clear)
+(define-key kdb-map "K" #'q-inline-clear-buffer)
 (define-key kdb-map "z" #'q-show-q-buffer)
 (fset 'kdb-map kdb-map)
 
