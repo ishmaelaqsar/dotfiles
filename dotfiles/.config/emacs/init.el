@@ -6,8 +6,8 @@
 ;; those, and adds the packages that are not in core: Sly and paredit for Lisp,
 ;; Magit, markdown-mode, the Vertico + Orderless + Consult search stack, which
 ;; runs the installed rg and fd from the minibuffer, with Marginalia, Embark,
-;; Avy, and Corfu + Cape for completion at point. setup-emacs.sh installs them
-;; from `package-selected-packages'.
+;; Avy, Corfu + Cape for completion at point, and eat for a bash inside a frame.
+;; setup-emacs.sh installs them from `package-selected-packages'.
 ;;
 ;; eglot finds the language servers on PATH. The setup-*.sh scripts put them
 ;; there: clangd, basedpyright, gopls, jdtls. Nothing here names a server path.
@@ -36,7 +36,8 @@
         create-lockfiles nil
         recentf-save-file (expand-file-name "recentf" my/state-dir)
         savehist-file (expand-file-name "history" my/state-dir)
-        save-place-file (expand-file-name "places" my/state-dir))
+        save-place-file (expand-file-name "places" my/state-dir)
+        eshell-directory-name (expand-file-name "eshell/" my/state-dir))
 
 ;;;; Packages
 
@@ -48,7 +49,7 @@
 ;; not, so its value would not survive the first `enable-theme'.
 (customize-set-variable
  'package-selected-packages
- '(avy cape consult corfu dape embark embark-consult exec-path-from-shell
+ '(avy cape consult corfu dape eat embark embark-consult exec-path-from-shell
    magit marginalia markdown-mode orderless paredit q-mode sly vertico))
 
 ;; use-package is built in. Nothing here uses :ensure: the setup script
@@ -641,6 +642,36 @@ then enter the mode again with the grammar in place."
 (use-package magit
   :bind ("C-x g" . magit-status)
   :custom (magit-bury-buffer-function #'my/magit-bury-buffer))
+
+;;;; Shells
+
+;; In a tty frame, tmux is the terminal: M-n splits and M-f pops a shell. A GUI
+;; frame (ce, alt+shift+o, VISUAL) has no tmux, so the shells live here.
+;; eshell is the Lisp shell, on C-x p e. Its full-screen commands run in eat,
+;; not in term.el.
+;; em-term holds the list, and loads with the first eshell.
+(use-package em-term
+  :defer t
+  :config
+  ;; TUI programs this repository uses, beyond eshell's own list.
+  (dolist (cmd '("btop" "k9s" "lazydocker" "claude"))
+    (add-to-list 'eshell-visual-commands cmd)))
+
+;; eat runs a real bash, so the fzf keys and the .aliases functions work, which
+;; eshell cannot offer. It is pure Elisp, from NonGNU ELPA: nothing native can
+;; take the daemon down. ghostel (libghostty-vt) is faster, but it is a young
+;; native module with an unverified binary download; assessed 2026-09-15 and
+;; deferred. .bashrc sources the shell integration for directory tracking.
+(use-package eat
+  :hook (eshell-load . eat-eshell-visual-command-mode)
+  :bind (("C-c t" . eat)
+         :map project-prefix-map
+         ("s" . eat-project))
+  :custom
+  ;; C-d closes the buffer, as it closes a tmux popup.
+  (eat-kill-buffer-on-exit t)
+  :config
+  (add-to-list 'project-switch-commands '(eat-project "Shell") t))
 
 ;;;; Org
 

@@ -161,6 +161,17 @@ if command -v direnv >/dev/null 2>&1; then
     eval "$(direnv hook bash)"
 fi
 
+# Inside an eat buffer in Emacs: directory tracking and prompt navigation. eat
+# sets the variable, so every other shell skips this. The script enables itself
+# only under eat's own TERM, so source it first. Then hand every program the
+# xterm name: eat's terminfo exists on this machine only, and a host you ssh to
+# would answer "unknown terminal". eat emulates xterm, so nothing is lost, and
+# COLORTERM keeps the 24-bit colour that the xterm entry does not advertise.
+if [[ -n "${EAT_SHELL_INTEGRATION_DIR:-}" ]]; then
+    source "$EAT_SHELL_INTEGRATION_DIR/bash"
+    export TERM=xterm-256color COLORTERM=truecolor
+fi
+
 # ============================================================
 # User-Specific Extensions
 # ============================================================

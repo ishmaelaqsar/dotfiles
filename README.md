@@ -160,7 +160,7 @@ always act, so a script stops when `DOTFILES_DRY_RUN` is set rather than half ho
 | `setup-go.sh` | go | gopls | delve |
 | `setup-java.sh` | sdkman → Temurin LTS, maven, gradle | jdtls (brew/AUR) | JDWP/jdb (in the JDK) |
 | `setup-sbcl.sh` | SBCL + Quicklisp | none — CL uses Swank/Slynk via the editor | SBCL built-in |
-| `setup-emacs.sh` | Emacs (`emacs-plus@31` on macOS, the pgtk package on Linux) and the packages `init.el` selects: Sly, Magit, markdown-mode, Vertico, Orderless, Consult, Marginalia, Embark, Avy, Corfu, Cape, Dape, q-mode | `eglot`, built in, over the servers the rows above install | none |
+| `setup-emacs.sh` | Emacs (`emacs-plus@31` on macOS, the pgtk package on Linux) and the packages `init.el` selects: Sly, Magit, markdown-mode, Vertico, Orderless, Consult, Marginalia, Embark, Avy, Corfu, Cape, Dape, q-mode, eat | `eglot`, built in, over the servers the rows above install | none |
 | `setup-yk.sh` | [yk](https://github.com/ishmaelaqsar/yk), the YubiKey maintenance tool | none | none |
 
 These scripts share the package-manager logic in `lib/pkg.sh`, and the name mappings in
@@ -266,6 +266,13 @@ daemon when none runs. `GIT_EDITOR` is `emacs -nw -q`, a plain Emacs with no ini
 does not depend on the daemon. In the shell, `e file` opens a file in the running Emacs, in the
 terminal. A machine with `emacs` but no client gets `emacs -nw -q`; a machine with no Emacs keeps
 vi.
+
+A shell inside a frame: `C-c t` opens a bash in an [eat](https://codeberg.org/akib/emacs-eat)
+buffer, `C-x p s` opens one in the project root, and `C-x p e` opens eshell, whose full-screen
+commands (`htop`, `less`) run in eat. The `.aliases` functions and the fzf keys work there,
+because it is the same bash. In a terminal frame, tmux stays the terminal: `M-n` splits and
+`M-f` pops a shell. eat is pure Emacs Lisp from NonGNU ELPA, so no native module runs in the
+daemon.
 
 `dotfiles/.config/emacs/lisp/kdb.el` queries a remote kdb server from a local q shell, on top
 of the `q-mode` package. It needs a licensed `q` on `PATH`, and a list of servers in
