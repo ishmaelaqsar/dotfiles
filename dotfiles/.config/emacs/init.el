@@ -760,8 +760,8 @@ then enter the mode again with the grammar in place."
 
 ;; Four kinds of page need a JavaScript engine or a session that EWW has
 ;; neither of, so they go straight to the system browser. A page reached any
-;; other way opens in EWW, and & sends it on from there. Site data belongs in
-;; lisp/site.el, which adds a host of its own to this list.
+;; other way opens in EWW, and & sends it on from there. A host that one
+;; machine alone knows belongs in lisp/site.el.
 (setopt browse-url-browser-function #'eww-browse-url
         browse-url-secondary-browser-function #'browse-url-default-browser
         browse-url-handlers
@@ -806,9 +806,10 @@ then enter the mode again with the grammar in place."
 
 ;;;; Site
 
-;; ~/.config/emacs/lisp/site.el is machine-local, outside the repository, like
-;; kdb-site.el. It holds directory classes for shared repositories, whose
-;; diffs must stay small, and adds no file to them. For example:
+;; ~/.config/emacs/lisp/site.el holds what one machine knows, like kdb-site.el:
+;; the directory classes of shared repositories, whose diffs must stay small,
+;; and a browse-url handler for an internal host. The public repository carries
+;; neither file. For example:
 ;;   (dir-locals-set-class-variables 'shared '((nil . ((my/format-on-save . nil)))))
 ;;   (dir-locals-set-directory-class "~/work/shared-repo/" 'shared)
 (load (locate-user-emacs-file "lisp/site.el") 'noerror 'nomessage)
