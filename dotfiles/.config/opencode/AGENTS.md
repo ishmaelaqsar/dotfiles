@@ -78,11 +78,23 @@ well as STE. STE controls the shape of a sentence. The Google guide covers every
   Keep a term when it is the literal name of a command or flag.
 - **Punctuation.** Use the serial comma. Avoid exclamation marks.
 - **No anthropomorphism.** A program does not want, think, or try.
+- **Spelling.** British spelling in prose. Identifiers and quoted output keep theirs.
 
-For code comments, two more rules:
+For comments and docs, more rules:
 
-- Explain **why**, not what. The code already says what it does.
-- Delete a comment that no longer matches the code. A stale comment is worse than none.
+- Describe the current state only. No past state, no migration story, no dates, no "now",
+  "still", "no longer", "replaced", or "used to". History goes in the commit body. A comment that
+  no longer matches the code is worse than none: delete it.
+- A comment explains why. Delete a comment that restates the code, names the option or glob under
+  it, or labels a block with the name of the thing in it. No comment is better than a useless one.
+- One fact has one home. A code comment holds the reason. The README holds the map and names the
+  file. Do not restate a fact in a second file or a second section.
+- No waffle. No hedges, filler adverbs ("quickly", "actually", "safely"), figurative language,
+  rhetorical questions, shouting capitals, emoji, or banners that name the next line.
+- Generic by default. Add a machine, person, or version detail only when the reader needs it to
+  act. Examples use placeholders.
+- Agent prompts (commands, skills) follow the same rules in their prose. Keep every
+  instruction's meaning.
 
 ## This machine
 
