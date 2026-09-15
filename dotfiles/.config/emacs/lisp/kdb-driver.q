@@ -42,15 +42,28 @@ system "c 2000 2000";
   hsym[`$path] 0: csv 0: .kdb.csvable (.kdb.gridRows&count t)#t;
   -1 "kdb-grid: ",path," rows=",string count t;};
 
-/ Evaluate one statement remotely. Print the result, or the error, keep a
+/ A handle error means the server closed the connection, after an idle
+/ period or a restart, or that no handle was ever opened.
+.kdb.handleErr:{[e] any e like/: ("Cannot write to handle*";"*Bad file descriptor*";"close";"*.kdb.h*")};
+
+.kdb.try:{[stmt] @[{(1b;.kdb.h x)};stmt;{(0b;x)}]};
+
+/ Evaluate one statement remotely. On a handle error, open the handle again
+/ and run the statement once more. Print the result, or the error, keep a
 / successful result in .kdb.last, and hand a table to the grid.
 .kdb.exec:{[stmt]
-  res:@[{(1b;.kdb.h x)};stmt;{(0b;x)}];
+  res:.kdb.try stmt;
+  if[not first res; if[.kdb.handleErr last res;
+    -1 "kdb: handle dropped, reconnecting";
+    @[.kdb.connect;::;{-2 "connect: ",x}];
+    res:.kdb.try stmt]];
   $[first res;
     [.kdb.last:last res;show .kdb.last;if[.kdb.gridOn and .Q.qt .kdb.last;@[.kdb.grid;.kdb.last;{-2 "grid: ",x}]]];
     -2 "ERR: ",last res];};
 
-.kdb.run:{[text] .kdb.exec each .kdb.split text;};
+/ Protected, so a fault in this file prints instead of suspending the local
+/ q in its debugger, where every later send would land.
+.kdb.run:{[text] @[{.kdb.exec each .kdb.split x;};text;{-2 "kdb: ",x}];};
 
 / Fetch the table and column names over the handle, write them one table
 / per line, "table col col ...", and print the marker line.

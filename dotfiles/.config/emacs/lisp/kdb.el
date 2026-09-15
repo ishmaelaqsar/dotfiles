@@ -20,6 +20,7 @@
 ;; to it runs remotely and prints at a wide console.  Two prefixes stay
 ;; local: `\' for a q system command, and `kdb-local-prefix' (`%'), which
 ;; is stripped.  `.kdb.last' in the local q holds the last remote result.
+;; A handle the server has closed opens again on the next run.
 ;;
 ;; A table result opens in a `kdb-grid-mode' buffer: a `tabulated-list' with
 ;; a frozen header and sortable columns; `f' filters the rows.  The window
