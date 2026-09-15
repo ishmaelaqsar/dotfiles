@@ -5,10 +5,7 @@ set -euo pipefail
 # gpg as its only dependency, so it is a clone and a link, not a package. The
 # first shell of each day runs `yk remind` from .bashrc. Idempotent.
 
-# A dry run is all or nothing. lib/pkg.sh honours DOTFILES_DRY_RUN for the
-# package steps, but the installers below (curl | sh, git clone, go install,
-# sdkman) always act, so a half-planned run would install anyway. -h prints
-# the header above.
+# git clone always acts, so a dry run stops instead of half planning.
 case "${1:-}" in
     -h|--help)
         sed -n '3,/^$/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'

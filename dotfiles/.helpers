@@ -1,13 +1,8 @@
-# ============================================================
-# Helper Functions
-# ============================================================
-
 # Usage: encrypt <file_or_folder> [recipient_email]
 #        echo "string" | encrypt [recipient_email]
 #
-# Encrypts a file, directory (auto-archives to .tar.gz), or stdin stream.
-# If [recipient_email] is omitted, defaults to $IDENTITY.
-# Generates output in the format: <filename>.<timestamp>.enc
+# Encrypt a file, a directory (as a .tar.gz archive), or stdin. The recipient
+# defaults to $IDENTITY. The output is <filename>.<timestamp>.enc.
 encrypt() {
     local recipient
     local output
@@ -25,13 +20,12 @@ encrypt() {
             return 1
         fi
 
-        # GPG reads from stdin automatically
         gpg --encrypt --armor --output "$output" -r "$recipient" && \
         echo "Encrypted message from stdin -> $output"
         return 0
     fi
 
-    local input="${1%/}" # Removes trailing slash
+    local input="${1%/}"
 
     if [[ -z "$input" ]]; then
         echo "Usage: encrypt <filename/folder> [recipient]"
@@ -39,7 +33,6 @@ encrypt() {
         return 1
     fi
 
-    # If file mode, 2nd arg is recipient. Fallback to env vars.
     recipient="${2:-$IDENTITY}"
     if [[ -z "$recipient" ]]; then
         echo "Error: No recipient specified. Pass as 2nd arg or set \$IDENTITY."
@@ -49,7 +42,6 @@ encrypt() {
     local file_to_encrypt="$input"
     local is_temp_file=false
 
-    # Handle Directory (Compress first)
     if [[ -d "$input" ]]; then
         echo "Directory detected. Archiving '$input'..."
         file_to_encrypt="${input}.tar.gz"
@@ -60,14 +52,11 @@ encrypt() {
         return 1
     fi
 
-    # Construct Output Name
     output="${file_to_encrypt}.$(date +%s).enc"
 
-    # Encrypt
     gpg --encrypt --armor --output "$output" -r "$recipient" "$file_to_encrypt"
     local status=$?
 
-    # Cleanup & Reporting
     if [[ $status -eq 0 ]]; then
         echo "Encrypted for $recipient: $output"
         if $is_temp_file; then
@@ -80,9 +69,8 @@ encrypt() {
 
 # Usage: decrypt <filename.enc>
 #
-# Decrypts the file and restores the original filename (removes .timestamp.enc).
-# If the decrypted file is an archive (tar/tgz), it automatically extracts it
-# and removes the intermediate archive file.
+# Decrypt the file and restore the original name without .timestamp.enc.
+# Extract an archive (tar, tgz), and remove the archive file.
 decrypt() {
     local input="$1"
 
@@ -91,20 +79,16 @@ decrypt() {
         return 1
     fi
 
-    # Strip the last two extensions (.timestamp.enc)
     local output="${input%.*.*}"
 
-    # Safety check logic
     if [[ "$input" == "$output" ]]; then
          echo "Warning: Filename format unexpected. Removing only last extension."
          output="${input%.*}"
     fi
 
-    # Decrypt
     gpg --decrypt --output "$output" "$input" || return 1
     echo "Decrypted: $output"
 
-    # Handle Archives (Auto-extract)
     if [[ "$output" == *.tar.gz || "$output" == *.tgz || "$output" == *.tar ]]; then
         echo "Archive detected. Extracting..."
         tar -xf "$output" && rm "$output"
@@ -114,9 +98,8 @@ decrypt() {
 
 # Usage: sign <filename>
 #
-# Creates a detached, ASCII-armored signature file.
-# The original file remains untouched.
-# Generates output: <filename>.asc
+# Create a detached, ASCII-armoured signature at <filename>.asc. The input file
+# is unchanged.
 sign() {
     local input="$1"
     local signer="$IDENTITY"
@@ -138,15 +121,13 @@ sign() {
 
     local output="${input}.asc"
 
-    # --detach-sign creates a separate file
-    # --armor ensures it is ASCII text (not binary)
     gpg --detach-sign --armor --local-user "$signer" --output "$output" "$input" && \
     echo "Detached signature created: $output"
 }
 
 # Usage: verify <filename> <signature_file>
 #
-# Verifies the digital signature of a file using the provided signature file.
+# Verify the detached signature of a file.
 verify() {
     local input="$1"
     local sig_file="$2"
@@ -166,25 +147,23 @@ verify() {
         return 1
     fi
 
-    # GPG usage: verify <sig> <data>
+    # gpg takes the signature first, then the data.
     gpg --verify "$sig_file" "$input"
 }
 
 # Usage: __are_secrets_loaded
 #
-# Parses the .secrets file and checks if every defined key exists in the
-# current environment. Returns 0 (true) if all are loaded, 1 (false) if any are missing.
+# Return 0 when every key in .secrets is in the environment, or only the named
+# keys when arguments are given.
 __are_secrets_loaded() {
     local secrets_file="$HOME/.secrets"
     if [[ ! -f "$secrets_file" ]]; then
         return 0
     fi
 
-    # If keys are passed as arguments, only check those
     if [[ $# -gt 0 ]]; then
         local key
         for key in "$@"; do
-            # If any requested key is empty in the environment, return false
             if [[ -z "${!key}" ]]; then
                 return 1
             fi
@@ -211,7 +190,7 @@ __are_secrets_loaded() {
 # Usage: add_secret API_KEY
 #        add_secret API_KEY "super_secret_value"
 #
-# Encrypts the value into .secrets, and exports it to the current shell.
+# Encrypt the value into .secrets, and export it to the current shell.
 # Without the value the shell asks for it, and reads it without an echo. Prefer
 # that form: a value on the command line lands in ~/.bash_history, and `ps`
 # shows it while the command runs.
@@ -246,12 +225,11 @@ add_secret() {
 }
 
 # Usage: load_secrets [KEY...]
-# Asks the YubiKey for the PIN, then exports every secret, or only the named
+# Ask the YubiKey for the PIN, then export every secret, or only the named
 # ones.
 load_secrets() {
     echo "Loading secrets from YubiKey..."
-    # Pass every argument (for example, named keys) down to the Python script.
-    # Capture before the eval, for the reason add_secret gives above.
+    # Capture before the eval, for the reason add_secret gives.
     local export_lines
     export_lines="$(manage-secrets decrypt "$@")" || {
         echo "load_secrets: nothing was exported." >&2
@@ -261,7 +239,7 @@ load_secrets() {
 }
 
 # ============================================================
-# Kubernetes Helpers
+# Kubernetes
 # ============================================================
 # Defined only where kubectl is. Without it the functions could never run,
 # and their names would shadow nothing useful.
@@ -270,7 +248,6 @@ if command -v kubectl >/dev/null 2>&1; then
         local namespace="${KUBE_NS:-default}"
         local pod=""
 
-        # Parse arguments
         while [[ $# -gt 0 ]]; do
             case "$1" in
                 -n|--namespace)
@@ -278,21 +255,18 @@ if command -v kubectl >/dev/null 2>&1; then
                     shift 2
                     ;;
                 *)
-                    # If it's not a flag, assume it's the pod name
                     pod="$1"
                     shift
                     ;;
             esac
         done
 
-        # Validate that a pod was actually provided
         if [[ -z "$pod" ]]; then
             echo "Error: Pod name is required."
             echo "Usage: kube-debug [-n namespace] <pod_name>"
             return 1
         fi
 
-        # Execute the command
         echo "Attaching debug container to '$pod' in namespace '$namespace'..."
         kubectl debug -it -n "$namespace" "$pod" --image=alpine
     }
@@ -316,9 +290,6 @@ if command -v kubectl >/dev/null 2>&1; then
         local filename="${pod}_$(date +%s).log"
         echo "Dumping ALL logs for '$pod' in '$namespace' to $filename..."
 
-        # --all-containers gets sidecars too
-        # --timestamps adds exact UTC times to the left column
-        # --tail=-1 ensures it grabs from the very beginning of the container's life
         kubectl logs -n "$namespace" "$pod" --all-containers --timestamps --tail=-1 > "$filename"
 
         echo "Wrote $filename."
@@ -341,11 +312,10 @@ if command -v kubectl >/dev/null 2>&1; then
         fi
 
         echo "Fetching previous (crashed) logs for '$pod' in '$namespace'..."
-        # -p reads the log of the previous container instance
         kubectl logs -n "$namespace" "$pod" -p --all-containers | less
     }
 
-    # rg when it is there, grep otherwise, like the grep alias in .aliases.
+    # rg when it is there, grep otherwise.
     if command -v rg >/dev/null 2>&1; then
         alias kfind='kubectl get pods -A | rg -i'
     else

@@ -1,13 +1,9 @@
-# ============================================================
-# Load Global Profile
-# ============================================================
-
 if [[ -f /etc/profile ]]; then
     . /etc/profile
 fi
 
 # ============================================================
-# PATH Management
+# PATH
 # ============================================================
 
 # Find /opt/homebrew/bin/bash before /bin/bash (no-op on Linux)
@@ -15,7 +11,6 @@ if [[ -d "/opt/homebrew/bin" ]]; then
     export PATH="/opt/homebrew/bin:$PATH"
 fi
 
-# Helper to prepend to PATH if not already present
 __add_path() {
     local dir="$1"
     if [[ -d "$dir" && ":$PATH:" != *":$dir:"* ]]; then
@@ -23,7 +18,6 @@ __add_path() {
     fi
 }
 
-# Add user bin directories
 __add_path "$HOME/bin"
 __add_path "$HOME/.local/bin"
 __add_path "$HOME/.cargo/bin"
@@ -33,18 +27,16 @@ __add_path "$HOME/go/bin"
 # a system directory instead, and this line then finds nothing.
 __add_path "$HOME/google-cloud-sdk/bin"
 
-# Clean up helper
 unset -f __add_path
 
 # ============================================================
-# Environment & One-Time Setup
+# Environment
 # ============================================================
 
-# Run these commands only when running in a container. -n with a default,
-# not -v: /bin/bash on macOS is 3.2, and its parser rejects -v, which kills
-# the rest of this file. The locale name must exist, or every program
-# complains: macOS spells it en_US.UTF-8, and a slim container often has
-# only C.UTF-8.
+# Set the locale in a container only. -n with a default, not -v: /bin/bash on
+# macOS is 3.2, and its parser rejects -v, which kills the rest of this file.
+# The locale name must exist, or every program complains: macOS spells it
+# en_US.UTF-8, and a slim container often has only C.UTF-8.
 if [[ -n "${CONTAINER_ID:-}" ]] || [[ -n "${REMOTE_CONTAINERS:-}" ]]; then
     if locale -a 2>/dev/null | grep -qix 'en_US.UTF-8'; then
         export LC_ALL=en_US.UTF-8
@@ -85,9 +77,9 @@ for __podman_sock in \
 done
 unset __podman_sock
 
-# ------------------------------------------------------------
+# ============================================================
 # Editor: emacsclient, then a plain emacs, then vi
-# ------------------------------------------------------------
+# ============================================================
 # emacsclient needs a running Emacs. -t opens in the terminal, -c a new frame,
 # and --alternate-editor= (empty value) starts a daemon when none runs. The
 # long flag, not -a '': a consumer that splits EDITOR on whitespace turns ''
@@ -110,11 +102,6 @@ if command -v emacs >/dev/null 2>&1; then
 else
     export GIT_EDITOR="$EDITOR"
 fi
-
-
-# ============================================================
-# Load User .bashrc (for interactive shells)
-# ============================================================
 
 if [[ -n "$BASH_VERSION" ]]; then
     if [[ -f "$HOME/.bashrc" ]]; then

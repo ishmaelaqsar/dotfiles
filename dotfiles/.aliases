@@ -6,8 +6,8 @@ alias ...='cd ../..'
 alias ....='cd ../../..'
 
 # Modern replacements, guarded so a fresh machine keeps the stock tools.
-# Debian installs fd as `fdfind`, hence the elif. The functions below call __fd,
-# so one name covers both platforms. Do not alias `find` or `grep` themselves:
+# Debian installs fd as `fdfind`, hence the elif. ce and pj call __fd, so one
+# name covers both platforms. Do not alias `find` or `grep` themselves:
 # scripts that the shell sources (for example sdkman-init.sh) call them with
 # POSIX flags and bake the alias into their function bodies, and rg honours
 # .gitignore, so `grep -r` would silently skip files.
@@ -42,17 +42,16 @@ command -v pacdiff >/dev/null && alias pacnew="sudo DIFFPROG=$HOME/bin/ediff pac
 command -v paccache >/dev/null && alias paccleanup='sudo paccache -rk2'
 command -v pacman >/dev/null && alias pacorphans='pacman -Qtdq'
 
-# Quickly reload bash configuration
 alias reload='source ~/.bashrc && echo "Bash config reloaded."'
 
-# Restart GPG agent to fix YubiKey issues
+# scdaemon can hold a stale card state after a re-plug. A fresh agent reads the
+# card anew.
 alias fixgpg="gpgconf --kill gpg-agent && gpg-connect-agent /bye && gpg --card-status"
 
-# Show my public IP (useful for whitelisting)
 alias myip='curl ifconfig.me'
 
 # The fzf preview for a directory. eza draws a tree; ls is the fallback. The
-# preview runs through sh, so the ls alias above does not apply to it.
+# preview runs through sh, so the ls alias does not apply to it.
 if command -v eza >/dev/null; then
     __FZF_DIR_PREVIEW='eza --icons --group-directories-first --tree --level=2 --color=always {}'
 else
@@ -60,14 +59,12 @@ else
 fi
 
 # Usage: e [file...]
-# Open in the running Emacs, in this terminal. --alternate-editor= with an empty
-# value starts a daemon when none runs. emacs and emacsclient stay unaliased.
+# Open in the running Emacs, in this terminal. emacs and emacsclient stay
+# unaliased.
 alias e='emacsclient -t --alternate-editor='
 
 # Usage: ce some-project-name
 # Fuzzy find a directory under $WORKSPACE, and open it in an Emacs frame (Dired).
-# --alternate-editor= with an empty value starts a daemon when none runs, and
-# needs no quoting inside the function, unlike -a ''.
 ce() {
     local dir
     dir=$(__fd --type d --max-depth 3 . "$WORKSPACE" \
@@ -78,7 +75,6 @@ ce() {
     fi
 }
 
-# Fuzzy find and cd into a directory within $WORKSPACE
 pj() {
     local dir
     dir=$(__fd --type d --max-depth 3 . "$WORKSPACE" \
@@ -105,7 +101,6 @@ __tmux_goto() {
     fi
 }
 
-# List the sessions on the server
 alias tl="tmux list-sessions"
 
 # Go to a session. With no name, pick one from the running sessions.
@@ -118,11 +113,8 @@ ta() {
     [[ -n "$name" ]] && __tmux_goto "$name"
 }
 
-# Go to the session named main, and create it on the first call
 tm() { __tmux_goto main; }
 
-# Go to a session by name, and create it on the first call (Usage: tn <name>)
 tn() { __tmux_goto "${1:?usage: tn <session_name>}"; }
 
-# Kill every session, and the server with them
 alias tkill="tmux kill-server"

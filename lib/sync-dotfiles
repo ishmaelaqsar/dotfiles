@@ -43,7 +43,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Parse arguments
 dry_run = False
 check = False
 target_arg = None
@@ -57,8 +56,8 @@ for arg in sys.argv[1:]:
         print(USAGE, end="")
         sys.exit(0)
     elif arg.startswith("-"):
-        # Never treat an unknown flag as the target: `--dryrun` once created a
-        # directory by that name and linked the whole tree into it.
+        # Never treat an unknown flag as the target: a typo such as `--dryrun`
+        # would become a directory of that name with the whole tree linked into it.
         print(f"Unknown option: {arg}", file=sys.stderr)
         print(USAGE, end="", file=sys.stderr)
         sys.exit(2)
@@ -226,7 +225,7 @@ for src in dotfiles_dir.rglob("*"):
         dest.symlink_to(src)
         print(f"  -> Linking {rel_path}")
 
-# Prune the stale links: orphans, and links to files git now ignores.
+# Prune the stale links: orphans, and links to files that git ignores.
 for link, reason in stale_links():
     if dry_run:
         print(f"  [dry-run] prune {link} ({reason})")

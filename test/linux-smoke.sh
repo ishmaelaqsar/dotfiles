@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Linux smoke test — runs INSIDE a throwaway container. From the repo root:
+# Linux smoke test — runs inside a throwaway container. From the repo root:
 #
 #   docker run --rm -v "$PWD":/repo:ro debian:stable    bash /repo/test/linux-smoke.sh full
 #   docker run --rm -v "$PWD":/repo:ro fedora:latest    bash /repo/test/linux-smoke.sh quick
@@ -25,7 +25,7 @@ elif command -v dnf >/dev/null 2>&1; then
     dnf install -y -q curl ca-certificates python3 git unzip zip fontconfig findutils gawk >/dev/null
 elif command -v pacman >/dev/null 2>&1; then
     # pacman's download sandbox breaks under qemu emulation (docker on arm
-    # macs); disable it here only — real Arch hardware doesn't need this
+    # macs). Disable it here only; real Arch hardware does not need this.
     echo "DisableSandbox" >> /etc/pacman.conf
     pacman -Sy --noconfirm >/dev/null
     pacman -S --noconfirm --needed curl ca-certificates python3 git unzip zip fontconfig >/dev/null
@@ -72,7 +72,7 @@ grep -q "wl-clipboard" /tmp/dry-nodesktop.log \
 
 say "install.sh (home install, container detection overridden)"
 # stdin closed, as under the dev-container hook: the script must not ask, must
-# say so, and must still install everything the detection selected.
+# say so, and must install everything the detection selected.
 ./install.sh < /dev/null > /tmp/install.log 2>&1 || flunk "install.sh exited non-zero"
 cat /tmp/install.log
 grep -q "No terminal on stdin" /tmp/install.log \
@@ -101,15 +101,15 @@ fi
 [ -L "$HOME/.config/environment.d/10-gpg-ssh.conf" ] && pass "environment.d gpg-ssh symlinked" || flunk "environment.d gpg-ssh missing"
 # environment.d expands $VAR only. A systemd specifier such as %t would reach
 # the session as literal characters, and every graphical app would then get a
-# socket path that does not exist. Read the assignment alone: the comments in
-# that file name the specifier to explain why it is not used.
+# socket path that does not exist. Read the assignment alone, because the
+# comments in that file name the specifier.
 SOCK_LINE="$(grep '^SSH_AUTH_SOCK=' "$HOME/.config/environment.d/10-gpg-ssh.conf")"
 case "$SOCK_LINE" in
     *'${XDG_RUNTIME_DIR}'*) pass "environment.d uses a variable, not a specifier" ;;
     *%*) flunk "environment.d holds a specifier: SSH_AUTH_SOCK stays literal" ;;
     *) flunk "environment.d SSH_AUTH_SOCK is unexpected: $SOCK_LINE" ;;
 esac
-# Debian ships fd as fdfind, so the fuzzy-find helpers call __fd
+# Debian ships fd as fdfind, so the fuzzy-find helpers call __fd.
 bash -lic '__fd --version' >/dev/null 2>&1 \
     && pass "__fd resolves on this distro" || flunk "__fd does not resolve"
 # The gcloud wiring is guarded on an SDK directory that this repo never
@@ -129,11 +129,11 @@ python3 ./bin/gnome-settings dump >/dev/null 2>&1 && pass "gnome-settings runs w
 [ -f "$HOME/.local/share/fonts/0xProtoNerdFont-Regular.ttf" ] && pass "fonts installed" || flunk "fonts missing"
 [ -L "$HOME/.bashrc" ] && pass ".bashrc symlinked" || flunk ".bashrc not a symlink"
 # Python's byte-code cache sits next to the scripts in bin/, and must not follow
-# them into ~/bin
+# them into ~/bin.
 [ ! -e "$HOME/bin/__pycache__" ] && pass "no __pycache__ in ~/bin" || flunk "__pycache__ linked into ~/bin"
 [ "$(git config --global user.email)" = "ishmael-dev@aqsar.dev" ] && pass "git identity set" || flunk "git identity wrong"
 # delta is wired in only when the package landed, so gate the assertion the
-# same way install.sh does
+# same way install.sh does.
 if command -v delta >/dev/null 2>&1; then
     [ "$(git config --global core.pager)" = "delta" ] && pass "delta is the diff pager" || flunk "core.pager is not delta"
     [ "$(git config --global interactive.diffFilter)" = "delta --color-only" ] \
@@ -150,8 +150,8 @@ else
     echo "note: delta absent — pager wiring skipped, as install.sh does"
 fi
 bash -lic 'type ll' >/dev/null 2>&1 && pass "aliases load in interactive shell" || flunk "aliases failed to load"
-# `dotfiles` must be the shell function, not the alias earlier versions wrote:
-# an alias expands first and would hide the function
+# `dotfiles` must be the shell function, not an alias: an alias expands first
+# and would hide the function. install.sh removes an alias file at this path.
 [ ! -f "$HOME/.bashrc.d/dotfiles_alias" ] \
     && pass "no stale dotfiles alias file" || flunk "the old dotfiles alias file survived"
 [ "$(bash -lic 'type -t dotfiles' 2>/dev/null | tr -d '\r')" = "function" ] \
@@ -164,7 +164,7 @@ dotfiles doctor >/dev/null 2>&1 \
     && pass "dotfiles doctor passes after an install" || flunk "dotfiles doctor failed"
 dotfiles sync --check >/dev/null 2>&1 \
     && pass "dotfiles sync --check passes" || flunk "dotfiles sync --check failed"
-# The sync engine lives in lib/ now, so nothing links it into ~/bin
+# The sync engine is lib/sync-dotfiles, so nothing links it into ~/bin.
 [ ! -e "$HOME/bin/sync-dotfiles" ] \
     && pass "the sync engine is not linked into ~/bin" || flunk "\$HOME/bin/sync-dotfiles still exists"
 
@@ -190,8 +190,8 @@ for t in uv ruff basedpyright debugpy; do check "$t"; done
 say "setup-go.sh"
 ./setup-go.sh || flunk "setup-go.sh exited non-zero"
 check go
-# Go binaries crash compiling under qemu user emulation; the driver sets
-# SMOKE_EMULATED=1 for such runs and gopls/dlv absence becomes a note
+# Go binaries crash compiling under qemu user emulation. The driver sets
+# SMOKE_EMULATED=1 for such runs, and a missing gopls or dlv becomes a note.
 for t in gopls dlv; do
     if command -v "$t" >/dev/null 2>&1; then pass "$t on PATH"
     elif [ "${SMOKE_EMULATED:-0}" = "1" ]; then echo "note: $t missing (go-under-qemu crash — verify on real hardware)"
@@ -201,8 +201,8 @@ done
 
 say "setup-sbcl.sh"
 if [ "${SMOKE_EMULATED:-0}" = "1" ]; then
-    # SBCL hangs compiling ASDF under qemu; bootstrap is distro-independent
-    # and proven natively elsewhere, so verify the package name only
+    # SBCL hangs compiling ASDF under qemu. The bootstrap is distro-independent
+    # and proven natively elsewhere, so verify the package name only.
     echo "note: skipping SBCL/quicklisp under emulation; checking package name only"
     if command -v pacman >/dev/null 2>&1; then
         pacman -Si sbcl >/dev/null 2>&1 && pass "pacman knows 'sbcl'" || flunk "no 'sbcl' package in pacman repos"
@@ -241,7 +241,7 @@ fi
 
 say "cleanup.sh -a"
 # printf, not `yes`: yes dies of SIGPIPE when cleanup stops reading, and
-# under pipefail that masquerades as a cleanup failure
+# pipefail then reports that as a cleanup failure.
 printf 'y\n' | ./cleanup.sh -a || flunk "cleanup.sh exited non-zero"
 [ ! -L "$HOME/.bashrc" ] && pass ".bashrc symlink removed" || flunk ".bashrc symlink survived cleanup"
 [ ! -L "$HOME/.config/environment.d/10-gpg-ssh.conf" ] && pass "environment.d gpg-ssh removed" || flunk "environment.d gpg-ssh survived cleanup"

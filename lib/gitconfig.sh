@@ -7,9 +7,6 @@
 # first `=`, so a value may contain `=`.
 #
 # shellcheck disable=SC2034
-# The variables below look unused here: install.sh and cleanup.sh source this
-# file and read them.
-#
 # $HOME is read when this file is sourced. install.sh writes the global config
 # for a real home install only, so a probe run into another directory never
 # reaches these values.

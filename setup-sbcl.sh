@@ -6,10 +6,7 @@ set -euo pipefail
 # via Quicklisp by the editor. SBCL's debugger is built in; gdb also works
 # on native code. Idempotent.
 
-# A dry run is all or nothing. lib/pkg.sh honours DOTFILES_DRY_RUN for the
-# package steps, but the installers below (curl | sh, git clone, go install,
-# sdkman) always act, so a half-planned run would install anyway. -h prints
-# the header above.
+# The Quicklisp bootstrap always acts, so a dry run stops instead of half planning.
 case "${1:-}" in
     -h|--help)
         sed -n '3,/^$/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'

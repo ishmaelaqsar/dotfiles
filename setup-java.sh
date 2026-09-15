@@ -5,10 +5,8 @@ set -euo pipefail
 # maven + gradle, and jdtls (LSP) where a package exists. JDWP/jdb debugging
 # ships with the JDK. Shell init lands in ~/.bashrc.d/sdkman. Idempotent.
 
-# A dry run is all or nothing. lib/pkg.sh honours DOTFILES_DRY_RUN for the
-# package steps, but the installers below (curl | sh, git clone, go install,
-# sdkman) always act, so a half-planned run would install anyway. -h prints
-# the header above.
+# The sdkman installer and `sdk install` always act, so a dry run stops instead
+# of half planning.
 case "${1:-}" in
     -h|--help)
         sed -n '3,/^$/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'

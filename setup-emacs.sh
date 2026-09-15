@@ -6,10 +6,8 @@ set -euo pipefail
 # eglot talks to the servers the other setup-*.sh scripts install. The init is
 # dotfiles/.config/emacs/init.el, linked by install.sh. Idempotent.
 
-# A dry run is all or nothing. lib/pkg.sh honours DOTFILES_DRY_RUN for the
-# package steps, but the installers below (curl | sh, git clone, go install,
-# sdkman) always act, so a half-planned run would install anyway. -h prints
-# the header above.
+# The Emacs package install and brew services always act, so a dry run stops
+# instead of half planning.
 case "${1:-}" in
     -h|--help)
         sed -n '3,/^$/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
@@ -85,7 +83,7 @@ else
     echo "Note: $INIT is missing. Run ./install.sh to link it, then run this script again." >&2
 fi
 
-# Keep the daemon warm across logins. Linux gets it from the systemd user unit
+# Keep the daemon running across logins. Linux gets it from the systemd user unit
 # in dotfiles/.config/systemd/user/emacs.service, which install.sh enables.
 # macOS has no such unit, so hand the job to brew services, which writes its
 # own LaunchAgent. Both are idempotent, and neither restarts a running daemon.
@@ -101,4 +99,4 @@ fi
 
 echo "Done. $(emacs --version | head -1)"
 echo "emacsclient needs a server. On Linux the systemd user unit starts one, on"
-echo "macOS the brew service does, and \`emacsclient -a ''\` starts one when neither has."
+echo "macOS the brew service does, and \`emacsclient --alternate-editor=\` starts one when neither has."

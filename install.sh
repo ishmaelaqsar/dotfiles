@@ -15,7 +15,7 @@ set -euo pipefail
 # =============================================================================
 
 # -----------------------------
-# Options & target directory
+# Options and target directory
 # -----------------------------
 FORCE=0
 DRY_RUN=0
@@ -98,8 +98,8 @@ if [ -z "${DOTFILES_FORCE_HOST:-}" ]; then
     fi
 fi
 
-# Desktop box or headless? Gates desktop-only packages and GNOME settings, so
-# a server or a container does not pull in a clipboard tool it cannot use.
+# Detect a desktop. This gates desktop-only packages and GNOME settings, so a
+# server or a container does not pull in a clipboard tool it cannot use.
 IS_GRAPHICAL=0
 if [ -n "${WAYLAND_DISPLAY:-}" ] || [ -n "${DISPLAY:-}" ] || command -v gnome-shell >/dev/null 2>&1; then
     IS_GRAPHICAL=1
@@ -120,7 +120,7 @@ DOTFILES_DIR="$SCRIPT_DIR/dotfiles"
 # -----------------------------
 # What a finished install looks like
 # -----------------------------
-# The global git keys. --check tests them, the steps below write them, and
+# The global git keys. --check tests them, the git step writes them, and
 # cleanup.sh unsets them, all from this one list.
 source "$SCRIPT_DIR/lib/gitconfig.sh"
 
@@ -135,8 +135,8 @@ else
     FONT_DIR="$TARGET_DIR/.local/share/fonts"
 fi
 
-# The optional groups. The detection sets them, and the questions below can
-# turn each one off. Everything else — the symlinks, the git config, the GPG
+# The optional groups. The detection sets them, and the questions can turn
+# each one off. Everything else — the symlinks, the git config, the GPG
 # agent — always runs, because without it the machine is not installed.
 WANT_PACKAGES=1
 WANT_HYPRLAND=0
@@ -199,8 +199,8 @@ if [ "$IS_HOME_INSTALL" -eq 1 ] \
    && [ -n "$OTHER_DIR" ] \
    && [ "$OTHER_DIR" != "$SELF_DIR" ] \
    && [ "$FORCE" -ne 1 ]; then
-    # A dry run and a check change nothing, and a machine owned by another
-    # checkout is exactly where reading the plan first is worth the most.
+    # A dry run and a check change nothing, so they run on a machine that
+    # another checkout owns.
     if [ "$DRY_RUN" -eq 1 ] || [ "$CHECK" -eq 1 ]; then
         echo "Note: $EXISTING_DOTFILES belongs to another checkout. A real run would refuse; -f overrides."
     else
@@ -219,7 +219,7 @@ PKG_MGR="$(__detect_pkg_mgr)"
 # -----------------------------
 # Check mode  (reads the machine, changes nothing)
 # -----------------------------
-# Answers "is this machine still correctly installed?" without a real run.
+# Reports whether the machine matches a finished install, without a real run.
 # A missing or drifted file is a failure, because install.sh always writes it.
 # A missing package is only a warning: packages are best-effort, and install.sh
 # itself warns and continues when one has no package on this platform.
@@ -330,7 +330,7 @@ fi
 # The questions  (a terminal, a home install, and no -y)
 # -----------------------------
 # One question per optional group, and only when the group applies to this
-# machine. Each answer sets the variable that the step below already tests.
+# machine. Each answer sets the variable that the step already tests.
 if [ "$INTERACTIVE" -eq 1 ]; then
     echo "Optional steps for this machine. Enter keeps the default."
     if [ "$IN_CONTAINER" -eq 0 ] && [ "$PKG_MGR" != "none" ]; then
@@ -427,11 +427,11 @@ elif ! python3 "$SCRIPT_DIR/lib/sync-dotfiles" "$TARGET_DIR"; then
 fi
 
 # -----------------------------
-# Remove what an earlier install left behind
+# Files that must not exist
 # -----------------------------
-# .helpers defines a `dotfiles` shell function now, and it calls bin/dotfiles.
-# An alias expands before the shell looks for a function, so the alias file an
-# earlier install wrote would hide the function.
+# .helpers defines a `dotfiles` shell function, which calls bin/dotfiles. An
+# alias expands before the shell looks for a function, so an alias at this path
+# would hide the function.
 ALIAS_FILE="$TARGET_DIR/.bashrc.d/dotfiles_alias"
 
 if [ -f "$ALIAS_FILE" ]; then
@@ -443,9 +443,9 @@ if [ -f "$ALIAS_FILE" ]; then
     fi
 fi
 
-# The sync engine moved to lib/, so bin/ holds only the commands a person runs.
-# An earlier install linked it into the target's bin/, where it is now a broken
-# link. `dotfiles sync` replaces it.
+# The sync engine is lib/sync-dotfiles, and bin/ holds only the commands a
+# person runs. A link at this path points at nothing. `dotfiles sync` is the
+# command.
 STALE_SYNC_LINK="$TARGET_BIN_DIR/sync-dotfiles"
 
 if [ -L "$STALE_SYNC_LINK" ] && [ "$(readlink "$STALE_SYNC_LINK")" = "$SOURCE_BIN_DIR/sync-dotfiles" ]; then
@@ -471,9 +471,7 @@ __run mkdir -p "$TARGET_DIR/workspace"
 echo "Syncing custom scripts to $TARGET_BIN_DIR..."
 
 __run mkdir -p "$TARGET_BIN_DIR"
-# Loop through all files in the source bin directory
 for script_path in "$SOURCE_BIN_DIR"/*; do
-    # Check if the glob found any files
     if [ -e "$script_path" ] && ! __skip_bin_entry "$script_path"; then
         script_name=$(basename "$script_path")
         target_path="$TARGET_BIN_DIR/$script_name"
@@ -483,11 +481,9 @@ for script_path in "$SOURCE_BIN_DIR"/*; do
             continue
         fi
 
-        # Make the source script executable before linking
         chmod +x "$script_path"
 
         echo "  -> Linking $script_name"
-        # Create or update the symlink, forcing overwrite
         ln -sf "$script_path" "$target_path"
     fi
 done
@@ -524,8 +520,7 @@ elif command -v git &> /dev/null; then
     done <<< "$GIT_BASE_CONFIG"
 
     # delta renders the diffs, but only after git is told to use it. Guard on
-    # the command: the package is best-effort, and a core.pager that is not
-    # installed breaks every `git diff`.
+    # the command: the package is best-effort.
     if command -v delta >/dev/null 2>&1; then
         echo "  -> Using delta as the diff pager"
         while IFS='=' read -r key value; do
@@ -555,9 +550,9 @@ else
 fi
 
 # -----------------------------
-# GPG Agent Configuration
+# GPG agent configuration
 # -----------------------------
-# agent.conf is a plain file write; the agent reload and keyring import below
+# agent.conf is a plain file write; the agent reload and the keyring import
 # are live state (gpg reads GNUPGHOME, not GNUPG_DIR) and gated on home installs.
 echo "Configuring GPG Agent..."
 
@@ -567,7 +562,6 @@ __run chmod 700 "$GNUPG_DIR"
 PINENTRY_PATH=""
 
 if [[ "$OSTYPE" == "darwin"* ]]; then
-    # macOS: Look for Homebrew pinentry-mac
     if command -v pinentry-mac >/dev/null; then
         PINENTRY_PATH=$(command -v pinentry-mac)
     elif [ -f "/opt/homebrew/bin/pinentry-mac" ]; then
@@ -575,10 +569,9 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
     elif [ -f "/usr/local/bin/pinentry-mac" ]; then
         PINENTRY_PATH="/usr/local/bin/pinentry-mac"
     else
-        echo "Warning: pinentry-mac not found. Please run: brew install pinentry-mac"
+        echo "Warning: pinentry-mac not found. Run: brew install pinentry-mac"
     fi
 else
-    # Linux: prefer a GUI pinentry, then curses, then tty
     if command -v pinentry-gnome3 >/dev/null; then
         PINENTRY_PATH=$(command -v pinentry-gnome3)
     elif command -v pinentry-qt >/dev/null; then
@@ -586,7 +579,6 @@ else
     elif command -v pinentry-curses >/dev/null; then
         PINENTRY_PATH=$(command -v pinentry-curses)
     else
-        # Fallback to generic link
         PINENTRY_PATH="/usr/bin/pinentry"
     fi
 fi
@@ -598,22 +590,18 @@ else
 echo "Writing gpg-agent.conf to $AGENT_CONF..."
 
 cat <<EOF > "$AGENT_CONF"
-# ---------------------------------------------------------
-# GPG Agent Configuration ($AGENT_CONF_MARKER)
-# ---------------------------------------------------------
+# gpg-agent configuration ($AGENT_CONF_MARKER)
 
-# Enable SSH support so YubiKey works for SSH auth
+# The agent serves ssh, so the YubiKey authentication key answers ssh.
 enable-ssh-support
 
-# Cache PIN for 1 day (86400 seconds)
+# 86400 seconds is one day.
 default-cache-ttl 86400
 max-cache-ttl 86400
-
-# Cache SSH keys for 1 day as well
 default-cache-ttl-ssh 86400
 max-cache-ttl-ssh 86400
 
-# Pinentry Program detected by install script
+# The pinentry that install.sh found on this machine.
 EOF
 
 if [ -n "$PINENTRY_PATH" ]; then
@@ -624,7 +612,7 @@ else
     echo "  -> Warning: Could not detect pinentry program."
 fi
 
-fi  # end of the dry-run guard around the gpg-agent.conf write
+fi
 
 if [ "$IS_HOME_INSTALL" -eq 0 ]; then
     echo "[probe] Skipping gpg-agent reload and key import."
@@ -635,21 +623,20 @@ else
     fi
 
     # ---------------------------------------------------------------
-    # systemd user session: make the SSH-agent handover deterministic
+    # systemd user session: the SSH agent handover
     # ---------------------------------------------------------------
     # .bashrc points SSH_AUTH_SOCK at gpg-agent, but that covers login shells
-    # only. Graphical apps inherit the session environment instead, where:
-    #   * the gpg-agent SSH socket may not be listening yet, and
-    #   * GNOME starts its own SSH agent (gcr-ssh-agent, or gnome-keyring's)
-    #     that claims the variable and never asks the YubiKey.
-    # ~/.config/environment.d/10-gpg-ssh.conf sets the variable session-wide;
-    # these two steps make sure the right agent is behind it.
+    # only. Graphical apps inherit the session environment instead, where the
+    # gpg-agent SSH socket might not be listening yet, and GNOME's own SSH
+    # agent (gcr-ssh-agent, or gnome-keyring's) claims the variable and never
+    # reaches the YubiKey. ~/.config/environment.d/10-gpg-ssh.conf sets the
+    # variable session-wide; these two steps put the right agent behind it.
     if command -v systemctl >/dev/null 2>&1 && [ -d "/run/user/$(id -u)" ]; then
         echo "  -> Enabling gpg-agent-ssh.socket"
         __run systemctl --user enable gpg-agent-ssh.socket 2>/dev/null \
             || __warn "could not enable gpg-agent-ssh.socket."
-        # Starting it now fails when the agent this script reloaded a moment ago
-        # already holds the socket file. The enable above is what matters —
+        # A start at this point fails when the agent this script reloaded a
+        # moment ago already holds the socket file. The enable is what matters:
         # systemd takes the socket at the next login.
         if [ "$DRY_RUN" -eq 0 ]; then
             systemctl --user start gpg-agent-ssh.socket >/dev/null 2>&1 || true
@@ -670,10 +657,9 @@ else
     fi
 
     # -----------------------------
-    # Import Public Key (Bootstrapping)
+    # Public key import
     # -----------------------------
-    # If a public key is found in dotfiles/public.asc, this auto-imports it.
-    # Command to generate: gpg --armor --export <key-id> > dotfiles/public.asc
+    # dotfiles/public.asc comes from `gpg --armor --export <key-id>`.
 
     PUB_KEY="$DOTFILES_DIR/public.asc"
     if ! command -v gpg >/dev/null 2>&1; then
@@ -682,14 +668,13 @@ else
         echo "Importing public GPG key from $PUB_KEY..."
         __run gpg --import "$PUB_KEY"
 
-        # This extracts the fingerprint and sets it to ultimate trust.
         FINGERPRINT=$(gpg --with-colons --import-options show-only --import "$PUB_KEY" \
             | grep -m 1 "^fpr" | awk -F: '{print $10}')
 
         if [ -n "$FINGERPRINT" ]; then
             echo "Setting ultimate trust for $FINGERPRINT..."
-            # --import-ownertrust is the scriptable route; the interactive
-            # --edit-key trust dance exits non-zero and trips set -e
+            # --import-ownertrust is the scriptable route. The interactive
+            # --edit-key trust flow exits non-zero and trips set -e.
             if [ "$DRY_RUN" -eq 1 ]; then
                 echo "  [dry-run] set ultimate trust for $FINGERPRINT"
             else
@@ -775,9 +760,9 @@ fi
 # -----------------------------
 # systemd user units (Linux)
 # -----------------------------
-# The Linux counterpart of a macOS LaunchAgent. lib/sync-dotfiles already
-# symlinked dotfiles/.config/systemd/user/* into place; systemd still has to
-# be told they exist, and units with an [Install] section get enabled.
+# The Linux counterpart of a macOS LaunchAgent. lib/sync-dotfiles symlinks
+# dotfiles/.config/systemd/user/* into place, but systemd has to be told they
+# exist, and units with an [Install] section get enabled.
 UNIT_SRC_DIR="$DOTFILES_DIR/.config/systemd/user"
 
 if [ "$IS_HOME_INSTALL" -eq 1 ] && [ "$IN_CONTAINER" -eq 0 ] && [ -d "$UNIT_SRC_DIR" ] \
@@ -800,7 +785,7 @@ fi
 # -----------------------------
 # Ghostty's own quick terminal needs wlr-layer-shell, which Mutter does not
 # implement. Quake Terminal does the same job from inside the shell: it drops
-# down the Ghostty window that is already there, so one terminal config still
+# down the Ghostty window that is already there, so one terminal config
 # covers macOS and Linux. `gnome-extensions` ships with gnome-shell, so no
 # extra tooling is needed — only the right build for this shell version.
 QUAKE_UUID="quake-terminal@diegodario88.github.io"
@@ -833,8 +818,8 @@ PY
             TMP_DIR="$(mktemp -d)"
             if curl -fsSL "https://extensions.gnome.org$DOWNLOAD_PATH" -o "$TMP_DIR/quake.zip" \
                 && gnome-extensions install --force "$TMP_DIR/quake.zip"; then
-                # A new extension is not loaded until the shell restarts, so
-                # enabling it now fails on Wayland. It takes effect at login.
+                # A new extension is not loaded until the shell restarts, so an
+                # enable at this point fails on Wayland. It takes effect at login.
                 gnome-extensions enable "$QUAKE_UUID" >/dev/null 2>&1 || true
                 echo "  -> Installed. Log out and back in, then set the hotkey in its preferences."
             else
@@ -873,7 +858,7 @@ else
     echo "Pointing git hooks at hooks/ ..."
     git -C "$SCRIPT_DIR" config core.hooksPath hooks
     chmod +x "$SCRIPT_DIR/hooks/pre-commit" "$SCRIPT_DIR/hooks/pre-push" "$SCRIPT_DIR/hooks/scan-added-lines"
-    # Remove the legacy copied hook: core.hooksPath makes .git/hooks dead.
+    # A hook in .git/hooks is dead under core.hooksPath, so remove it.
     rm -f "$(git -C "$SCRIPT_DIR" rev-parse --path-format=absolute --git-common-dir)/hooks/pre-commit"
 fi
 

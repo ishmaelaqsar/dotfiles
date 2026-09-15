@@ -1,11 +1,10 @@
-# If not running interactively, don't do anything
 case $- in
     *i*) ;;
       *) return;;
 esac
 
 # ============================================================
-# Starship Prompt
+# Prompt
 # ============================================================
 
 if command -v starship >/dev/null 2>&1; then
@@ -31,15 +30,13 @@ export HISTIGNORE='add_secret *:manage-secrets encrypt *:* --password *:* --toke
 shopt -s histappend
 
 # ============================================================
-# Environment & Basic Setup
+# Aliases and helpers
 # ============================================================
 
-# Source aliases
 if [[ -f ~/.aliases ]]; then
     . ~/.aliases
 fi
 
-# Source Helper Functions
 if [[ -f ~/.helpers ]]; then
     . ~/.helpers
 fi
@@ -50,14 +47,12 @@ if [[ -d "${WORKSPACE:-}" ]]; then
     alias ws='cd "$WORKSPACE"'
 fi
 
-# -----------------------------------------------------------------------------
-# GPG & SSH Agent Integration
-# -----------------------------------------------------------------------------
+# ============================================================
+# GPG and SSH agent
+# ============================================================
 
-# This tells GPG which terminal to draw the PIN prompt on.
 export GPG_TTY=$(tty)
 
-# Link SSH to GPG
 unset SSH_AGENT_PID
 if command -v gpgconf >/dev/null; then
     # Only export a socket that gpgconf named. An empty value leaves ssh with
@@ -75,19 +70,20 @@ fi
 # matters: this call starts the agent when none runs, and the start probes the
 # card reader, which blocks a new shell for several seconds when no card is in.
 # A cold agent does not need the call anyway — the first gpg command starts it
-# with GPG_TTY already exported above.
+# with the exported GPG_TTY.
 if [[ -S "$(gpgconf --list-dirs agent-socket 2>/dev/null)" ]]; then
     gpg-connect-agent updatestartuptty /bye >/dev/null 2>&1
 fi
 
-# -----------------------------------------------------------------------------
+# ============================================================
 # YubiKey subkey expiry
-# -----------------------------------------------------------------------------
+# ============================================================
 
-# Once a day, in the first shell of the day: is a YubiKey subkey close to its
-# expiry? yk prints nothing when all is well, so this costs output only when
-# maintenance is due. The stamp keeps it to one run per day, and `find -mtime
-# +0` is true when the stamp is more than 24 hours old on both find variants.
+# Once a day, in the first shell of the day, check whether a YubiKey subkey is
+# close to its expiry. yk prints nothing when all is well, so this costs output
+# only when maintenance is due. The stamp keeps it to one run per day, and
+# `find -mtime +0` is true when the stamp is more than 24 hours old on both find
+# variants.
 if command -v yk >/dev/null 2>&1 && [[ -f "${YK_PUBKEY:-}" ]]; then
     __yk_stamp="${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/yk-remind"
     if [[ ! -f "$__yk_stamp" || -n "$(find "$__yk_stamp" -mtime +0 2>/dev/null)" ]]; then
@@ -99,7 +95,7 @@ if command -v yk >/dev/null 2>&1 && [[ -f "${YK_PUBKEY:-}" ]]; then
 fi
 
 # ============================================================
-# Shell Completion Setup
+# Shell completion
 # ============================================================
 
 if ! shopt -oq posix; then
@@ -125,7 +121,6 @@ if command -v fzf >/dev/null 2>&1 && fzf --bash >/dev/null 2>&1; then
     unset __fd_bin
 fi
 
-# kubectl completion
 if command -v kubectl >/dev/null 2>&1; then
     source <(kubectl completion bash)
 fi
@@ -142,7 +137,6 @@ if command -v podman >/dev/null 2>&1; then
     unset __docker_bin
 fi
 
-# FNM setup
 if command -v fnm >/dev/null 2>&1; then
     eval "$(fnm env --use-on-cd --shell bash)"
     source <(fnm completions --shell bash)
@@ -173,7 +167,7 @@ if [[ -n "${EAT_SHELL_INTEGRATION_DIR:-}" ]]; then
 fi
 
 # ============================================================
-# User-Specific Extensions
+# User-specific extensions
 # ============================================================
 
 if [[ -d ~/.bashrc.d ]]; then
