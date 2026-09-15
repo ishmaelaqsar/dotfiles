@@ -1,5 +1,5 @@
 ---
-description: "Capture the current context (a thing explained, debugged, or learned in this session) as a durable Knowledge Base note in the Obsidian vault at $OBSIDIAN_VAULT. Use when the user says 'add this to my notes / knowledge base / second brain' or wants to keep an explanation for later."
+description: "Capture the current context as a Knowledge Base note at $OBSIDIAN_VAULT when the user says 'add this to my notes / knowledge base / second brain'."
 ---
 
 Capture a durable Knowledge Base note into the Obsidian vault at `$OBSIDIAN_VAULT` (resolve from
@@ -16,5 +16,5 @@ lint rules).
    - Open with inline `#tags`, then a one-line description.
    - Then structured markdown: headings, tables, callouts as warranted.
    - Cross-link related notes/projects with `[[…]]`.
-4. **Do not git commit** — leave syncing to the vault's own mechanism. Keep markdown lint-clean.
+4. **Do not git commit**. Leave sync to the vault's own mechanism. Keep markdown lint-clean.
 5. Report the path written and the tags used.

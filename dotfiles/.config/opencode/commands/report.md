@@ -1,5 +1,5 @@
 ---
-description: "Write up the current session's investigation/analysis as a point-in-time report note in the Obsidian vault's Reports/ folder (dated, shareable). Use when the user says 'write this up', 'put this in my second brain as a report', 'turn this into a report', or wants a finished analysis captured as a note rather than an evergreen KB entry."
+description: "Write up the session's investigation as a dated report note in Reports/ when the user says 'write this up' or 'turn this into a report'."
 ---
 
 Capture the current investigation/analysis as a **report** note in the Obsidian vault at
@@ -33,11 +33,11 @@ lint rules).
      callouts for caveats and ruled-out hypotheses.
    - A **recommendations / what-to-do** list.
    - A **Source & method** footer: where the data came from, how it was computed, and any
-     reproduction caveats — so the report is auditable later.
+     reproduction caveats, so the report is auditable later.
 4. Cross-link related vault notes with `[[…]]` and inline `#tags`. Prefer a link over a copy.
-5. **Do not git commit** — leave syncing to the vault's own mechanism. Keep markdown lint-clean
+5. **Do not git commit**. Leave sync to the vault's own mechanism. Keep markdown lint-clean
    (one H1, blank lines around headings/lists, frontmatter at the very top).
 6. Report the path written and the tags used.
 
-Honesty rules: report outcomes faithfully — state what was ruled out and why, flag any figure you
-could not reproduce exactly, and keep claims tied to the data you actually pulled.
+Honesty rules: report outcomes faithfully. State what was ruled out and why, flag any figure you
+could not reproduce exactly, and keep claims tied to the data you pulled.

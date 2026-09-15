@@ -1,13 +1,13 @@
 ---
-description: "Create or update a tracked project in the Obsidian vault at $OBSIDIAN_VAULT/Projects/. Use to start tracking a new piece of work, or to move a project across its lifecycle (pending → progressing → completed → shelved). Status is the folder."
+description: "Create or update a tracked project note in $OBSIDIAN_VAULT/Projects/, or move it across its lifecycle (pending → progressing → completed → shelved)."
 ---
 
 Create or update a project note in `$OBSIDIAN_VAULT/Projects/` (resolve `$OBSIDIAN_VAULT` from
 the environment; default `~/vault`).
 
 If the vault has its own `AGENTS.md`, read it first and follow its conventions. Remember:
-**status is the subfolder** (`Pending`/`Progressing`/`Completed`/`Shelved`), and **do not git
-commit** — leave syncing to the vault's own mechanism.
+**status is the subfolder** (`Pending`/`Progressing`/`Completed`/`Shelved`). **Do not git
+commit**. Leave sync to the vault's own mechanism.
 
 Interpret `$ARGUMENTS` and recent context to decide the action:
 
