@@ -232,6 +232,40 @@ headline that starts with `http` is a feed and takes the tags of its ancestors. 
 tracks that file, so every machine reads the same feeds. The database is generated state under
 `~/.local/state/emacs/elfeed/`, so what you have read stays on the machine that read it.
 
+### Mail
+
+`C-c m` starts Gnus. It reads the mailbox over IMAP, reads public list archives over NNTP, and
+sends through smtpmail. Every part of it ships with Emacs.
+
+Before the first run, put two lines in `~/.config/emacs/authinfo.gpg`. Open that path in Emacs
+and save it, and Emacs encrypts the file to your key:
+
+```
+machine imap.gmail.com login YOU@gmail.com port 993 password APP-PASSWORD
+machine smtp.gmail.com login YOU@gmail.com port 587 password APP-PASSWORD
+```
+
+The password is a Google app password, which needs two-step verification on the account. A
+normal password is refused. Gmail rewrites a From address it does not know, so either add the
+address as a "send mail as" alias, or set `user-mail-address` to the account address.
+
+Two archive servers are configured and need no account: `lore` carries the kernel lists and
+their neighbours, and `gmane` carries the GNU and Emacs ones. `A A` in the group buffer lists
+what a server holds, and `u` subscribes to a group. A second mailbox is a second entry in
+`gnus-secondary-select-methods` with its own name and host, plus two more lines in the same
+credentials file.
+
+Gnus keeps its group state, caches, and drafts under `~/.local/state/emacs/mail/`, so it leaves
+no `News` or `Mail` directory behind. For patches, `git send-email` reads its own settings, which
+stay out of this repository because they carry the login:
+
+```bash
+git config --global sendemail.smtpServer smtp.gmail.com
+git config --global sendemail.smtpServerPort 587
+git config --global sendemail.smtpEncryption tls
+git config --global sendemail.smtpUser YOU@gmail.com
+```
+
 ---
 
 ## Secrets

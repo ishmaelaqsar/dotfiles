@@ -7,7 +7,8 @@
 ;; Magit, markdown-mode, the Vertico + Orderless + Consult search stack, which
 ;; runs the installed rg and fd from the minibuffer, with Marginalia, Embark,
 ;; Avy, Corfu + Cape for completion at point, eat for a bash inside a frame, and
-;; elfeed with elfeed-org for the feeds in elfeed.org.
+;; elfeed with elfeed-org for the feeds in elfeed.org. Gnus, EWW and the rest of
+;; the mail and web stack are built in.
 ;; setup-emacs.sh installs them from `package-selected-packages'.
 ;;
 ;; eglot finds the language servers on PATH. The setup-*.sh scripts put them
@@ -784,6 +785,70 @@ then enter the mode again with the grammar in place."
 (use-package elfeed-org
   :after elfeed
   :config (elfeed-org))
+
+;;;; Mail
+
+;; Gnus reads the mailbox over IMAP, and the public list archives over NNTP.
+;; The null backend is the primary method, so every server is an equal entry in
+;; the secondary list, and a second provider is a second entry. The password
+;; comes from authinfo.gpg, which gpg decrypts through the YubiKey, so no login
+;; appears here. `gnus-posting-styles' is where a From address per account goes.
+
+(defconst my/mail-dir (expand-file-name "mail/" my/state-dir)
+  "Where Gnus keeps what it generates: group state, caches and drafts.")
+
+;; The servers, through `setq' rather than `setopt': the type of
+;; `gnus-select-method' lives in gnus.el, so a `setopt' loads the whole of Gnus
+;; at startup to check the value against it.
+(setq gnus-select-method '(nnnil "")
+      gnus-secondary-select-methods
+      '((nnimap "gmail"
+                (nnimap-address "imap.gmail.com")
+                (nnimap-server-port 993)
+                (nnimap-stream ssl))
+        ;; Public archives, and no account: lore carries the kernel lists and
+        ;; their neighbours, gmane the GNU and Emacs ones. `A A' in the group
+        ;; buffer lists what a server holds, and `u' subscribes to a group.
+        (nntp "lore" (nntp-address "nntp.lore.kernel.org"))
+        (nntp "gmane" (nntp-address "news.gmane.io"))))
+
+;; The address is the one Gmail sends as; an alias it does not know about it
+;; rewrites. Left alone, Gnus fills ~/News and ~/Mail, writes ~/.newsrc, and
+;; drops an autosaved draft in the home directory.
+(setopt user-full-name "Ishmael Aqsar"
+        user-mail-address "ishmael-dev@aqsar.dev"
+        ;; One file, and an encrypted one. A plaintext ~/.authinfo is never
+        ;; read, and the credentials keep out of the home directory.
+        auth-sources (list (locate-user-emacs-file "authinfo.gpg"))
+        send-mail-function #'smtpmail-send-it
+        message-send-mail-function #'smtpmail-send-it
+        smtpmail-smtp-server "smtp.gmail.com"
+        smtpmail-smtp-service 587
+        smtpmail-stream-type 'starttls
+        ;; A server that carries thousands of lists answers slowly, and a list
+        ;; is something you go and find rather than hear about at every start.
+        gnus-check-new-newsgroups nil
+        ;; Gnus alone reads the .newsrc.eld beside it, so the legacy .newsrc
+        ;; costs a write and buys nothing.
+        gnus-save-newsrc-file nil
+        gnus-read-newsrc-file nil
+        gnus-home-directory my/mail-dir
+        gnus-directory my/mail-dir
+        gnus-startup-file (expand-file-name "newsrc" my/mail-dir)
+        gnus-init-file (expand-file-name "gnus.el" my/mail-dir)
+        gnus-cache-directory (expand-file-name "cache/" my/mail-dir)
+        gnus-article-save-directory (expand-file-name "saved/" my/mail-dir)
+        gnus-kill-files-directory (expand-file-name "score/" my/mail-dir)
+        gnus-agent-directory (expand-file-name "agent/" my/mail-dir)
+        message-directory my/mail-dir
+        mail-source-directory my/mail-dir
+        message-auto-save-directory (expand-file-name "drafts/" my/mail-dir)
+        nndraft-directory (expand-file-name "drafts/" my/mail-dir)
+        smtpmail-queue-dir (expand-file-name "queue/" my/mail-dir)
+        nnmail-message-id-cache-file (expand-file-name "message-id-cache" my/mail-dir))
+
+(use-package gnus
+  :bind ("C-c m" . gnus))
 
 ;;;; KDB
 
