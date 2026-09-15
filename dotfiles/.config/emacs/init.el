@@ -355,9 +355,6 @@ there and the theme's faces are computed for a dumb terminal. Every frame
     (corfu-mode 1)))
 (use-package corfu
   :hook ((prog-mode text-mode) . my/corfu-maybe)
-  :bind (:map corfu-map
-              ;; A space inside the popup separates Orderless terms.
-              ("SPC" . corfu-insert-separator))
   :custom
   (corfu-auto t)
   (corfu-auto-delay 0.15)
