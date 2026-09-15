@@ -246,7 +246,8 @@ machine smtp.gmail.com login YOU@gmail.com port 587 password APP-PASSWORD
 ```
 
 The password is a Google app password, which needs two-step verification on the account. A
-normal password is refused. Gmail rewrites a From address it does not know, so either add the
+normal password is refused. Make a new one rather than reuse the app password the mail relay in
+`docs/forgejo-setup.org` holds, so that revoking either leaves the other alone. Gmail rewrites a From address it does not know, so either add the
 address as a "send mail as" alias, or set `user-mail-address` to the account address.
 
 Two archive servers are configured and need no account: `lore` carries the kernel lists and
