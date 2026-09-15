@@ -416,7 +416,7 @@ there and the theme's faces are computed for a dumb terminal. Every frame
 ;; Go and YAML have no classic mode in Emacs, and their ts-modes register a
 ;; file association only when the grammar is already installed, so a fresh
 ;; machine would open .go in fundamental-mode. Register the associations here;
-;; the hook below then fetches the grammar on the first file.
+;; `my/treesit-install-missing' then fetches the grammar on the first file.
 (dolist (entry '(("\\.go\\'" . go-ts-mode)
                  ("/go\\.mod\\'" . go-mod-ts-mode)
                  ("\\.ya?ml\\'" . yaml-ts-mode)))
@@ -434,7 +434,7 @@ there and the theme's faces are computed for a dumb terminal. Every frame
 
 ;; A missing grammar installs itself on the first file of its kind, so a fresh
 ;; machine needs no manual step. Emacs 31 does this through
-;; `treesit-auto-install-grammar'; on 30 the hook below does it.
+;; `treesit-auto-install-grammar'; on 30 `my/treesit-install-missing' does it.
 (defun my/treesit-install-missing ()
   "Install the grammar of the current tree-sitter mode when it is absent,
 then enter the mode again with the grammar in place."
@@ -479,10 +479,10 @@ then enter the mode again with the grammar in place."
 
 ;; gopls, jdtls and clangd implement textDocument/formatting, so any buffer
 ;; whose server reports the capability formats before a save; Go also gets its
-;; imports organized first, which is what goimports does. basedpyright reports
-;; no such capability, so Python stays with ruff below. jdtls needs no
+;; imports organised first, which is what goimports does. basedpyright reports
+;; no such capability, so Python stays with ruff. jdtls needs no
 ;; profile: eglot sends tab-width and indent-tabs-mode as the formatting
-;; options, so Java gets 4 spaces from the settings above; a project that
+;; options, so Java gets 4 spaces from `tab-width'; a project that
 ;; wants a style ships its own java.format.settings.url.
 (declare-function eglot-managed-p "eglot")
 (declare-function eglot-server-capable "eglot")
@@ -515,11 +515,11 @@ then enter the mode again with the grammar in place."
 
 ;;;; Python formatting: ruff
 
-;; basedpyright checks types and completes, and formats nothing: pyright never
-;; implemented textDocument/formatting. ruff is the formatter, installed as a
+;; basedpyright checks types and completes, and formats nothing: pyright does not
+;; implement textDocument/formatting. ruff is the formatter, installed as a
 ;; uv tool by setup-python.sh, so run it on save: first the import sorter
 ;; (rule set I, the isort rules), then the formatter, the order ruff itself
-;; documents. replace-buffer-contents keeps point and marks where they were.
+;; documents. replace-buffer-contents keeps point and marks in place.
 (defun my/ruff--pipe (args)
   "Pipe the buffer through ruff with ARGS. Return the output buffer, or nil."
   (let ((out (generate-new-buffer " *ruff*")))
@@ -549,7 +549,7 @@ then enter the mode again with the grammar in place."
 (add-hook 'python-ts-mode-hook #'my/ruff-format-on-save)
 (add-hook 'python-mode-hook #'my/ruff-format-on-save)
 
-;; C-c f formats the buffer now: through eglot where the server formats,
+;; C-c f formats the buffer on demand: through eglot where the server formats,
 ;; through ruff in a Python buffer.
 (defun my/format-buffer ()
   "Format this buffer through eglot or ruff."
@@ -612,7 +612,7 @@ then enter the mode again with the grammar in place."
   (electric-pair-local-mode -1))
 (use-package paredit
   ;; Only once installed: package.el opens paredit's own files in
-  ;; emacs-lisp-mode while it generates their autoloads, and the hook below
+  ;; emacs-lisp-mode while it generates their autoloads, and the mode hook
   ;; would call a paredit that is not loadable yet.
   :if (locate-library "paredit")
   :hook (((lisp-mode emacs-lisp-mode lisp-interaction-mode sly-mrepl-mode) . paredit-mode)
@@ -659,9 +659,8 @@ then enter the mode again with the grammar in place."
 
 ;; eat runs a real bash, so the fzf keys and the .aliases functions work, which
 ;; eshell cannot offer. It is pure Elisp, from NonGNU ELPA: nothing native can
-;; take the daemon down. ghostel (libghostty-vt) is faster, but it is a young
-;; native module with an unverified binary download; assessed 2026-09-15 and
-;; deferred. .bashrc sources the shell integration for directory tracking.
+;; take the daemon down. .bashrc sources the shell integration for directory
+;; tracking.
 (use-package eat
   :hook (eshell-load . eat-eshell-visual-command-mode)
   :bind (("C-c t" . eat)
@@ -708,8 +707,8 @@ then enter the mode again with the grammar in place."
 
 ;; A :session is an interpreter in a comint buffer, and Org never stops it.
 ;; Python sessions come from run-python (inferior-python-mode), shell sessions
-;; from shell (shell-mode). Sly is left alone: it is the user's own REPL, and
-;; Babel only borrows it.
+;; from shell (shell-mode). Sly is left alone: it is your own REPL, and Babel
+;; only borrows it.
 (defun my/org-babel-kill-sessions ()
   "Kill every Babel session interpreter and its buffer."
   (interactive)
