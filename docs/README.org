@@ -1,5 +1,5 @@
 * docs/
-Build notes, in Org. Open them in Emacs: =S-TAB= folds to the overview, =C-c '= edits a shell block in =sh-mode=, and =C-c C-c= runs one after it asks. =bin/md2org= converted them from markdown; the repository =README.md= stays markdown, because GitHub renders it as the landing page.
+Build notes, in Org. Open them in Emacs: =S-TAB= folds to the overview, =C-c '= edits a shell block in =sh-mode=, and =C-c C-c= runs one after it asks. The repository =README.md= stays markdown, because GitHub renders it as the landing page.
 
 | File                 | What it is                                                                                                                                                         |
 |----------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------|

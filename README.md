@@ -1,109 +1,54 @@
 # Dotfiles
 
-**Author:** Ishmael Aqsar
-
-Configuration files, maintenance scripts, and GPG-encrypted secrets for my development
-environment. They work on **macOS**, **Linux**, and inside **VS Code Dev Containers**. Build notes
-for the home servers are in `docs/`, as Org files.
+Configuration files, maintenance scripts, and GPG-encrypted secrets for a development
+environment on **macOS**, **Linux**, and **VS Code Dev Containers**. Build notes for the home
+servers are in `docs/`, as Org files.
 
 ---
 
-## Bootstrap
+## Install
 
-### Option A: VS Code Dev Containers
+### VS Code Dev Containers
 
-VS Code can install the dotfiles in every container. Open Settings (`Cmd+,` or `Ctrl+,`), search
-for **Dotfiles**, and set three fields:
+VS Code can install the dotfiles in every container. Open Settings, search for **Dotfiles**, and
+set three fields:
 
-1. **Repository** — `ishmaelaqsar/dotfiles`
-2. **Install Command** — `install.sh`
-3. **Target Path** — `~/.dotfiles`
+1. **Repository**: `ishmaelaqsar/dotfiles`
+2. **Install Command**: `install.sh`
+3. **Target Path**: `~/.dotfiles`
 
-### Option B: macOS and Linux
-
-Install on a fresh machine:
+### macOS and Linux
 
 ```bash
 git clone https://github.com/ishmaelaqsar/dotfiles.git ~/.dotfiles
 ~/.dotfiles/install.sh
 ```
 
-`install.sh` does these steps:
+`install.sh` installs the packages in `lib/packages.conf` with the manager it finds. It links the
+files under `dotfiles/` into your home directory, and the scripts in `bin/` into `~/bin`. It
+installs the 0xProto Nerd Font, writes the global git config, configures the GPG agent for SSH
+and the YubiKey, and installs the git hooks. On Linux it also enables the systemd user units and
+applies the GNOME settings. On Arch it builds `yay` first when no AUR helper exists. It does not
+install Emacs; `setup-emacs.sh` does.
 
-1. **Install the packages** with the manager it finds (brew, apt, yay, paru, pacman or dnf):
-   `eza`, `fd`, `ripgrep`, `fzf`, `git-delta`, `tmux`, `podman` and more. The list is data —
-   see [The package table](#the-package-table). Some packages are best-effort: `lazydocker` is
-   not in Debian's repos. It also installs
-   [OpenCode](https://opencode.ai) and [Ghostty](https://ghostty.org), which can fail without
-   stopping the run. On Arch it builds **yay** first when no AUR helper exists.
-2. **Link the config files** (`.bashrc`, `.editorconfig`, and the rest) into your home directory.
-3. **Link the scripts** in `bin/` into `$HOME/bin`.
-4. **Install the 0xProto Nerd Font** from `general/0xProto/`.
-5. **Configure global git**: the identity, the global ignore and attributes files, and **delta**
-   as the diff pager. It sets the pager keys only when `delta` is on `PATH`, because a `core.pager`
-   that is absent breaks every `git diff`. On Linux it also picks the libsecret credential helper
-   when one exists.
-6. **Configure the GPG agent** for SSH and the YubiKey. It detects the OS and the pinentry
-   program.
-7. **Install the git hook** that keeps cleartext secrets out of a commit.
-8. On Linux, enable the systemd user units in `dotfiles/.config/systemd/user/`, and apply the
-   GNOME settings. See [Linux desktop](#linux-desktop-gnome--arch).
+`./install.sh --help` lists the flags. Three matter before a real run:
 
-Flags:
+- `-n` prints the whole plan and changes nothing.
+- `--check` reports what is missing or has drifted. See the next section.
+- `./install.sh /some/dir` is a **probe run**: it writes the file layout into that directory and
+  skips the packages, the git config, and the GPG keyring. Use it to test a change.
 
-| Flag | Effect |
-| :--- | :--- |
-| `-n`, `--dry-run` | Print every change, and make none. Read the whole plan first: packages, symlinks, git config, systemd units and GNOME keys. |
-| `-c`, `--check` | Report what is missing or has drifted, then exit. See [Check an existing install](#check-an-existing-install). |
-| `-y`, `--yes` | Ask nothing. The detection decides every optional step. See [What the script asks](#what-the-script-asks). |
-| `--desktop` | Run the desktop steps whatever the session looks like (GNOME settings, `wl-clipboard`). Use it over ssh, where `DISPLAY` is not set. |
-| `--no-desktop` | Skip those steps, for a server that has X libraries. |
-| `-f` | Install even when a different dotfiles checkout owns `~/.dotfiles`. |
-| `-h`, `--help` | Print the usage text. |
+In a terminal, the script asks before each optional group: the packages, the desktop steps, the
+Hyprland helpers, OpenCode, and Ghostty. Enter keeps the default, which is yes. `-y` skips the
+questions, and so does a run with no terminal, such as the dev-container hook or an agent shell.
+The script refuses to run when a different dotfiles checkout owns `~/.dotfiles`; `-f` overrides
+that. It repeats every warning as a numbered summary at the end.
 
-Without a flag, the session decides: a Wayland or X display, or `gnome-shell` on `PATH`, means a
-desktop.
-
-Safety:
-
-* `./install.sh /some/dir` is a **probe run**. It writes the file layout only. It skips the
-  packages, the git config, and every GPG keyring change. Use it to test a change.
-* The script **refuses to run** when a different dotfiles checkout owns `~/.dotfiles`. `-f`
-  overrides the guard. A dry run passes the guard, because it changes nothing.
-* It repeats every warning as a numbered summary at the end. A failure in the middle of a long
-  package run then does not scroll past unread.
-* It needs a working `python3` for `lib/sync-dotfiles`, and stops with a clear message when there
-  is none. On a fresh macOS machine `/usr/bin/python3` is only a stub, so run
-  `xcode-select --install` first.
-* After the install, run `opencode auth login` once to connect a model provider.
-* `install.sh` does not install Emacs. `setup-emacs.sh` does, on a machine that wants it.
-
-### What the script asks
-
-In a terminal, `install.sh` asks before each optional group, so a forgotten flag cannot install a
-tool you do not want. Enter keeps the default, which is yes. It asks only about the groups that
-apply to the machine:
-
-| Question | On a "no" |
-| :--- | :--- |
-| Install the packages via the detected manager? | Skips the package table, and the AUR helper on Arch. |
-| Desktop steps? (Linux with a display) | Skips `wl-clipboard`, the GNOME settings and keys, and the Quake Terminal extension. |
-| Install the Hyprland session helpers? (`Hyprland` on `PATH`) | Skips `fuzzel`, `waybar`, `mako`, `hyprlock`, `hypridle`, `grim`, `slurp`, `brightnessctl`, the two portals, and `local.conf`. |
-| Install OpenCode? (when absent) | Skips it. |
-| Install Ghostty? (when absent) | Skips it. |
-
-The symlinks, the scripts in `bin/`, the fonts, the git config, and the GPG agent never ask. Without
-them the machine is not installed, and `--check` would fail.
-
-Nothing asks when stdin is not a terminal — the dev-container hook, `docker run` without `-t`, a
-pipe, an agent shell. Those runs take the detection as it stands, and print one line to say so.
-`-y` does the same in a terminal, for a run you have already read with `-n`. A dry run, a check,
-and a probe run change nothing, so they never ask either.
+Two notes for a fresh machine. On macOS, `/usr/bin/python3` is a stub until you run
+`xcode-select --install`, and `lib/sync-dotfiles` needs a working `python3`. After the install,
+run `opencode auth login` once.
 
 ### Check an existing install
-
-`./install.sh --check` answers one question: is this machine still correctly installed? It reads
-the machine, changes nothing, and exits non-zero when a repair is necessary.
 
 ```bash
 ./install.sh --check           # this machine
@@ -111,125 +56,84 @@ the machine, changes nothing, and exits non-zero when a repair is necessary.
 dotfiles doctor                # the same report, by its shorter name
 ```
 
-| Checked | Result |
-| :--- | :--- |
-| Every file in `dotfiles/` is a symlink back to this repo | **Failure** — missing, a real file, broken, or linked elsewhere |
-| Every script in `bin/` is linked into `$HOME/bin` | **Failure** |
-| The 0xProto font family is installed | **Failure** |
-| `install.sh` wrote `~/.gnupg/gpg-agent.conf` | **Failure** |
-| The global git identity, and the delta pager keys when `delta` is installed | **Failure** — skipped on a probe target |
-| The commands in the package table are on `PATH` | **Warning** — packages are best-effort, and some have no package on a platform |
+The check reads the machine, changes nothing, and exits non-zero when a repair is necessary. A
+missing symlink, script link, font, `gpg-agent.conf`, or git setting is a failure. A package
+command that is not on `PATH` is a warning, because packages are best-effort. Run `./install.sh`
+to repair what it reports.
 
-Run `./install.sh` to repair what it reports.
+### Packages
 
-### The package table
-
-`lib/packages.conf` holds what to install. The scripts hold no list. One row per tool:
-
-```
-commands | tags | per-manager package overrides
-```
-
-* **commands** — the command names that satisfy the row, separated by commas. The first name is
-  the identity, and the default package name. A `~` prefix means that no command answers to the
-  row: a shell script, a daemon in `sbin`, or a USB driver. `--check` then reports the row as
-  unverifiable, not missing.
-* **tags** — `install.sh` installs a row when **all** of its tags are active. `base` is always
-  active. `linux` is active off macOS, `desktop` on a graphical machine, and `arch` where `pacman`
-  exists. `toolchain` and `virt` are never active; those rows only map a name — `toolchain`
-  for a `setup-*.sh` script, and `virt` for the libvirt stack that `bin/vm` drives.
-* **overrides** — `mgr=pkg` pairs. An exact manager wins first, then `*=pkg`, then the first
-  command name.
-
-`lib/pkg.sh` reads the table. To add a tool, add a row. No script changes.
+`lib/packages.conf` holds every package as one row: the commands it provides, the tags that
+select it, and per-manager package names. Its header documents the format. `lib/pkg.sh` reads the
+table, so a new tool is a new row and no script change. The tags are `base`, `linux`, `desktop`,
+`arch`, `hyprland`, `toolchain`, and `virt`.
 
 ### Language toolchains
 
-`install.sh` stops at the shell and terminal tools. Each language environment is a separate
-script: the compiler or runtime, the LSP server, and the debugger. Run them by hand, only on a
-machine that needs them. They are idempotent.
+Each language environment is a separate script: the compiler or runtime, the language server, and
+the debugger. Run them by hand, on a machine that needs them. They are idempotent, each takes
+`-h`, and none takes a dry run.
 
-Each takes `-h` and prints its own header. None takes a dry run: `lib/pkg.sh` plans the package
-steps, but the installers these scripts drive (`curl | sh`, `git clone`, `go install`, sdkman)
-always act, so a script stops when `DOTFILES_DRY_RUN` is set rather than half honouring it.
-
-| Script | Toolchain | LSP | Debugger |
+| Script | Toolchain | Language server | Debugger |
 | :--- | :--- | :--- | :--- |
-| `setup-c.sh` | C/C++ (CLT / build-essential / base-devel), cmake | clangd | lldb, gdb + valgrind (Linux); Dape in Emacs |
-| `setup-python.sh` | uv (manages interpreters) | ruff + basedpyright | debugpy |
+| `setup-c.sh` | C and C++ (CLT, build-essential, or base-devel), cmake | clangd | lldb; gdb and valgrind on Linux |
+| `setup-python.sh` | uv, which manages the interpreters | ruff and basedpyright | debugpy |
 | `setup-go.sh` | go | gopls | delve |
-| `setup-java.sh` | sdkman → Temurin LTS, maven, gradle | jdtls (brew/AUR) | JDWP/jdb (in the JDK) |
-| `setup-sbcl.sh` | SBCL + Quicklisp | none — CL uses Swank/Slynk via the editor | SBCL built-in |
-| `setup-emacs.sh` | Emacs (`emacs-plus@31` on macOS, the pgtk package on Linux) and the packages `init.el` selects: Sly, Magit, markdown-mode, Vertico, Orderless, Consult, Marginalia, Embark, Avy, Corfu, Cape, Dape, q-mode, eat | `eglot`, built in, over the servers the rows above install | none |
+| `setup-java.sh` | sdkman, Temurin LTS, maven, gradle | jdtls | jdb, in the JDK |
+| `setup-sbcl.sh` | SBCL and Quicklisp | none; Sly talks to Slynk | SBCL built-in |
+| `setup-emacs.sh` | Emacs and the packages `init.el` selects | `eglot`, built in | none |
 | `setup-yk.sh` | [yk](https://github.com/ishmaelaqsar/yk), the YubiKey maintenance tool | none | none |
 
-These scripts share the package-manager logic in `lib/pkg.sh`, and the name mappings in
-[`lib/packages.conf`](#the-package-table) — the `toolchain` rows. They write shell init to
-`~/.bashrc.d/` with a marker, so cleanup can find it. They never write a tracked dotfile.
+The scripts share `lib/pkg.sh` and the `toolchain` rows of the package table. They write shell
+init to `~/.bashrc.d/` with a marker, so cleanup can find it, and never write a tracked dotfile.
 
 ### Cleanup
 
-`./cleanup.sh` undoes an install. It removes this repo's symlinks, the managed `~/.bashrc.d`
-files, the fonts, and the generated config. It unsets the git config it set. `-a` also removes the
-toolchains — sdkman, quicklisp and uv, but never `~/go`. It refuses to run on a machine that a
-different dotfiles checkout owns. It never uninstalls a system package; it prints the list
-instead.
+`./cleanup.sh` undoes an install: the symlinks, the managed `~/.bashrc.d` files, the fonts, the
+generated config, and the git settings. `-a` also removes the toolchains, but never `~/go`. It
+refuses to run on a machine that a different checkout owns, and it never uninstalls a system
+package; it prints the list instead.
 
 ---
 
 ## Scripts in bin/
 
-`install.sh` links each of these into `$HOME/bin`. Every one prints its own help with `--help`:
-the commands, the environment variables it reads, examples, and the exit codes.
-
-`bin/` holds only the commands a person runs. The engines they share live in `lib/`, and nothing
-links them into `$HOME/bin`: `lib/sync-dotfiles` writes the symlinks, and `lib/pkg.sh` reads
-`lib/packages.conf`. Reach the sync through `dotfiles sync`.
+`install.sh` links each of these into `~/bin`. Every one prints its help with `--help`. `bin/`
+holds only the commands you run; the engines they share live in `lib/`, and `dotfiles sync`
+reaches the symlink engine.
 
 | Script | Purpose | With no argument |
 | :--- | :--- | :--- |
-| `dotfiles` | Update, check, sync and edit the repository. See below. | It prints the help. The shell function changes directory. |
-| `manage-secrets` | Encrypt, decrypt, list and verify `dotfiles/.secrets`. The pre-commit hook runs `verify`. | It prints the help |
-| `venv` | Create and inspect Python virtual environments. It prefers uv. | It prints the environment path |
-| `vm` | Manage one QEMU machine through virsh and virt-install. A missing tool is reported with the package name this host uses. | It picks a machine, and prints its status |
-| `gnome-settings` | Apply, dump or restore the managed GNOME keys. | It prints the help |
-| `ediff` | Compare two files in Emacs, in the terminal. `pacnew` runs it as `DIFFPROG`. | It prints an Emacs error |
-| `md2org` | Convert markdown files to Org with `pandoc`, one `.org` beside each. | It prints the usage |
-| `docker` | Run `podman` under the name lazydocker and compose files call. See [Containers](#containers-podman). | It prints the podman help |
-| `git-gone` | Prune the remote-tracking refs, then delete every local branch whose upstream is gone. `git gone` runs it too. | It deletes the merged gone branches; `--force` takes the unmerged ones |
-| `tmux-sessions` | Pick, create or kill tmux sessions from an `fzf` list, inside a `display-popup`. `M-s` opens it. | It lists the sessions; Enter switches, C-x kills |
+| `dotfiles` | Update, check, sync, and edit the repository. | Prints the help. The shell function enters the repository. |
+| `manage-secrets` | Encrypt, decrypt, list, and verify `dotfiles/.secrets`. | Prints the help. |
+| `venv` | Create and inspect Python virtual environments, with uv. | Prints the environment path. |
+| `vm` | Manage one QEMU machine through virsh and virt-install. | Picks a machine and prints its status. |
+| `gnome-settings` | Apply, dump, or restore the managed GNOME keys. | Prints the help. |
+| `ediff` | Compare two files in Emacs, in the terminal. `pacnew` runs it as `DIFFPROG`. | Prints an Emacs error. |
+| `md2org` | Convert markdown files to Org with `pandoc`, one `.org` beside each. | Prints the usage. |
+| `docker` | Run `podman` under the name that lazydocker and compose files call. | Prints the podman help. |
+| `git-gone` | Delete every local branch whose upstream is gone. `git gone` runs it too. | Deletes the merged ones; `--force` takes the rest. |
+| `tmux-sessions` | Pick, create, or kill tmux sessions from an `fzf` list. `M-s` opens it. | Lists the sessions; Enter switches, C-x kills. |
 
-None of them is a TUI, and **none of them needs a terminal**. `vm` and `manage-secrets get` offer
-an `fzf` picker when a name is missing and a terminal is there, because looking a name up and
-retyping it is the whole friction. Without a terminal, or without `fzf`, they print the names and
-exit non-zero instead. So each one still behaves predictably in a shell, in a script, in the
-pre-commit hook, and under an agent — a picker is never the only way in, and `-n`, `$VM_NAME` and a
-named key all still work.
+None of them needs a terminal. `vm` and `manage-secrets get` open an `fzf` picker only when a
+name is missing and a terminal is there. Otherwise they print the names and exit non-zero, so a
+script, the pre-commit hook, and an agent get the same behaviour.
 
 ### The dotfiles command
 
-`dotfiles` holds only the jobs that need several steps in the right order. It wraps nothing that
-already works on its own: `install.sh`, `cleanup.sh` and the `setup-*.sh` scripts keep their own
-interfaces.
+`dotfiles` with no argument is a shell function in `.helpers` that enters the repository, because
+a script cannot change the directory of its caller. Every other argument goes to `bin/dotfiles`.
 
 | Command | Effect |
 | :--- | :--- |
-| `dotfiles` | Enter the repository. This is the shell function in `.helpers`. |
-| `dotfiles update` | Pull, link the files, then check this machine. It names the files that need a full `./install.sh`, such as a new package or a new script in `bin/`. |
-| `dotfiles status` | The branch, the gap to the upstream, the uncommitted edits, and one line on the health of the machine. |
-| `dotfiles doctor` | Every check for this machine, in full. The same report as `./install.sh --check`. |
-| `dotfiles sync` | Link the files, and nothing else. It passes `-n`, `--check` and a target directory to the engine. |
-| `dotfiles edit [name]` | Find one tracked dotfile and open it in `$VISUAL` or `$EDITOR`. `fzf` picks between several matches. |
-| `dotfiles path` | Print the repository root. The shell function reads it. |
+| `dotfiles update` | Pull, link the files, then check this machine. It names the files that need a full `./install.sh`. |
+| `dotfiles status` | The branch, the gap to the upstream, the uncommitted edits, and one line on the machine. |
+| `dotfiles doctor` | Every check for this machine. The same report as `./install.sh --check`. |
+| `dotfiles sync` | Link the files, and nothing else. It passes `-n`, `--check`, and a target directory through. |
+| `dotfiles edit [name]` | Find one tracked dotfile and open it in `$VISUAL` or `$EDITOR`. |
+| `dotfiles path` | Print the repository root. |
 
-Two details are deliberate:
-
-* **The `cd` lives in the shell, and nothing else does.** A script cannot change the directory of
-  its caller, so `.helpers` defines a `dotfiles` function for that one case. Every other argument
-  goes to `bin/dotfiles`, which an agent or a script can call directly. Earlier versions installed
-  an alias instead; `install.sh` removes it, because an alias would hide the function.
-* **`update` refuses to run when a different checkout owns `$HOME`.** It would otherwise relink the
-  home directory to this repository. `install.sh` refuses for the same reason.
+`update` refuses to run when a different checkout owns `$HOME`, as `install.sh` does.
 
 ---
 
@@ -237,13 +141,13 @@ Two details are deliberate:
 
 CI runs on every push to `main` and on every pull request, from `.github/workflows/ci.yml`:
 
-* **parity**: `test/pkg-parity.sh` proves that `lib/pkg.sh` and `lib/pkgconf.py` read every row of
+- **parity**: `test/pkg-parity.sh` proves that `lib/pkg.sh` and `lib/pkgconf.py` read every row of
   `lib/packages.conf` the same way.
-* **shellcheck**: every tracked file with a `sh` or `bash` shebang, at warning level and up.
-* **python**: every Python entry point byte-compiles.
-* **elisp**: in a Debian container, the selected packages install, `lisp/*.el` byte-compiles with
+- **shellcheck**: every tracked file with a `sh` or `bash` shebang, at warning level and up.
+- **python**: every Python entry point byte-compiles.
+- **elisp**: in a Debian container, the selected packages install, `lisp/*.el` byte-compiles with
   warnings as errors, and `init.el` loads in batch.
-* **smoke**: `test/linux-smoke.sh quick` in a Debian container. A dry run changes nothing,
+- **smoke**: `test/linux-smoke.sh quick` in a Debian container. A dry run changes nothing,
   `install.sh` runs with no terminal, the doctor passes, and `cleanup.sh -a` removes it all.
 
 The same checks run locally:
@@ -257,227 +161,119 @@ emacs --batch -l dotfiles/.config/emacs/early-init.el --eval '(package-initializ
 
 ---
 
-## Editor
+## Emacs
 
-Emacs, where `setup-emacs.sh` has installed it. `.bash_profile` then sets `EDITOR` to
-`emacsclient -t --alternate-editor=` and `VISUAL` to `emacsclient -c --alternate-editor=`: the
-terminal for a quick edit, a frame for a large one, and the empty alternate editor starts the
-daemon when none runs. `GIT_EDITOR` is `emacs -nw -q`, a plain Emacs with no init, so a commit
-does not depend on the daemon. In the shell, `e file` opens a file in the running Emacs, in the
-terminal. A machine with `emacs` but no client gets `emacs -nw -q`; a machine with no Emacs keeps
-vi.
+`.bash_profile` sets `EDITOR` to `emacsclient -t --alternate-editor=` and `VISUAL` to
+`emacsclient -c --alternate-editor=`: the terminal for a quick edit, a frame for a large one, and
+a daemon started when none runs. `GIT_EDITOR` is `emacs -nw -q`, a plain Emacs with no init, so a
+commit does not depend on the daemon. A machine with no Emacs keeps vi. To change the editor on
+one machine, export the three variables from a file in `~/.bashrc.d/`, which is sourced last.
 
-A shell inside a frame: `C-c t` opens a bash in an [eat](https://codeberg.org/akib/emacs-eat)
-buffer, `C-x p s` opens one in the project root, and `C-x p e` opens eshell, whose full-screen
-commands (`htop`, `less`) run in eat. The `.aliases` functions and the fzf keys work there,
-because it is the same bash. In a terminal frame, tmux stays the terminal: `M-n` splits and
-`M-f` pops a shell. eat is pure Emacs Lisp from NonGNU ELPA, so no native module runs in the
-daemon.
+`setup-emacs.sh` keeps a daemon warm: the systemd user unit in
+`dotfiles/.config/systemd/user/emacs.service` on Linux, `brew services` on macOS. Restart it
+after an init change with `emacsclient -e '(kill-emacs)'`. Plain `emacs` on macOS opens the GUI
+app and holds the terminal; use `emacsclient -t` for a terminal frame. Three openers: `e file` opens a file in the terminal. `ce` picks a directory
+under `$WORKSPACE` and opens it in a frame. `alt+shift+o` in Ghostty opens the current directory
+in a frame.
 
-`dotfiles/.config/emacs/lisp/kdb.el` queries a remote kdb server from a local q shell, on top
-of the `q-mode` package. It needs a licensed `q` on `PATH`, and a list of servers in
-`kdb-targets`. Put that list in `~/.config/emacs/lisp/kdb-site.el`, which `init.el` loads when
-it exists; the file is machine-local and untracked.
+The init is `dotfiles/.config/emacs/init.el`, on the built-in `use-package` for Emacs 30 and
+31. Its comments explain each choice. In outline: `eglot` over the language servers the
+`setup-*.sh` scripts install, and tree-sitter modes with a grammar fetched on first use. Vertico,
+Orderless, and Consult make the minibuffer the fuzzy picker over `rg` and `fd`, with Marginalia,
+Embark, and Avy. Corfu with Cape completes at point. Magit is on `C-x g`, Sly and paredit serve
+Lisp, and Dape debugs. Generated files go under `~/.local/state/emacs/`. No framework, no vim
+keys.
 
-`setup-emacs.sh` keeps a daemon warm, so `-a ''` is the fallback rather than the normal path:
-Linux enables the systemd user unit in `dotfiles/.config/systemd/user/emacs.service`, and macOS
-gets `brew services start emacs-plus@31`. Restart it after an init change:
-`emacsclient -e '(kill-emacs)'`, then let the service start it again. Note that plain `emacs` on
-macOS opens the **GUI** app and holds the terminal; use `emacsclient -t` or `emacs -nw` for a
-terminal frame. Two openers: `ce` picks a
-directory under `$WORKSPACE` with fzf and opens it in a frame, and `alt+shift+o` in Ghostty does
-the same for the current directory.
+| Language | Server | Format on save | Debug |
+| :--- | :--- | :--- | :--- |
+| C and C++ | clangd | clangd, with `~/.clang-format` where a project has none | Dape over gdb or `lldb-dap`; `M-x gdb` for text |
+| Python | basedpyright | ruff, imports then format | Dape over `debugpy-adapter` |
+| Go | gopls | gopls, imports organised first | Dape |
+| Java | jdtls | jdtls, 4 spaces | none |
 
-The init is `dotfiles/.config/emacs/init.el`, written in the built-in `use-package` on Emacs 30
-and 31: `eglot` over the language servers the other `setup-*.sh` scripts install, the tree-sitter
-modes with a grammar fetched on first use, terminal polish for `emacsclient -t` (mouse, OSC 52
-clipboard, 24-bit colour), and generated files under `~/.local/state/emacs/` (`early-init.el`
-sends the native-compilation cache there too). Seven packages come from MELPA: Sly and paredit
-for Lisp, Magit on `C-x g`, markdown-mode, and Vertico, Orderless and Consult, which make the
-minibuffer the fuzzy picker. `consult-ripgrep` and `consult-fd` run the installed `rg` and `fd`
-with a live preview, `xref` searches with `rg` as well, and `M-.` picks between several
-definitions in the minibuffer. fzf stays in the shell. No framework, and no vim keys: the point is
-the Emacs keys the rest of the repository already uses.
+`C-c f` formats on demand. `~/.config/emacs/lisp/site.el`, a machine-local file, turns the
+save-time formatting off under a shared repository, so its diffs stay small. Diagnostics show at
+the end of the line; `M-n` and `M-p` walk them, and `M-g f` lists them.
 
-Five more packages, all from GNU ELPA: Marginalia annotates every candidate; Embark acts on the
-candidate or the thing at point (`C-.`, `C-;`), and a prefix key followed by a one-second pause
-lists its keys; Avy jumps to a visible position (`M-j`, then the characters you see); Corfu
-completes at point, with Cape adding buffer words and file paths. A terminal frame draws Corfu's
-popup on Emacs 31; on 30 it keeps the built-in completion.
+### Shells
 
-For C and C++, `clangd` from `setup-c.sh` is the language server, and `~/.clang-format` is the
-style for code with no `.clang-format` of its own: `clang-format` stops at the first one it meets
-walking up from the file, so a project's file wins. Debugging has two routes: `M-x gdb` and
-`M-x lldb` from `gud`, text only, and Dape (`C-c d`), a DAP client with breakpoints in the
-margin and locals in a side window, over gdb's own DAP mode on Linux and `lldb-dap` on macOS.
-Any buffer whose language server can format does so on save — Go through `gopls`, which also
-organizes the imports, Java through `jdtls` with the 4-space indent Emacs sends it, C and C++
-through `clangd` and the `.clang-format` rule. For Python, `basedpyright` from `setup-python.sh` checks and completes, `ruff` sorts the imports and formats on every
-save because pyright formats nothing, and Dape debugs through `debugpy-adapter`, the entry point
-the `debugpy` uv tool puts on `PATH`. `C-c f` formats the buffer on demand. A directory class in
-`~/.config/emacs/lisp/site.el`, a machine-local file, turns the save-time formatting off under a
-shared repository, so its diffs stay small. A diagnostic shows at the end of its line, `M-n` and
-`M-p` walk them, and `M-g f` lists them.
+`C-c t` opens a bash in an [eat](https://codeberg.org/akib/emacs-eat) buffer, and `C-x p s`
+opens one in the project root. `C-x p e` opens eshell, whose full-screen commands run in eat. The
+`.aliases` functions and the fzf keys work there, because it is the same bash. In a terminal
+frame, tmux stays the terminal.
 
-Startup is measured, not guessed: `early-init.el` holds the garbage collector and the file-name
-handlers during init and turns on `package-quickstart`; the daemon starts in about a second. After
-`M-x package-install`, run `M-x package-quickstart-refresh`. `M-x use-package-report` shows the
-load time of each package when one feels slow.
+### kdb
 
-To change the editor on one machine, drop a file in `~/.bashrc.d/`, which is sourced last, and
-export the three variables:
+`dotfiles/.config/emacs/lisp/kdb.el` runs q buffers against a remote kdb server from a local `q`.
+It needs `q` on `PATH` and a list of servers in `kdb-targets`. Put that list in
+`~/.config/emacs/lisp/kdb-site.el`, a machine-local file that `init.el` loads when it exists.
 
-```bash
-export EDITOR=emacs VISUAL=emacs GIT_EDITOR=emacs
-```
+### Org
 
----
-
-## Org
-
-Notes live in `$ORG_DIR`, default `~/org/`, which `.bash_profile` exports. The Obsidian vault
-stays markdown: Obsidian and the six vault commands read `.md`. `C-c c` captures into
-`inbox.org`, `C-c a` opens the agenda over the directory, and `<s TAB` inserts a source block.
-
-A literate notebook is an Org file with one header line:
-
-```org
-#+PROPERTY: header-args :session nb :results output
-```
-
-Every block then shares one interpreter, so a variable from the first block is visible in the
-second. `C-c C-c` runs the block under point and asks once, because `org-confirm-babel-evaluate`
-stays on. Babel is loaded for Emacs Lisp, shell, Python, C, Common Lisp (through Sly) and SQLite.
-A session is a process that Org never stops, so closing the last Org buffer kills the
-interpreters, and `M-x my/org-babel-kill-sessions` does it by hand.
-
-`md2org FILE.md` writes `FILE.org` beside it through `pandoc`, for the markdown you move over.
+Notes live in `$ORG_DIR`, default `~/org/`. The Obsidian vault stays markdown, because Obsidian
+and the vault commands read `.md`. `C-c c` captures into `inbox.org`, `C-c a` opens the agenda,
+and `<s TAB` inserts a source block. A file with the header
+`#+PROPERTY: header-args :session nb :results output` is a notebook: every block shares one
+interpreter. `C-c C-c` runs the block under point and asks once. Closing the last Org buffer kills
+the interpreters. `md2org FILE.md` writes `FILE.org` beside it.
 
 ---
 
 ## Secrets
 
-This repository keeps sensitive environment variables in git: API keys and tokens. GPG and a
-YubiKey encrypt them.
+`dotfiles/.secrets` keeps API keys and tokens in git, encrypted with GPG to a key on a YubiKey.
+The install imports the public key from `dotfiles/public.asc`. Run `gpg -k` once, so GnuPG
+creates its directory.
 
-### Prerequisites
-
-* A **YubiKey** that holds your PGP private keys.
-* Your public key in `dotfiles/public.asc`. The install imports it.
-
-### Packages for the YubiKey
-
-**Debian and Ubuntu**
-```bash
-sudo apt update
-sudo apt install -y gnupg gnupg-agent scdaemon pcscd
-```
-
-**Arch**
-```bash
-sudo pacman -S --needed gnupg pcsclite ccid pcsc-tools
-sudo systemctl enable --now pcscd.socket
-```
-
-`install.sh` does both Arch steps for you. It installs `pcsclite` and `ccid`, with `yay` when
-present and `pacman` otherwise, then enables `pcscd.socket`. The commands above are the manual
-equivalent.
-
-**macOS**
-```bash
-brew install gnupg
-```
-
-### Initialise GnuPG
-```bash
-gpg -k
-```
-
-### Workflow
-
-The helpers load with `.bashrc`. To load them by hand:
-
-```bash
-source ~/.helpers
-```
+The helpers load with `.bashrc`:
 
 | Action | Command | Effect |
 | :--- | :--- | :--- |
-| **Add a secret** | `add_secret KEY` | Ask for the value without an echo, encrypt it into `.secrets`, and export `KEY` to the current shell. |
-| **Add a secret in one line** | `add_secret KEY VALUE` | The same, but the value lands in `~/.bash_history`, and `ps` shows it while the command runs. Prefer the form above. |
-| **Load the secrets** | `load_secrets` | Decrypt every secret into an environment variable. It asks for the YubiKey PIN once a day. |
-| **List the names** | `manage-secrets list` | Print every key name. It decrypts nothing, so it never asks the YubiKey. |
-| **Read one secret** | `manage-secrets get [KEY]` | Print one value. With no key it picks one, then decrypts only that. |
-| **Verify** | `bin/manage-secrets verify` | Prove that no cleartext secret is in the commit. `git commit` runs it. |
+| Add a secret | `add_secret KEY` | Asks for the value without an echo, encrypts it, and exports `KEY` to the current shell. |
+| Add a secret in one line | `add_secret KEY VALUE` | The same, but the value lands in the history and `ps` shows it. Prefer the form with no value. |
+| Load the secrets | `load_secrets` | Decrypts every secret into an environment variable. The YubiKey asks for its PIN once a day. |
+| List the names | `manage-secrets list` | Prints every key name. It decrypts nothing. |
+| Read one secret | `manage-secrets get [KEY]` | Prints one value. With no key it picks one, then decrypts only that. |
+| Verify | `manage-secrets verify` | Proves that no cleartext secret is in the commit. |
 
-### Example
-```bash
-# Store a new key. The shell asks for the value, and does not echo it.
-# The YubiKey asks for a touch or a PIN.
-add_secret OPENAI_API_KEY
+Two hooks enforce the last row. The pre-commit hook runs `verify`, and the pre-push hook scans
+every outgoing commit, which catches `--no-verify`, an amend, or a rebase. `HISTIGNORE` drops any
+`add_secret` line that carries a value.
 
-# Load the keys at the start of a session.
-load_secrets
-```
-
-`.bashrc` sets `HISTCONTROL=ignoreboth`, so a command that starts with a space
-stays out of the history file. `HISTIGNORE` also drops any `add_secret` line that
-carries a value.
-
-### Key maintenance
-
-[yk](https://github.com/ishmaelaqsar/yk) renews, rotates and reports on the subkeys. `setup-yk.sh`
-clones it into `~/.local/share/yk` and links `~/bin/yk`. `.bash_profile` exports `YK_PUBKEY`, the
-public key that `sync-dotfiles` links to `~/public.asc`, so `yk status` and `yk remind` need no
-argument. The first shell of each day runs `yk remind`. It prints nothing while every subkey is
-more than 90 days from its expiry, and a short report when one is not. The stamp that limits it
-to one run a day is `~/.local/state/dotfiles/yk-remind`.
+[yk](https://github.com/ishmaelaqsar/yk) renews, rotates, and reports on the subkeys.
+`setup-yk.sh` installs it, and `.bash_profile` exports `YK_PUBKEY`, so `yk status` and
+`yk remind` need no argument. The first shell of each day runs `yk remind`, which prints nothing
+while every subkey is more than 90 days from its expiry.
 
 ---
 
 ## Terminal agent and second brain
 
 [OpenCode](https://opencode.ai) is the terminal agent. Its global config ships from
-`dotfiles/.config/opencode/`: the behavioural rules in `AGENTS.md`, and the commands for the
-Obsidian vault — `/brief`, `/daily`, `/kb`, `/project`, `/remind` and `/report`.
-
-`AGENTS.md` makes the agent a tutor. It asks what you tried, names the mechanism, and points
-at the primary source. It does not write the solution, and there is no escape word. A
-command is not a question: run, edit, and the vault commands are done as asked.
-
-The vault lives at `$OBSIDIAN_VAULT`, and defaults to `~/vault`. Two helpers in `.helpers` work
-from the shell: `jot <text>` appends to today's daily note without an LLM, and `sb` opens the
-agent over the vault.
+`dotfiles/.config/opencode/`: the rules in `AGENTS.md`, which make the agent a tutor that does
+not write the solution, and the commands for the Obsidian vault: `/brief`, `/daily`, `/kb`,
+`/project`, `/remind`, and `/report`. The vault lives at `$OBSIDIAN_VAULT`, default `~/vault`.
+From the shell, `jot <text>` appends to today's daily note, and `sb` opens the agent over the
+vault.
 
 ---
 
 ## Ghostty
 
 `install.sh` installs Ghostty where a package exists: brew on macOS, the Arch repos, and the
-Ubuntu repos from 26.04. Debian needs a `.deb`, and Fedora needs a COPR. Each warning names
-the source.
-
-The config is in `dotfiles/.config/ghostty/`. The Quake-style quick terminal is **opt-in per
-machine**, through the untracked `config.local`. The installer enables it on macOS. Linux needs
-compositor setup first — see `quick-terminal.conf`. GNOME cannot host it at all, so
-`bin/gnome-settings` binds Super+Return to a normal Ghostty window there.
+Ubuntu repos from 26.04. Elsewhere it prints where to get one. The config is in
+`dotfiles/.config/ghostty/`. The quick terminal is opt-in per machine through the untracked
+`config.local`; the installer enables it on macOS, and `quick-terminal.conf` says what Linux
+needs.
 
 ---
 
 ## tmux
 
 The config is `dotfiles/.config/tmux/tmux.conf`, and the menus it reads are in
-`dotfiles/.config/tmux/menu/`. It needs tmux 3.2 or newer, for `display-popup` and
-`terminal-features`.
-
-**C-x is the leader**, as it is in emacs. It is not the tmux `prefix` option, though. tmux resolves
-the prefix key before it reads the root key table, so a real prefix swallows C-x and no binding can
-act on it. `prefix` is therefore `None`, and C-x is bound in the root table to open a menu.
-
-### The which-key layer
-
-C-x opens a menu of the keys it accepts, the way `which-key` does in emacs. The keys work at
-speed whether or not you read the menu, so `C-x 2` still splits a pane. Five rows open a submenu:
+`dotfiles/.config/tmux/menu/`. It needs tmux 3.2 or newer. **C-x is the leader**, as in Emacs:
+it opens a menu of the keys it accepts, the way `which-key` does, and the keys work without
+reading the menu. Five rows open a submenu:
 
 | Key | Menu | Holds |
 | --- | ---- | ----- |
@@ -486,111 +282,73 @@ speed whether or not you read the menu, so `C-x 2` still splits a pane. Five row
 | `C-x C-n` | resize | `h j k l` by a step, `H J K L` by one cell, tile evenly |
 | `C-x C-o` | session | pick, next, previous, new, rename, detach, kill, reload the config |
 | `C-x C-s` | copy | copy mode, search, top and end of the history, paste, buffer list |
-| `C-x t` | tools | Magit, lazydocker, the `vm` picker, htop, ncdu — each in a popup |
+| `C-x t` | tools | Magit, lazydocker, the `vm` picker, htop, ncdu, each in a popup |
 
-The tools rows open a popup, so a full-screen program borrows the whole terminal and gives it back
-on exit. Each row checks its precondition first and says what is wrong, rather than flashing an
-empty frame: the tool has to be installed, and the git row has to be inside a repository. A popup inherits the environment of the tmux **server**, so a tool installed after the
-server started is not on its `PATH` until the server restarts.
+A tools row checks its precondition first and says what is wrong, and every popup starts in the
+directory of the current pane. tmux draws the tool's common keys in the popup border, so the hint
+stays while the program owns the inside. Rows that repeat hold their menu open, so `C-x C-n l l l`
+widens a pane three steps. A key that no row claims closes the menu and does nothing.
 
-Every popup starts in the directory of the current pane, through `-d "#{pane_current_path}"`.
-Splits and new windows take `-c "#{pane_current_path}"` for the same reason. Without those flags
-tmux uses the **session** directory, which is wherever you started tmux — rarely where you are.
+Some keys need no leader. `M-<arrow>` and `M-h/j/k/l` move the focus, and `M-S-<arrow>` moves
+the pane. `M-n` splits, `M-i` and `M-o` reorder the window, and `M-[` and `M-]` cycle the layout.
+`M-f` opens a shell in a popup. `C-x ?` lists them from tmux itself.
 
-Every popup names its tool's common keys in the border title, through `-T`. tmux draws the border,
-so the hint stays on screen while a full-screen program owns the inside. `vm` and `tmux-sessions`
-carry the same hint in the fzf `--header`, so it follows them outside tmux. Keep a new hint short:
-a title truncates at the popup width, and a header at the picker's list pane, about 41 columns.
+In a pane that runs Emacs, the layer is off by itself: every root binding tests
+`pane_current_command` and sends the key through. `C-x C-x` sends one literal C-x to any other
+program. F12 turns the whole layer off and on, and the status bar says `KEYS OFF` while it is.
 
-Rows that repeat hold their menu open, so `C-x C-n l l l` widens a pane three steps. A key that no
-row claims closes the menu and does nothing, which makes Escape and `C-g` the cancel keys and
-means a typo cannot fire the wrong command.
-
-Two limits are worth knowing, because both are tmux's and neither can be worked around:
-
-* **No arrow key can be a menu row.** A tmux menu keeps the whole arrow family, with every
-  modifier, for moving its own selection. Pane moves therefore sit on `H J K L`, and on
-  `M-S-<arrow>` outside the menu.
-* **A menu taller than the terminal does not draw**, and its keys go with it. Each menu stays
-  under 21 rows, which fits a 24-row terminal. Keep it that way when you add a row.
-
-### Keys that need no leader
-
-`M-<arrow>` and `M-h/j/k/l` move the focus, `M-S-<arrow>` moves the pane itself, `M-n` splits,
-`M-i` and `M-o` reorder the window, `M-[` and `M-]` cycle the layout, and `M-f` opens a shell in a
-popup. `C-x ?` lists them from tmux itself, so the list cannot go stale.
-
-### Emacs in the terminal
-
-C-x and eight Alt keys are Emacs keys, so in a pane that runs `emacs` or `emacsclient` the layer
-is off by itself. Every root binding tests `pane_current_command` and sends the key through when
-it matches; `C-x C-f` opens a file and `M-f` moves a word, with no toggle. Elsewhere the layer is
-unchanged. Two escapes remain for other programs:
-
-* `C-x C-x` sends one literal C-x to the program in the pane, which is what readline wants.
-* **F12 turns the whole layer off** for any other full-screen program. Every key then reaches
-  it, mouse events included. The left of the status bar turns yellow and says `KEYS OFF`, because
-  otherwise tmux looks broken. F12 turns it back on.
-
-### Sessions
-
-`.aliases` holds the shell side: `tl` lists, `ta` goes to a session and picks one with `fzf` when
-you name none, `tm` goes to the session named `main`, `tn <name>` goes to one by name, and `tkill`
-kills the server. `ta`, `tm` and `tn` create the session when it is not there, and all three work
-both inside and outside tmux: inside, they switch the client, because attaching a client to its own
-server nests it.
+`.aliases` holds the sessions. `tl` lists them, and `tkill` kills the server. `ta` goes to a
+session, and picks one with `fzf` when you name none. `tm` goes to `main`, and `tn <name>` goes to
+one by name. All three create the session when it is not there, inside or outside tmux.
 
 ---
 
-## Linux desktop (GNOME + Arch)
+## Containers
+
+podman is the container engine, rootless, on Linux and macOS. On Linux `install.sh` enables
+`podman.socket`. On macOS podman runs in a VM: `install.sh` creates it, and you start it with
+`podman machine start` when you need it, because the VM costs memory while it runs.
+
+`bin/docker` is a shim that runs `podman`, so lazydocker, the `lzd` alias, and the `C-x t d` tmux
+row work with no lazydocker config. `.bash_profile` exports `DOCKER_HOST` when a podman socket
+exists, and `.bashrc` gives `docker` the podman completion.
+
+---
+
+## Linux desktop
 
 ### GNOME settings
 
-`gsettings` is the GNOME counterpart of `defaults write` on macOS. `bin/gnome-settings` manages a
-small **allowlist** of keys. A full `dconf dump /` is not tracked on purpose: it is
-machine-specific, and unreadable in a diff.
+`bin/gnome-settings` manages a small allowlist of `gsettings` keys. A full `dconf dump /` is not
+tracked, because it is machine-specific and unreadable in a diff.
 
 | Command | Effect |
 | :--- | :--- |
-| `gnome-settings apply` | Set the managed keys. `install.sh` runs this when it detects GNOME. |
+| `gnome-settings apply` | Set the managed keys. `install.sh` runs this on a graphical Linux machine. |
 | `gnome-settings dump` | Print the current value of every managed key. |
-| `gnome-settings restore` | Put the pre-dotfiles values back. `cleanup.sh` runs this. |
+| `gnome-settings restore` | Put the previous values back. `cleanup.sh` runs this. |
 
-It manages these keys today:
-
-* The Emacs key theme. GTK4 needs the gsettings key, because `settings.ini` covers GTK2 and GTK3
-  only.
-* The dark colour scheme, and 0xProto as the monospace font.
-* Caps Lock as Control, and the key-repeat rates.
-* Night Light, and fractional scaling.
-* Ghostty as the desktop terminal, and the keys in [The Super layout](#the-super-layout).
-
-The first apply writes the previous values to `~/.local/state/dotfiles/gnome-settings.json`.
-`install.sh` runs `apply` on any graphical Linux box with `gsettings`, GNOME or not: GTK apps
-under Hyprland read the key theme and the colour scheme from the same place, and the script skips
-the schemas that only GNOME Shell installs.
+The managed keys: the Emacs key theme, the dark colour scheme, and 0xProto as the monospace
+font. Caps Lock as Control, and the key-repeat rates. Night Light, and fractional scaling. Ghostty
+as the desktop terminal, and the Super layout. GTK apps under Hyprland read the key theme and the
+colour scheme from the same place. The script skips the schemas that only GNOME Shell installs.
 
 ### The Super layout
 
-Super is the window-manager key on Linux, as i3 and Hyprland use it. `bin/gnome-settings` and
-`dotfiles/.config/hypr/hyprland.conf` bind the **same keys**, so the hands learn one layout. The
-terminal shortcuts do **not** match macOS: `Ctrl+C` cannot be the copy key in a terminal. Linux
-keeps `ctrl+shift+…`, and macOS keeps `cmd+…`.
-
-Launch:
+Super is the window-manager key. `bin/gnome-settings` and `dotfiles/.config/hypr/hyprland.conf`
+bind the **same keys**, so the hands learn one layout. The terminal shortcuts do not match macOS:
+Linux keeps `ctrl+shift+…`, because `Ctrl+C` cannot be the copy key in a terminal.
 
 | Key | Action |
 | :--- | :--- |
-| `Super+Return` | Ghostty — the i3/sway/Hyprland idiom for "terminal". |
-| `Super+e` | An Emacs frame on the running daemon. It starts the daemon when none runs. |
+| `Super+Return` | Ghostty. |
+| `Super+e` | An Emacs frame on the running daemon. |
 | `Super+b` | The default web browser. |
 | `Super+n` | The home folder in the default file manager. |
 | `Super+Space` | The app launcher: the GNOME app grid, or `fuzzel` on Hyprland. |
-| `` Super+` `` | The drop-down terminal. On GNOME the extension needs its hotkey set once by hand; see [Drop-down terminal](#drop-down-terminal). |
-| `Super+Shift+s` | Screenshot of a region: the GNOME screenshot UI, or `grim` and `slurp` to the clipboard. |
+| `` Super+` `` | The drop-down terminal. |
+| `Super+Shift+s` | Screenshot of a region to the clipboard. |
 | `Super+Escape` | Lock the screen. |
-
-Windows and workspaces:
 
 | Key | GNOME | Hyprland |
 | :--- | :--- | :--- |
@@ -599,151 +357,84 @@ Windows and workspaces:
 | `Super+m` | Toggle maximised. | Maximise without hiding the bar. |
 | `Super+h` / `Super+l` | Tile left or right. | Focus left or right. |
 | `Super+k` / `Super+j` | Maximise or unmaximise. | Focus up or down. |
-| `Super+Shift+h j k l` | — | Move the window that way. |
-| `Super+Ctrl+h j k l` | — | Resize the window. |
-| `Super+v`, `Super+p`, `Super+s` | — | Float, pseudo-tile, toggle the split direction. |
+| `Super+Shift+h j k l` | | Move the window that way. |
+| `Super+Ctrl+h j k l` | | Resize the window. |
+| `Super+v`, `Super+p`, `Super+s` | | Float, pseudo-tile, toggle the split direction. |
 | `Super+Tab` | Switch application. | Cycle the windows. |
 | `Super+1…4` | Jump to that workspace. | The same, and 5 and 6. |
 | `Super+Shift+1…4` | Move the window to that workspace. | The same. |
 | `Super+Alt+Left/Right` | Previous or next workspace. | The same. |
-| `Super+Shift+e` | — | **End the session.** It asks nothing, and it sits one Shift from `Super+e`, which opens an Emacs frame. |
+| `Super+Shift+e` | | **End the session.** It asks nothing, one Shift from `Super+e`. |
 
-GNOME has no directional focus, so `h j k l` tile and maximise there. The arrow keys keep their
-GNOME defaults next to the letters.
-
-This displaces some GNOME defaults, and `gnome-settings restore` puts every one back. `Super+N`
-switches to the Nth **application** in the dash, `Super+h` minimises, `Super+Space` switches the
-input source, and `Super+l` locks the screen — so those move or go. The workspaces become
-**static**, and there are four of them (`WORKSPACES` in `bin/gnome-settings`), because a dynamic
-count has nothing to jump to when the desktop is quiet.
+GNOME has no directional focus, so `h j k l` tile and maximise there. The layout displaces some
+GNOME defaults, and `gnome-settings restore` puts every one back. The workspaces become static,
+because a dynamic count has nothing to jump to.
 
 ### Hyprland
 
-`dotfiles/.config/hypr/hyprland.conf` is the tiling counterpart of the GNOME keys. When
-`Hyprland` is on `PATH`, `install.sh` activates the `hyprland` tag in the package table (and asks
-first, in a terminal), which
-brings `fuzzel` (launcher), `waybar` (bar), `mako` (notifications), `hyprlock`, `hypridle`,
-`grim` and `slurp`, `brightnessctl`, and two portals. Their configs are `dotfiles/.config/fuzzel/`,
-`dotfiles/.config/waybar/`, `dotfiles/.config/mako/` and `dotfiles/.config/hypr/hypridle.conf`.
-It does not install Hyprland itself: the package is the one thing that decides which desktop a
-machine runs.
+When `Hyprland` is on `PATH`, `install.sh` activates the `hyprland` tag: `fuzzel`, `waybar`,
+`mako`, `hyprlock`, `hypridle`, `grim` and `slurp`, `brightnessctl`, and two portals, with their
+configs under `dotfiles/.config/`. It does not install Hyprland itself. Machine-local settings,
+such as monitors, scale, wallpaper, and `kb_layout`, go in `~/.config/hypr/local.conf`, which
+`install.sh` creates empty. The main config sources it last, so a line there wins.
 
-Three things GNOME does for free, which Hyprland does only when told:
+Three things GNOME does for free, which Hyprland does only when told. `hypridle` dims, locks,
+and blanks the screen on a timer. The volume, mute, and brightness keys are bound to `wpctl` and
+`brightnessctl`. GTK3 reads `dotfiles/.config/gtk-3.0/settings.ini` for the dark theme, because
+no settings daemon runs.
 
-* **The screen locks itself.** `hypridle` dims the backlight at 8 minutes, locks at 10, and blanks
-  the display at 15. `Super+Escape` locks at once. Without hypridle the session locks on that
-  key alone.
-* **The hardware keys work.** Volume, mute, mic mute and brightness are bound to `wpctl` and
-  `brightnessctl`. Mute and the volume keys keep working while the screen is locked.
-* **GTK apps are dark.** GTK3 reads `dotfiles/.config/gtk-3.0/settings.ini` directly here, because
-  no settings daemon runs. `xdg-desktop-portal-gtk` comes too: the Hyprland portal carries screen
-  sharing and global shortcuts, but no file picker and no settings.
-
-Machine-local settings — monitors, scale, a wallpaper — go in `~/.config/hypr/local.conf`, which
-`install.sh` creates empty and the repo does not track. The main config sources it last, so a line
-there wins.
-
-**The Emacs chord.** `Super+x` opens a chord, as `C-x` does in Emacs and in tmux. The next key
-runs one window command and closes the chord. The keys are the Emacs ones:
+`Super+x` opens a chord, as `C-x` does in Emacs and tmux. The next key runs one window command
+and closes the chord, and waybar shows `C-x window` while it is open:
 
 | Chord | Emacs | Hyprland |
 | :--- | :--- | :--- |
 | `Super+x 0` | `delete-window` | Close the window. |
 | `Super+x 1` | `delete-other-windows` | Full screen. |
-| `Super+x 2` | `split-window-below` | The next window opens below this one. |
+| `Super+x 2` | `split-window-below` | The next window opens under this one. |
 | `Super+x 3` | `split-window-right` | The next window opens to the right. |
 | `Super+x o` | `other-window` | Focus the next window. |
 | `Escape`, `C-g` | `keyboard-quit` | Leave the chord. |
 
-A key that no row claims closes the chord and does nothing. waybar shows `C-x window` while the
-chord is open, the way tmux shows its menu. GNOME cannot host a chord — Mutter has no key
-submaps, and an extension is the only route — so the chord is Hyprland-only.
-
-**Keyboard layout.** `hyprland.conf` sets `kb_layout = gb`. Change it in `local.conf` on a machine
-with another keyboard: an `input { kb_layout = us }` block there wins.
-
 ### Drop-down terminal
 
-Ghostty's own quick terminal needs `wlr-layer-shell`, which Mutter does not implement. On Wayland,
-nothing outside the shell can raise or hide the window of another app. A GNOME Shell extension is
-therefore the only route. `install.sh` installs
-[Quake Terminal](https://extensions.gnome.org/extension/6307/quake-terminal/)
-(`quake-terminal@diegodario88.github.io`). It drops down the **Ghostty** window that is already
-there, so one terminal config still covers macOS and Linux.
+Ghostty's own quick terminal needs `wlr-layer-shell`, which Mutter does not implement, so on
+GNOME `install.sh` installs the
+[Quake Terminal](https://extensions.gnome.org/extension/6307/quake-terminal/) shell extension.
+It drops down the Ghostty window that is already there. `install.sh` fetches the build that
+matches the shell version and installs it with `gnome-extensions`; `cleanup.sh` removes it.
 
-`install.sh` asks the extensions.gnome.org API for the build that matches the shell version of
-this machine. It installs the build with `gnome-extensions`, which ships inside gnome-shell. No
-extra tool is necessary. `cleanup.sh` removes the extension.
+After the first install, log out and back in, because the shell loads a new extension at start
+only. Then set the hotkey in the extension's preferences. `` Super+` `` works, because
+`gnome-settings` clears the GNOME `switch-group` binding that would otherwise take it.
+`gnome-settings` does not manage the extension's own keys.
 
-After the first install, **log out and back in**: the shell loads a new extension at start only.
-Then set the hotkey in the preferences of the extension. `F12` is the Guake convention, and it
-collides with nothing. ``Super+` `` also works: `gnome-settings` clears the GNOME `switch-group`
-binding, which would otherwise grab that key before any app sees it.
+Hyprland needs no extension. `hyprland.conf` starts one Ghostty window on the special workspace
+`term`, and `` Super+` `` toggles that workspace over whatever is on screen.
 
-`gnome-settings` does not track the settings of the extension yet, because its schema keys have to
-be read on a machine that has the extension. To track them, set the hotkey, run
-`gsettings list-recursively org.gnome.shell.extensions.quake-terminal`, and add the keys to
-`SETTINGS` in `bin/gnome-settings`.
+### SSH agent
 
-Hyprland needs neither the extension nor Ghostty's own quick terminal. `hyprland.conf` starts one
-Ghostty window with the class `com.mitchellh.ghostty.scratch`, a window rule parks it on the
-special workspace `term`, and `` Super+` `` toggles that workspace over whatever is on screen.
+`.bashrc` points `SSH_AUTH_SOCK` at gpg-agent, but that covers login shells only. Graphical apps
+read the systemd user environment, where the GNOME agent would claim the variable and never ask
+the YubiKey. Three parts fix it: `dotfiles/.config/environment.d/10-gpg-ssh.conf` sets
+`SSH_AUTH_SOCK` for the session, `install.sh` enables `gpg-agent-ssh.socket`, and `install.sh`
+masks the GNOME SSH agent. Log out and back in after the first install.
 
-### SSH agent: gpg-agent, not the GNOME agent
-
-`.bashrc` points `SSH_AUTH_SOCK` at gpg-agent, but that covers **login shells only**. Graphical
-apps — VS Code and the GNOME apps — read the systemd user environment. There, the GNOME agent
-would claim the variable, and never ask the YubiKey. Three parts fix it:
-
-* `dotfiles/.config/environment.d/10-gpg-ssh.conf` sets `SSH_AUTH_SOCK` for the whole session.
-* `install.sh` enables `gpg-agent-ssh.socket`, so the agent listens before an app asks.
-* `install.sh` masks `gcr-ssh-agent` or `gnome-keyring-ssh`, whichever this GNOME version ships.
-
-**Log out and back in** after the first install. The session reads its environment at login.
-
-HTTPS git remotes use `git-credential-libsecret`, the GNOME keyring, when the helper is present.
-They do not use a cleartext `~/.git-credentials`.
-
-### Containers: podman
-
-podman is the container engine, rootless, on Linux and macOS. `install.sh` installs `podman` and
-`podman-compose` from the package table. On Linux it enables `podman.socket`, the user unit that
-serves the API. On macOS podman runs in a VM: `install.sh` creates it with `podman machine init`,
-and you start it by hand with `podman machine start`, because the VM costs memory while it runs.
-
-`bin/docker` is a shim that runs `podman`. lazydocker runs a literal `docker attach`, and its
-compose command is `docker compose`, which podman routes to `podman-compose`. So lazydocker, the
-`lzd` alias, and the `C-x t d` tmux row work with no lazydocker config. When the engine is down,
-the popup holds the error until you press Enter.
-
-`.bash_profile` exports `DOCKER_HOST` when a podman socket exists, and leaves it unset otherwise.
-lazydocker reads that variable first. podman itself needs no variable. `.bashrc` gives `docker` the
-podman completion.
-
-### systemd user units
-
-These are the Linux counterpart of a macOS LaunchAgent. Drop a `*.service`, `*.timer` or
-`*.socket` file in `dotfiles/.config/systemd/user/`. `install.sh` reloads systemd, and enables
-every unit that has an `[Install]` section. `cleanup.sh` disables them again.
+HTTPS git remotes use `git-credential-libsecret` when the helper is present, not a cleartext
+`~/.git-credentials`.
 
 ### Arch upkeep
 
-`install.sh` installs `pacman-contrib`, and enables `paccache.timer` for a weekly cache trim. The
+`install.sh` installs `pacman-contrib` and enables `paccache.timer` for a weekly cache trim. The
 aliases wrap the rest:
 
 | Alias | Command | Why |
 | :--- | :--- | :--- |
 | `pacup` | `checkupdates` | List updates without touching the sync database. |
-| `pacnew` | `pacdiff` | Merge the `.pacnew` files an upgrade leaves behind silently. |
+| `pacnew` | `pacdiff` | Merge the `.pacnew` files an upgrade leaves behind. |
 | `paccleanup` | `paccache -rk2` | Trim the package cache by hand. |
 | `pacorphans` | `pacman -Qtdq` | List orphaned dependencies. |
 
 `install.sh` and the `setup-*.sh` scripts run `pacman -Syu` before they install. A plain `-S`
-asks the mirrors for the versions the local database lists, and once that database is stale every
-mirror answers 404; `-Sy` alone would leave a partial upgrade. So an install is also an upgrade.
-
-`dotfiles/.makepkg.conf` builds AUR packages with every core, and skips package compression.
-Nothing packages an AUR helper, so `install.sh` builds `yay-bin` once on a fresh Arch machine.
-Without it, the AUR-only packages (`jdtls`) are skipped.
-
----
+asks the mirrors for the versions the local database lists, and a stale database gets 404 from
+every mirror. So an install is also an upgrade. `dotfiles/.makepkg.conf` builds AUR packages with every
+core and skips package compression.

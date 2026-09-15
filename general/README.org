@@ -1,5 +1,5 @@
 * general/
-Assets that are *not* dotfiles. The tooling uses only =0xProto/=. The build notes that used to live here are in =docs/=.
+Assets that are *not* dotfiles. The tooling uses only =0xProto/=.
 
 | Path                          | Used by                    | What it is                                                                                                                    |
 |-------------------------------+----------------------------+-------------------------------------------------------------------------------------------------------------------------------|
