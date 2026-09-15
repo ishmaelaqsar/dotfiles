@@ -1,8 +1,8 @@
 [Unit]
 # The Emacs daemon, so the first Super+e or git commit of a session does not
-# pay the whole init cost. EDITOR is `emacsclient -t -a ''`, which starts a
-# daemon when none runs; without this unit that first client waits for the
-# full startup.
+# pay the whole init cost. Every client passes `--alternate-editor=`, which
+# starts a daemon when none runs. Without this unit that first client waits
+# for the full startup.
 #
 # This follows the unit Emacs ships in etc/emacs.service. A unit here shadows
 # the distro copy in /usr/lib/systemd/user/, which is the point: install.sh

@@ -7,15 +7,13 @@
 CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
-# (`Makefile` dropped — it hid hand-written ones; CMake's generated Makefile
-#  lives under /build*/ which is already ignored)
 CTestTestfile.cmake
 install_manifest.txt
 compile_commands.json
 *.ninja
 .ninja_*
 
-# Compiled Objects & Binaries
+# Compiled objects and binaries
 *.o
 *.a
 *.so
@@ -41,7 +39,7 @@ ENV/
 pip-wheel-metadata/
 pip-log.txt
 
-# Testing & Coverage
+# Testing and coverage
 .pytest_cache/
 .tox/
 .coverage
@@ -87,7 +85,7 @@ gradle-app.properties
 out/
 
 # ============================================================
-# IDEs & Editors
+# IDEs and editors
 # ============================================================
 # IntelliJ / CLion / Android Studio
 .idea/
@@ -110,7 +108,7 @@ cmake-build-*/
 Session.vim
 
 # ============================================================
-# OS Generated Files
+# OS-generated files
 # ============================================================
 .DS_Store
 .DS_Store?
@@ -121,7 +119,7 @@ ehthumbs.db
 Thumbs.db
 
 # ============================================================
-# Archives & Logs
+# Archives and logs
 # ============================================================
 *.7z
 *.dmg
@@ -138,6 +136,6 @@ Thumbs.db
 *.sqlite
 
 # ============================================================
-# Agent CLIs — machine-local settings
+# Agent CLIs: machine-local settings
 # ============================================================
 **/.claude/settings.local.json

@@ -17,13 +17,14 @@ cursor-style-blink = false
 # stop working. Unicode input through Option goes with it.
 macos-option-as-alt = true
 
-# `clipboard` = copy selections to the system clipboard too, not only the
-# primary selection (`true` never reaches ctrl+shift+v on Linux)
+# `clipboard` copies a selection to the system clipboard as well as to the
+# primary selection. With `true`, ctrl+shift+v on Linux gets nothing.
 copy-on-select = clipboard
 
-# Meta + Shift + O opens the current directory in an Emacs frame (Dired)
+# Meta+Shift+o opens the current directory in an Emacs frame, in Dired.
 keybind = alt+shift+o=text:emacsclient -c --alternate-editor= .\r
 
-# Machine-local overrides (untracked); opt in to the quick terminal here
-# with `config-file = quick-terminal.conf` (automatic on macOS via install.sh)
+# Machine-local overrides. The repo does not track config.local. Add
+# `config-file = quick-terminal.conf` to it for the quick terminal. install.sh
+# does this on macOS.
 config-file = ?config.local

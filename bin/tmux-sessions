@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# tmux-sessions -- pick, create, or kill sessions from an fzf list, meant to
-# run inside a tmux display-popup (session menu s, or M-s with no leader).
+# tmux-sessions: pick, create, or kill sessions from an fzf list. It runs
+# inside a tmux display-popup (session menu s, or M-s with no leader).
 #
 # Enter on a session switches this client to it. Enter on a query that
 # matches nothing creates a detached session by that name and switches to it.
@@ -8,17 +8,17 @@
 # session this client is on, detach-on-destroy no-detached moves the client
 # to a detached session and the popup goes with it.
 #
-# Session names pass through `-t "=$name"` so they match exactly, never as a
-# prefix or glob -- the same rule as __tmux_goto in .aliases. fzf expands {1}
-# to a single-quoted word and zsh reads a bare leading = as an equals-
-# expansion, so the preview and kill commands park the name in a variable
-# rather than writing `-t ={1}`.
+# Session names pass through `-t "=$name"`, so they match exactly and never as
+# a prefix or glob. __tmux_goto in .aliases follows the same rule. fzf expands
+# {1} to a single-quoted word, and zsh reads a bare leading = as an equals
+# expansion. So the preview and kill commands assign the name to a variable
+# rather than write `-t ={1}`.
 
 set -u
 
 if ! command -v fzf >/dev/null 2>&1; then
-    # The popup closes when this exits, so the message has to name the package
-    # while it is still on screen.
+    # The popup closes when this exits, so the message names the package, and
+    # the sleep keeps it on screen.
     repo="$(cd "$(dirname "$(readlink "${BASH_SOURCE[0]}" || echo "${BASH_SOURCE[0]}")")/.." && pwd)"
     hint="$(python3 -c 'import sys; sys.path.insert(0, sys.argv[1] + "/lib"); import pkgconf; print(pkgconf.install_hint("fzf"))' "$repo" 2>/dev/null)"
     echo "tmux-sessions needs fzf. ${hint:-Install fzf with your package manager.}"
@@ -56,7 +56,7 @@ case $status in
     1)  # Enter with no match: the query becomes a new detached session.
         [ -n "$query" ] || exit 0
         if ! err=$(tmux new-session -d -s "$query" 2>&1); then
-            echo "$err"      # e.g. a name with . or : -- show why, briefly
+            echo "$err"      # tmux refuses a name with . or : in it. Show why.
             sleep 2
             exit 1
         fi

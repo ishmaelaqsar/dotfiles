@@ -3,10 +3,6 @@
 #
 # install.sh links bin/ into ~/bin, and git runs any `git-<name>` on PATH as a
 # subcommand, so this is `git gone` as well as `git-gone`.
-#
-# It prunes the remote-tracking refs first, then deletes every local branch
-# that `git branch -vv` marks as '[<remote>: gone]'. The current branch is
-# always skipped, and an unmerged branch survives without --force.
 set -uo pipefail
 
 usage() {

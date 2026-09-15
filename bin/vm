@@ -80,7 +80,6 @@ class VMBackend:
     def get_install_args(self):
         """Return the virt-install arguments for this host."""
 
-        # --- LINUX DEFAULTS (KVM) ---
         if self.os_type == "Linux":
             args = [
                 "--connect",
@@ -95,7 +94,6 @@ class VMBackend:
                 "spicevmc",
             ]
 
-            # Extra settings for an ARM host
             if self.arch in ("aarch64", "arm64"):
                 args += [
                     "--arch",
@@ -108,11 +106,9 @@ class VMBackend:
 
             return args
 
-        # --- MACOS DEFAULTS (HVF / Apple Silicon) ---
         if self.os_type == "Darwin":
             args = ["--connect", self.get_connection_uri()]
 
-            # Apple Silicon settings
             if self.arch == "arm64":
                 args += [
                     "--arch",
@@ -184,7 +180,6 @@ class VMBackend:
         ]
 
 
-# The backend for this host
 BACKEND = VMBackend()
 
 # ------------------------------------------------------------
@@ -341,7 +336,7 @@ def pick_machine():
 
     fzf needs a terminal. Without one, or without fzf, print the names and stop,
     so a script or an agent gets a list instead of a hang. A picker is never the
-    only way in: -n and VM_NAME still work everywhere.
+    only way in: -n and VM_NAME work everywhere.
     """
     names = list_machines()
     if not names:
@@ -443,8 +438,7 @@ def cmd_delete(args):
             sys.exit(1)
 
     # The state check and the NVRAM probe only read, so they run in a dry run
-    # as well. A dry run that guessed at --nvram printed a command the real run
-    # would not use, which defeats the point of looking first.
+    # as well. The printed command then matches the one a real run uses.
     state = run(BACKEND.get_virsh_cmd(["domstate", name]), capture=True, check=False)
     if state and "running" in state:
         print(f"Stopping {name}...")
@@ -452,7 +446,6 @@ def cmd_delete(args):
 
     print(f"Deleting {name}...")
 
-    # Remove the NVRAM file only when the machine has one
     delete_cmd = ["undefine", name, "--remove-all-storage"]
     nvram_check = run(
         BACKEND.get_virsh_cmd(["dumpxml", name]), capture=True, check=False
@@ -501,14 +494,12 @@ def cmd_create(args):
     """Create a machine with virt-install, using the defaults of this host."""
     name = require_new_name(args)
 
-    # Refuse when the machine already exists. A dry run skips the check.
     if not args.dry_run:
         if run(BACKEND.get_virsh_cmd(["dominfo", name]), check=False, capture=True):
             print(f"Error: VM '{name}' already exists.", file=sys.stderr)
             sys.exit(1)
         check_default_network()
 
-    # Defaults
     ram = args.ram or "2048"  # 2 GB: a current installer needs it
     vcpus = args.cpu or "2"
     disk_size = args.disk or "20"
@@ -520,7 +511,6 @@ def cmd_create(args):
     print(f"   Specs: {ram}MB RAM, {vcpus} CPU, {disk_size}GB Disk")
     print(f"   OS Variant: {variant}")
 
-    # Where the installer comes from
     if args.iso:
         iso_path = os.path.abspath(args.iso)
         if not os.path.isfile(iso_path):
@@ -529,7 +519,6 @@ def cmd_create(args):
         location_args = ["--cdrom", iso_path]
         print(f"   Source: ISO ({iso_path})")
     else:
-        # Debian 13 netinst, for this architecture
         if BACKEND.arch in ("aarch64", "arm64"):
             installer_arch = "arm64"
             print(f"   Source: Debian 13 (Trixie) Network Install (ARM64)")
@@ -542,7 +531,6 @@ def cmd_create(args):
             f"http://deb.debian.org/debian/dists/trixie/main/installer-{installer_arch}/",
         ]
 
-    # The base virt-install command
     cmd = [
         "virt-install",
         "--name",
@@ -559,10 +547,7 @@ def cmd_create(args):
         "pty,target_type=serial",
     ]
 
-    # Per-host arguments: architecture, graphics, network
     cmd += BACKEND.get_install_args()
-
-    # The install source
     cmd += location_args
 
     if args.dry_run:
@@ -680,7 +665,7 @@ def cmd_deploy(args):
     print(f"Running {script} against {name} ({ip})...")
     
     # The script runs as a separate file, so it does not get the SSH options
-    # above. The author of the script must set them.
+    # that cmd_ssh sets. The author of the script must set them.
     subprocess.run(cmd)
 
 
@@ -706,10 +691,8 @@ def cmd_setup(args):
     print(f"Installing qemu-guest-agent on {name} ({ip})...")
     print(f"   Detecting package manager...")
 
-    # Build the detect-and-install command
     pkg_managers = BACKEND.get_package_manager_commands()
 
-    # One script that tries each package manager in turn
     install_script_parts = []
     for i, pm in enumerate(pkg_managers):
         detect_cmd = pm["detect"]
@@ -774,7 +757,6 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
-    # Global arguments
     parser.add_argument("-n", "--name", help="The machine name. It overrides VM_NAME.")
     parser.add_argument("-u", "--user", help="The SSH user. It overrides VM_USER.")
     parser.add_argument(
@@ -790,7 +772,6 @@ def main():
 
     subparsers = parser.add_subparsers(dest="command", metavar="<command>")
 
-    # Lifecycle
     subparsers.add_parser("list", help="List every machine, with its state")
     subparsers.add_parser("start", help="Start the machine")
     subparsers.add_parser("stop", help="Shut the machine down cleanly")
@@ -799,7 +780,6 @@ def main():
     subparsers.add_parser("status", help="Print the state and the address")
     subparsers.add_parser("ip", help="Print the IP address only")
 
-    # Creation
     create_p = subparsers.add_parser("create", help="Create a machine")
     create_p.add_argument("--ram", help="The RAM in MB. Default 2048.")
     create_p.add_argument("--cpu", help="The number of virtual CPUs. Default 2.")
@@ -811,7 +791,6 @@ def main():
         "--variant", help="The OS variant, such as ubuntu24.04. Default debian13."
     )
 
-    # Tools
     subparsers.add_parser("setup", help="Install qemu-guest-agent inside the machine")
     ssh_p = subparsers.add_parser("ssh", help="Open an SSH session, or run a command")
     ssh_p.add_argument(
@@ -834,7 +813,6 @@ def main():
         cmd_status(args)
         sys.exit(0)
 
-    # Dispatch
     cmds = {
         "list": cmd_list,
         "start": cmd_start,
@@ -857,25 +835,22 @@ def main():
 
 if __name__ == "__main__":
     # The help must be readable on a machine with no virsh, so check the tools
-    # only when there is real work to do. Bare `vm` is real work now: it lists
+    # only when there is real work to do. Bare `vm` is real work: it lists
     # the machines to pick from, and that needs virsh.
     _argv = sys.argv[1:]
     _wants_help = any(a in ("-h", "--help") for a in _argv)
 
-    # Check for required tools
     if not _wants_help and not shutil.which("virsh"):
         print("Error: 'virsh' not found.", file=sys.stderr)
         print(f"   {pkgconf.install_hint('virsh')}", file=sys.stderr)
         sys.exit(1)
 
-    # Only `create` needs virt-install
     if not _wants_help and "create" in _argv:
         if not shutil.which("virt-install"):
             print("Error: 'virt-install' not found.", file=sys.stderr)
             print(f"   {pkgconf.install_hint('virt-install')}", file=sys.stderr)
             sys.exit(1)
 
-    # Warn when the daemon does not answer, then continue anyway
     if not _wants_help and not check_libvirt_running():
         print("Warning: Cannot connect to libvirt daemon.", file=sys.stderr)
         if platform.system() == "Darwin":
@@ -892,7 +867,7 @@ if __name__ == "__main__":
                 f"   The daemon itself: {pkgconf.install_hint('libvirtd')}",
                 file=sys.stderr,
             )
-            # A running daemon still refuses qemu:///system without the group.
+            # A running daemon refuses qemu:///system without the group.
             print(
                 '   Then: sudo usermod -aG libvirt "$USER" — and log in again.',
                 file=sys.stderr,

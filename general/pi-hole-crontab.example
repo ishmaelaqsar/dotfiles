@@ -1,57 +1,17 @@
-# Redacted template. Substitute the placeholders by hand. cron does NOT expand
-# a shell variable here. MAILTO must hold a literal address.
+# Redacted template. Substitute the placeholders by hand. cron does not expand
+# a shell variable here, so MAILTO must hold a literal address.
 MAILTO="<your-email>"
 
-# Edit this file to introduce tasks to be run by cron.
-# 
-# Each task to run has to be defined through a single line
-# indicating with different fields when the task will be run
-# and what command to run for the task
-# 
-# To define the time you can provide concrete values for
-# minute (m), hour (h), day of month (dom), month (mon),
-# and day of week (dow) or use '*' in these fields (for 'any').
-# 
-# Notice that tasks will be started based on the cron's system
-# daemon's notion of time and timezones.
-# 
-# Output of the crontab jobs (including errors) is sent through
-# email to the user the crontab file belongs to (unless redirected).
-# 
-# For example, you can run a backup of all your user accounts
-# at 5 a.m every week with:
-# 0 5 * * 1 tar -zcf /var/backups/home.tgz /home/
-# 
-# For more information see the manual pages of crontab(5) and cron(8)
-# 
-# m h  dom mon dow   command
-
-# ┌───────────── minute (0 - 59)
-# │ ┌───────────── hour (0 - 23)
-# │ │ ┌───────────── day of the month (1 - 31)
-# │ │ │ ┌───────────── month (1 - 12)
-# │ │ │ │ ┌───────────── day of the week (0 - 7) (Sunday=0 or 7)
-# │ │ │ │ │
-# │ │ │ │ │
-# │ │ │ │ │
-# * * * * *  command to execute
-
-# === Pi-hole & System Maintenance ===
 # cron mails any output of a job to MAILTO. Do not also send stderr to a log
 # file. The mail then arrives empty, and the errors stay on the host.
 
-# Weekly: Update Pi-hole (every Sunday at 02:30)
 30 2 * * 0 /usr/local/bin/pihole -up --unattended
 
-# Weekly: Update and clean system packages (Sunday at 03:00). The
-# noninteractive settings prevent a block on a configuration prompt.
+# The noninteractive settings prevent a block on a configuration prompt.
 0 3 * * 0 DEBIAN_FRONTEND=noninteractive apt-get update -y && DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::=--force-confold upgrade && apt-get autoremove -y
 
-# Daily: Sync log2ram to SD (03:30)
 30 3 * * * /usr/sbin/log2ram write
 
-# Daily: Restart Pi-hole DNS (03:35) to refresh everything cleanly
 35 3 * * * /usr/local/bin/pihole restartdns >/dev/null 2>&1
 
-# Optional: Weekly reboot (Sunday at 04:00) — useful on long uptimes
 0 4 * * 0 /sbin/reboot
