@@ -291,6 +291,8 @@ The buffer is `*kdb scratch: NAME*', in `q-mode' with `kdb-mode' on."
         (q-mode))
       (kdb-mode 1)
       (setq kdb-inline-results t)
+      ;; q's own console output wraps a wide table mid-word without this.
+      (setq-local truncate-lines t)
       (kdb-set-target name))
     (pop-to-buffer buffer)))
 
@@ -484,6 +486,9 @@ With a prefix argument ASK, choose the target first."
   "Turn the results under statements on or off in this buffer."
   (interactive)
   (setq kdb-inline-results (not kdb-inline-results))
+  ;; q's own console output wraps a wide table mid-word without this.
+  (when kdb-inline-results
+    (setq-local truncate-lines t))
   (message "kdb: inline results %s" (if kdb-inline-results "on" "off")))
 
 (defun kdb--inline-text (reply)
