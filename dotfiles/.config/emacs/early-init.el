@@ -41,9 +41,10 @@
         frame-resize-pixelwise t)
 (push '(vertical-scroll-bars) default-frame-alist)
 (push '(tool-bar-lines . 0) default-frame-alist)
-;; A dark title bar, to match modus-vivendi. A tty frame ignores ns parameters.
+;; A light title bar, to match modus-operandi-tinted. A tty frame ignores ns
+;; parameters.
 (when (eq system-type 'darwin)
-  (push '(ns-appearance . dark) default-frame-alist)
+  (push '(ns-appearance . light) default-frame-alist)
   (push '(ns-transparent-titlebar . t) default-frame-alist))
 
 ;;; early-init.el ends here

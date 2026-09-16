@@ -180,15 +180,16 @@
 ;; A terminal frame draws a menu-bar line otherwise, so this is not GUI-only.
 (menu-bar-mode -1)
 
-;; Modus ships with Emacs: dark, to match Ghostty and the GNOME colour scheme,
-;; and every face pair clears WCAG AAA contrast. modus-operandi is its light
-;; twin, and M-x modus-themes-toggle switches between the two.
+;; Modus ships with Emacs, and every face pair clears WCAG AAA contrast. The
+;; tinted variant warms the light background, which holds the contrast and
+;; drops the glare. modus-vivendi is its dark twin, and M-x modus-themes-toggle
+;; switches between the two.
 ;; Prose runs proportional, so org tables and source blocks lose their
 ;; alignment unless those faces keep a fixed pitch. Modus reads the option when
 ;; the theme loads, hence the order here.
-(setopt modus-themes-to-toggle '(modus-vivendi modus-operandi)
+(setopt modus-themes-to-toggle '(modus-operandi-tinted modus-vivendi)
         modus-themes-mixed-fonts t)
-(load-theme 'modus-vivendi :no-confirm)
+(load-theme 'modus-operandi-tinted :no-confirm)
 
 (defun my/apply-frame-settings (&optional frame)
   "Apply what depends on the frame: bars, font, and the theme's faces.
@@ -207,7 +208,7 @@ there and the theme's faces are computed for a dumb terminal. Every frame
         (set-face-attribute 'default nil :family "0xProto Nerd Font Mono" :height 130)
         (set-face-attribute 'fixed-pitch nil :family "0xProto Nerd Font Mono")))
     (when (daemonp)
-      (enable-theme 'modus-vivendi))))
+      (enable-theme 'modus-operandi-tinted))))
 
 (if (daemonp)
     (add-hook 'server-after-make-frame-hook #'my/apply-frame-settings)
