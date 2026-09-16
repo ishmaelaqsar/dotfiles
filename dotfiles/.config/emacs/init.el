@@ -77,7 +77,16 @@
   ;; A login shell, not an interactive one: .bash_profile sets the variables,
   ;; and .bashrc would add two seconds to the start.
   (exec-path-from-shell-arguments '("-l"))
-  :config (exec-path-from-shell-initialize))
+  :config
+  (exec-path-from-shell-initialize)
+  ;; SSH_AUTH_SOCK cannot come from the login shell above: .bashrc exports it,
+  ;; and .bashrc returns at once when the shell is not interactive. gpg-agent
+  ;; names the socket itself. Without this, git over ssh reaches the launchd
+  ;; agent, which holds no card key.
+  (let ((sock (string-trim (shell-command-to-string
+                            "gpgconf --list-dirs agent-ssh-socket"))))
+    (unless (string-empty-p sock)
+      (setenv "SSH_AUTH_SOCK" sock))))
 
 ;;;; Defaults
 

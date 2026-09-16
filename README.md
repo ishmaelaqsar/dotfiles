@@ -463,11 +463,15 @@ Hyprland needs no extension. `hyprland.conf` starts one Ghostty window on the sp
 
 ### SSH agent
 
-`.bashrc` points `SSH_AUTH_SOCK` at gpg-agent, but that covers login shells only. Graphical apps
+`.bashrc` points `SSH_AUTH_SOCK` at gpg-agent, but that covers interactive shells only. Graphical apps
 read the systemd user environment, where the GNOME agent would claim the variable and never ask
 the YubiKey. Three parts fix it: `dotfiles/.config/environment.d/10-gpg-ssh.conf` sets
 `SSH_AUTH_SOCK` for the session, `install.sh` enables `gpg-agent-ssh.socket`, and `install.sh`
 masks the GNOME SSH agent. Log out and back in after the first install.
+
+macOS has no session file. The Emacs daemon starts from launchd, where `SSH_AUTH_SOCK` names
+Apple's own agent, which holds no card key. `dotfiles/.config/emacs/init.el` sets the variable
+from `gpgconf`, so eshell, magit, and TRAMP reach the YubiKey.
 
 HTTPS git remotes use `git-credential-libsecret` when the helper is present, not a cleartext
 `~/.git-credentials`.
