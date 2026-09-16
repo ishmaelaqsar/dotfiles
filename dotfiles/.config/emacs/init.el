@@ -121,6 +121,8 @@
         mouse-wheel-flip-direction t
         ;; The project name in the mode line.
         project-mode-line t
+        ;; C-x p k prints the buffers it is about to kill before it asks.
+        project-kill-buffers-display-buffer-list t
         recentf-max-saved-items 200
         ;; With the *eldoc* buffer shown (C-h .), the echo area stays quiet.
         eldoc-echo-area-prefer-doc-buffer t
@@ -278,6 +280,14 @@ there and the theme's faces are computed for a dumb terminal. Every frame
   ;; Files complete on the path prefix first, or `~/.co' would match everything.
   (completion-category-overrides '((file (styles basic partial-completion)))))
 
+(defvar consult-project-function)
+(defvar consult-source-buffer)
+(defvar consult-source-project-buffer)
+(declare-function consult--buffer-pair "consult")
+(declare-function consult--buffer-query "consult")
+(declare-function consult--buffer-state "consult")
+(declare-function consult--project-root "consult")
+
 (use-package consult
   :bind (("C-x b"   . consult-buffer)
          ("C-x p b" . consult-project-buffer)
@@ -304,7 +314,61 @@ there and the theme's faces are computed for a dumb terminal. Every frame
   ;; it. consult defaults to the literal "fd", so name whichever is here.
   (consult-fd-args
    (list (or (executable-find "fd") (executable-find "fdfind") "fd")
-         "--full-path --color=never")))
+         "--full-path --color=never"))
+  ;; C-x b lists the buffers of the current project, then the buffers of no
+  ;; project: the scratch buffer, Gnus, a shell in the home directory. Another
+  ;; project's buffers wait behind the narrow key `a', so the way to them is
+  ;; C-x p p. C-x p k closes a project once the work in it is done.
+  (consult-buffer-sources
+   '(my/consult-source-project-buffer
+     my/consult-source-global-buffer
+     my/consult-source-any-buffer
+     consult-source-hidden-buffer
+     consult-source-modified-buffer
+     consult-source-recent-file
+     consult-source-buffer-register
+     consult-source-file-register
+     consult-source-bookmark
+     consult-source-project-recent-file-hidden
+     consult-source-project-root-hidden))
+  :config
+  ;; Two of these sources copy a stock plist, so consult must be loaded first.
+  ;; `plist-get' reads the first value of a key, so a prepended key overrides.
+  (defun my/buffer-projectless-p (buffer)
+    "Return non-nil when BUFFER belongs to no project.
+A remote directory counts as project-less: `project-current' would open
+a connection to answer."
+    (let ((dir (buffer-local-value 'default-directory buffer)))
+      (or (file-remote-p dir) (not (project-current nil dir)))))
+
+  ;; `:enabled' drops this source outside a project, which hands `:default',
+  ;; the buffer RET takes on empty input, to the source under it.
+  (defvar my/consult-source-project-buffer
+    `( :default t
+       :enabled ,(lambda () (and consult-project-function (consult--project-root)))
+       ,@consult-source-project-buffer)
+    "The buffers of the current project, and the default source inside one.")
+
+  (defvar my/consult-source-global-buffer
+    `( :name     "Buffer"
+       :narrow   ?g
+       :category buffer
+       :face     consult-buffer
+       :history  buffer-name-history
+       :state    ,#'consult--buffer-state
+       :default  t
+       :items
+       ,(lambda ()
+          (consult--buffer-query
+           :sort 'visibility
+           ;; Outside a project no filter applies, so the list is every buffer.
+           :predicate (and (consult--project-root) #'my/buffer-projectless-p)
+           :as #'consult--buffer-pair)))
+    "The buffers of no project, or every buffer when point is in no project.")
+
+  (defvar my/consult-source-any-buffer
+    `( :hidden t :name "Any Buffer" :narrow ?a ,@consult-source-buffer)
+    "Every buffer, whichever project it belongs to."))
 
 ;; Annotations beside every candidate: a docstring for a command, the size
 ;; and date of a file.
