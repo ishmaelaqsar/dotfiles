@@ -385,18 +385,24 @@ a connection to answer."
 (use-package marginalia
   :init (marginalia-mode 1))
 
-;; Act on the candidate or the thing at point. A prefix key, and a one-second
-;; pause, lists the commands under it through the minibuffer; C-h after the
-;; prefix lists them at once.
+;; Act on the candidate or the thing at point. C-h after a prefix key lists the
+;; commands under it in the minibuffer, where you can filter them.
 (use-package embark
   :demand t
   :bind (("C-."   . embark-act)
          ("C-;"   . embark-dwim)
          ("C-h B" . embark-bindings))
   :custom
-  (prefix-help-command #'embark-prefix-help-command)
-  (embark-auto-prefix-help-delay 1.0)
-  :config (embark-auto-prefix-help-mode 1))
+  (prefix-help-command #'embark-prefix-help-command))
+
+;; A prefix key, and a one-second pause, lists the commands under it in a window
+;; at the bottom.
+(use-package which-key
+  :custom
+  (which-key-idle-delay 1.0)
+  ;; Off, so which-key leaves prefix-help-command to embark.
+  (which-key-use-C-h-commands nil)
+  :init (which-key-mode 1))
 
 (use-package embark-consult
   :hook (embark-collect-mode . consult-preview-at-point-mode))
