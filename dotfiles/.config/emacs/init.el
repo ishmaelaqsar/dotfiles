@@ -55,9 +55,9 @@
 ;; not, so its value would not survive the first `enable-theme'.
 (customize-set-variable
  'package-selected-packages
- '(avy cape consult corfu dape eat elfeed elfeed-org embark embark-consult
-   exec-path-from-shell magit marginalia markdown-mode orderless paredit q-mode
-   sly vertico))
+ '(avy cape consult corfu dape diff-hl eat elfeed elfeed-org embark
+   embark-consult exec-path-from-shell magit marginalia markdown-mode orderless
+   paredit q-mode sly vertico))
 
 ;; use-package is built in. Nothing here uses :ensure: the setup script
 ;; installs, and a missing package logs a warning instead of stopping the load.
@@ -136,12 +136,33 @@
         ;; With the *eldoc* buffer shown (C-h .), the echo area stays quiet.
         eldoc-echo-area-prefer-doc-buffer t
         ;; Compile output follows until the first error.
-        compilation-scroll-output 'first-error)
+        compilation-scroll-output 'first-error
+        ;; init.el and its neighbours are symlinks into the dotfiles repository,
+        ;; and git tracks the target, so vc asks on every visit.
+        vc-follow-symlinks t
+        ;; Git is the only backend in use, and vc probes each one on a visit.
+        vc-handled-backends '(Git)
+        ;; A delete is recoverable: macOS takes the file to ~/.Trash, Linux to
+        ;; the freedesktop trash.
+        delete-by-moving-to-trash t
+        ;; The help window takes focus, so q closes it without a C-x o first.
+        help-window-select t
+        ;; The kill ring and the search rings survive a restart.
+        history-length 300
+        savehist-additional-variables '(kill-ring search-ring regexp-search-ring)
+        ;; Dired and the buffer list revert too, not files alone.
+        global-auto-revert-non-file-buffers t
+        ;; C-u C-SPC, then C-SPC again, walks back through the mark ring.
+        set-mark-command-repeat-pop t)
 
 ;; Left-to-right text in every buffer: redisplay skips the bidirectional
 ;; analysis, which matters on long lines such as logs and JSON.
 (setq-default bidi-paragraph-direction 'left-to-right)
 (setq bidi-inhibit-bpa t)
+
+;; A file of very long lines, such as a log or minified JSON, opens with the
+;; costly minor modes off.
+(global-so-long-mode 1)
 
 (savehist-mode 1)
 (recentf-mode 1)
@@ -174,6 +195,15 @@
   "Highlight trailing whitespace in this buffer."
   (setq show-trailing-whitespace t))
 (add-hook 'prog-mode-hook #'my/show-trailing-whitespace)
+;; M-f, M-b and M-d stop inside camelCase, which Java and Go names are full of.
+(add-hook 'prog-mode-hook #'subword-mode)
+;; A URL in a comment becomes a button, and RET on it opens EWW.
+(add-hook 'prog-mode-hook #'goto-address-prog-mode)
+;; flymake byte-compiles the buffer and runs checkdoc, so a free variable or a
+;; malformed docstring shows while you edit this file and lisp/kdb.el.
+(add-hook 'emacs-lisp-mode-hook #'flymake-mode)
+;; C-c D copies the line, or the region, below itself.
+(keymap-global-set "C-c D" #'duplicate-dwim)
 ;; Go, Bazel and cargo colour their output.
 (add-hook 'compilation-filter-hook #'ansi-color-compilation-filter)
 
@@ -224,6 +254,8 @@ there and the theme's faces are computed for a dumb terminal. Every frame
 ;; list marker.
 (add-hook 'text-mode-hook #'visual-line-mode)
 (add-hook 'text-mode-hook #'visual-wrap-prefix-mode)
+;; A URL in prose becomes a button, and RET on it opens EWW.
+(add-hook 'text-mode-hook #'goto-address-mode)
 
 ;;;; Terminal frames
 
@@ -264,7 +296,10 @@ there and the theme's faces are computed for a dumb terminal. Every frame
   (isearch-allow-motion t)
   (isearch-allow-scroll t)
   (isearch-repeat-on-direction-change t)
-  (isearch-wrap-pause 'no-ding))
+  (isearch-wrap-pause 'no-ding)
+  ;; A space matches a hyphen, an underscore, or a newline, so "foo bar" finds
+  ;; foo-bar and foo_bar. M-s SPC turns it off for one search.
+  (search-whitespace-regexp "[-_ \t\n]+"))
 
 ;;;; Completion: Vertico + Orderless + Consult
 
@@ -726,6 +761,16 @@ then enter the mode again with the grammar in place."
 (use-package magit
   :bind ("C-x g" . magit-status)
   :custom (magit-bury-buffer-function #'my/magit-bury-buffer))
+
+;; Bars beside the buffer mark the lines that differ from git, and magit
+;; refreshes them when it refreshes itself. The marks go in the margin, which a
+;; terminal frame has, rather than the fringe, which it has not.
+(use-package diff-hl
+  :hook ((magit-pre-refresh  . diff-hl-magit-pre-refresh)
+         (magit-post-refresh . diff-hl-magit-post-refresh))
+  :init
+  (global-diff-hl-mode 1)
+  (diff-hl-margin-mode 1))
 
 ;;;; Shells
 
