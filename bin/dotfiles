@@ -23,7 +23,11 @@ REPO = Path(__file__).resolve().parent.parent
 DOTFILES_DIR = REPO / "dotfiles"
 
 # A change to one of these needs a full install, not only a new symlink.
-INSTALL_TRIGGERS = ("install.sh", "cleanup.sh", "lib/pkg.sh", "lib/packages.conf")
+# The fonts are copies, not links, so a new font needs the install too.
+INSTALL_TRIGGERS = (
+    "install.sh", "cleanup.sh", "lib/pkg.sh", "lib/packages.conf", "lib/gitconfig.sh",
+)
+INSTALL_TRIGGER_PREFIXES = ("setup-", "general/0xProto/")
 
 EXAMPLES = """
 Examples:
@@ -226,7 +230,7 @@ def cmd_update(_args):
     if before != after:
         added = git("diff", "--diff-filter=A", "--name-only", before, after).splitlines()
         def needs_install(f):
-            if f in INSTALL_TRIGGERS or f.startswith("setup-"):
+            if f in INSTALL_TRIGGERS or f.startswith(INSTALL_TRIGGER_PREFIXES):
                 return True
             # A changed script keeps its symlink. Only a new one lacks it.
             return f.startswith("bin/") and f in added

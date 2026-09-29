@@ -1,15 +1,20 @@
 name: ci
 
 # What a push must not break: the two packages.conf parsers must agree, every
-# shell script must pass shellcheck, the Emacs Lisp must compile and load, and
-# a Debian container must still install and clean up. The smoke test is the
-# slow one, so it runs last and only for the branches that matter.
+# shell script must pass shellcheck, the git hooks must stop a secret, the
+# Emacs Lisp must compile and load, and a Debian container must install and
+# clean up. The smoke test is the slow one, so it runs last and only for the
+# branches that matter.
 
 on:
   push:
     branches: [main]
   pull_request:
   workflow_dispatch:
+
+# The jobs read the repository and write nothing back.
+permissions:
+  contents: read
 
 jobs:
   parity:
@@ -36,6 +41,13 @@ jobs:
             head -n 1 "$f" | grep -qE '^#!.*(/|env +)(ba)?sh( |$)' && printf '%s\0' "$f"
           done | xargs -0 shellcheck -x --severity=warning
 
+  hooks:
+    name: the git hooks stop a secret
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash test/hooks.sh
+
   python:
     name: python scripts compile
     runs-on: ubuntu-latest
@@ -44,7 +56,7 @@ jobs:
       - name: byte-compile every python entry point
         run: |
           python3 -m py_compile \
-            bin/vm bin/dotfiles bin/manage-secrets bin/gnome-settings \
+            bin/vm bin/dotfiles bin/manage-secrets bin/gnome-settings bin/venv \
             lib/sync-dotfiles lib/pkgconf.py
 
   elisp:
@@ -64,14 +76,18 @@ jobs:
             emacs --batch -l early-init.el --eval "(package-initialize)" -l init.el \
               --eval "(progn (package-refresh-contents) (package-install-selected-packages t))"
             emacs --batch -l early-init.el --eval "(package-initialize)" \
-              --eval "(setq byte-compile-error-on-warn t)" -L lisp -f batch-byte-compile lisp/*.el
-            emacs --batch -l early-init.el --eval "(package-initialize)" -l init.el --eval "(kill-emacs)"
+              --eval "(setq byte-compile-error-on-warn t)" -L lisp -f batch-byte-compile \
+              lisp/*.el early-init.el init.el
+            # use-package turns an error in a stanza into a warning, and the
+            # load goes on. Minimal expansion lets the error stop the job.
+            emacs --batch -l early-init.el --eval "(package-initialize)" \
+              --eval "(setq use-package-expand-minimally t)" -l init.el --eval "(kill-emacs)"
           '
 
   smoke:
     name: debian install and cleanup
     runs-on: ubuntu-latest
-    needs: [parity, shellcheck, python, elisp]
+    needs: [parity, shellcheck, hooks, python, elisp]
     steps:
       - uses: actions/checkout@v4
       - name: quick smoke test in a container

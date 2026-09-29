@@ -233,7 +233,7 @@ __check_fail() {
 }
 
 __check_install() {
-    local script_path name dest font missing commands primary state before key value
+    local script_path name dest font missing commands primary state before key value unit_path unit
 
     echo "Checking the install in $TARGET_DIR (nothing is changed)."
 
@@ -312,13 +312,46 @@ __check_install() {
         fi
     fi
 
+    echo "Repository and workspace:"
+    if git -C "$SCRIPT_DIR" rev-parse --git-dir >/dev/null 2>&1; then
+        if [ "$(git -C "$SCRIPT_DIR" config --get core.hooksPath)" = "hooks" ]; then
+            echo "  ok: the secret hooks run from hooks/"
+        else
+            __check_fail "core.hooksPath is not 'hooks' — the secret hooks do not run"
+        fi
+    fi
+    if [ -d "$TARGET_DIR/workspace" ]; then
+        echo "  ok: $TARGET_DIR/workspace"
+    else
+        __check_fail "$TARGET_DIR/workspace is missing"
+    fi
+
+    # The install enables each unit with an [Install] section, but a machine
+    # can refuse, so a unit that is not enabled is a warning.
+    if [ "$IS_HOME_INSTALL" -eq 1 ] && [ "$IN_CONTAINER" -eq 0 ] \
+       && command -v systemctl >/dev/null 2>&1 && [ -d "/run/user/$(id -u)" ]; then
+        echo "systemd user units:"
+        for unit_path in "$DOTFILES_DIR"/.config/systemd/user/*.service \
+                         "$DOTFILES_DIR"/.config/systemd/user/*.timer \
+                         "$DOTFILES_DIR"/.config/systemd/user/*.socket; do
+            [ -e "$unit_path" ] || continue
+            grep -q '^\[Install\]' "$unit_path" || continue
+            unit="$(basename "$unit_path")"
+            if [ "$(systemctl --user is-enabled "$unit" 2>/dev/null)" = "enabled" ]; then
+                echo "  ok: $unit"
+            else
+                __warn "$unit is not enabled (systemctl --user enable --now $unit)."
+            fi
+        done
+    fi
+
     echo
     if [ "$CHECK_FAILURES" -eq 0 ]; then
         echo "Check passed."
     else
         echo "$CHECK_FAILURES check(s) failed. Run ./install.sh to repair."
     fi
-    __warn_summary "package(s)"
+    __warn_summary "item(s)"
 
     [ "$CHECK_FAILURES" -eq 0 ]
 }
