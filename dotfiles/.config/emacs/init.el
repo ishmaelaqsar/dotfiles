@@ -171,7 +171,13 @@
 (global-so-long-mode 1)
 
 (savehist-mode 1)
-(recentf-mode 1)
+;; The mode cleans the list when it starts, and early-init.el has taken the
+;; file-name handlers away until startup ends. Without them no path is remote,
+;; so every /ssh: entry would fail the readable test and drop out.
+(let ((file-name-handler-alist (if (boundp 'my/file-name-handler-alist)
+                                   my/file-name-handler-alist
+                                 file-name-handler-alist)))
+  (recentf-mode 1))
 (save-place-mode 1)
 (global-auto-revert-mode 1)
 (delete-selection-mode 1)
@@ -183,9 +189,6 @@
 ;; C-c <left> restores the window layout a Magit or compile window replaced.
 (winner-mode 1)
 (global-hl-line-mode 1)
-;; Grey text at point shows the first completion, and TAB accepts it. It is
-;; the completion UI of a frame that cannot draw Corfu.
-(global-completion-preview-mode 1)
 ;; Both are inert on a tty.
 (pixel-scroll-precision-mode 1)
 (context-menu-mode 1)
@@ -255,13 +258,27 @@ there and the theme's faces are computed for a dumb terminal. Every frame
 ;; answers Helvetica, Linux the fontconfig sans alias. So no font name belongs
 ;; here, and the two machines need no branch. A code buffer keeps the `default'
 ;; face, and stays 0xProto.
-(add-hook 'text-mode-hook #'variable-pitch-mode)
-;; Prose wraps at the window edge, and a wrapped line keeps the indent of its
-;; list marker.
-(add-hook 'text-mode-hook #'visual-line-mode)
-(add-hook 'text-mode-hook #'visual-wrap-prefix-mode)
-;; A URL in prose becomes a button, and RET on it opens EWW.
-(add-hook 'text-mode-hook #'goto-address-mode)
+(defconst my/data-text-modes '(yaml-ts-mode toml-ts-mode)
+  "Modes that derive from `text-mode' but hold data, not prose.")
+
+(defun my/prose-setup ()
+  "Give a prose buffer its proportional face, its wrapping, and its buttons."
+  (unless (apply #'derived-mode-p my/data-text-modes)
+    (variable-pitch-mode 1)
+    ;; Prose wraps at the window edge, and a wrapped line keeps the indent of
+    ;; its list marker.
+    (visual-line-mode 1)
+    (visual-wrap-prefix-mode 1)
+    ;; A URL in prose becomes a button, and RET on it opens EWW.
+    (goto-address-mode 1)))
+(add-hook 'text-mode-hook #'my/prose-setup)
+
+;; A YAML or TOML file is code in all but its parent mode, so it gets the
+;; prog-mode setup.
+(dolist (mode my/data-text-modes)
+  (dolist (fn '(display-line-numbers-mode my/show-trailing-whitespace
+                subword-mode goto-address-prog-mode))
+    (add-hook (intern (format "%s-hook" mode)) fn)))
 
 ;;;; Terminal frames
 
@@ -477,10 +494,14 @@ a connection to answer."
 ;; Corfu draws a child frame at point. A tty draws child frames from Emacs 31,
 ;; so on 30 a terminal frame keeps the built-in completion-at-point in the
 ;; minibuffer.
+;; Elsewhere, grey text at point shows the first completion, and TAB accepts
+;; it. Where Corfu draws, the popup already shows that candidate.
 (defun my/corfu-maybe ()
-  "Turn on `corfu-mode' where this frame can draw a child frame."
-  (when (or (display-graphic-p) (>= emacs-major-version 31))
-    (corfu-mode 1)))
+  "Turn on `corfu-mode' where this frame can draw a child frame.
+Elsewhere, turn on `completion-preview-mode'."
+  (if (or (display-graphic-p) (>= emacs-major-version 31))
+      (corfu-mode 1)
+    (completion-preview-mode 1)))
 (use-package corfu
   :hook ((prog-mode text-mode) . my/corfu-maybe)
   :custom
@@ -509,23 +530,32 @@ a connection to answer."
 (setopt xref-search-program 'ripgrep
         xref-show-xrefs-function #'consult-xref
         xref-show-definitions-function #'consult-xref)
+;; grep appends /dev/null to a command so that grep names the file of a match,
+;; and rg would search that path too. -H names the file instead.
 (use-package grep
-  :custom (grep-command "rg -nS --no-heading "))
+  :defer t
+  :custom
+  (grep-command "rg -nS -H --no-heading ")
+  (grep-use-null-device nil))
 
 ;;;; Tree-sitter
 
 (require 'treesit)
-(setopt treesit-language-source-alist
-        '((bash "https://github.com/tree-sitter/tree-sitter-bash")
-          (c "https://github.com/tree-sitter/tree-sitter-c")
-          (cpp "https://github.com/tree-sitter/tree-sitter-cpp")
-          (go "https://github.com/tree-sitter/tree-sitter-go")
-          (gomod "https://github.com/camdencheek/tree-sitter-go-mod")
-          (java "https://github.com/tree-sitter/tree-sitter-java")
-          (json "https://github.com/tree-sitter/tree-sitter-json")
-          (python "https://github.com/tree-sitter/tree-sitter-python")
-          (toml "https://github.com/tree-sitter/tree-sitter-toml")
-          (yaml "https://github.com/ikatyang/tree-sitter-yaml")))
+;; Emacs 31 pins every grammar here to the commit its mode is tested with, and
+;; each mode file registers its pin. An entry in this list would come first and
+;; win, so the list is for Emacs 30, whose modes register none.
+(when (< emacs-major-version 31)
+  (setopt treesit-language-source-alist
+          '((bash "https://github.com/tree-sitter/tree-sitter-bash")
+            (c "https://github.com/tree-sitter/tree-sitter-c")
+            (cpp "https://github.com/tree-sitter/tree-sitter-cpp")
+            (go "https://github.com/tree-sitter/tree-sitter-go")
+            (gomod "https://github.com/camdencheek/tree-sitter-go-mod")
+            (java "https://github.com/tree-sitter/tree-sitter-java")
+            (json "https://github.com/tree-sitter/tree-sitter-json")
+            (python "https://github.com/tree-sitter/tree-sitter-python")
+            (toml "https://github.com/tree-sitter/tree-sitter-toml")
+            (yaml "https://github.com/ikatyang/tree-sitter-yaml"))))
 
 ;; Modes that have a classic twin are remapped to the tree-sitter one.
 (setopt major-mode-remap-alist
@@ -644,7 +674,7 @@ then enter the mode again with the grammar in place."
 ;; implement textDocument/formatting. ruff is the formatter, installed as a
 ;; uv tool by setup-python.sh, so run it on save: first the import sorter
 ;; (rule set I, the isort rules), then the formatter, the order ruff itself
-;; documents. replace-buffer-contents keeps point and marks in place.
+;; documents. The replace keeps point and marks in place.
 (defun my/ruff--pipe (args)
   "Pipe the buffer through ruff with ARGS. Return the output buffer, or nil."
   (let ((out (generate-new-buffer " *ruff*")))
@@ -663,7 +693,9 @@ then enter the mode again with the grammar in place."
                       ("format" "--stdin-filename" ,file "-")))
         (let ((out (my/ruff--pipe args)))
           (when out
-            (replace-buffer-contents out)
+            (if (>= emacs-major-version 31)
+                (replace-region-contents (point-min) (point-max) out)
+              (with-no-warnings (replace-buffer-contents out)))
             (kill-buffer out)))))))
 
 (defun my/ruff-format-before-save ()
@@ -698,6 +730,7 @@ then enter the mode again with the grammar in place."
 ;; The keys live on C-c because gud.el runs
 ;; (global-set-key gud-key-prefix gud-global-map) when it loads, and its prefix
 ;; is C-x C-a. A binding there disappears with the first M-x gdb.
+(declare-function dape-ensure-command "dape")
 (use-package dape
   :commands (dape dape-breakpoint-toggle)
   :bind (("C-c d" . dape)
@@ -715,6 +748,9 @@ then enter the mode again with the grammar in place."
   (when (executable-find "debugpy-adapter")
     (let ((cfg (alist-get 'debugpy dape-configs)))
       (plist-put cfg 'command "debugpy-adapter")
+      ;; The default check runs COMMAND -c "import debugpy.adapter", which
+      ;; debugpy-adapter rejects. Check that the command exists instead.
+      (plist-put cfg 'ensure #'dape-ensure-command)
       ;; Loopback only: the adapter evaluates arbitrary expressions in the
       ;; debuggee, so a wildcard bind hands that to the whole network.
       (plist-put cfg 'command-args '("--host" "127.0.0.1" "--port" :autoport)))))
@@ -734,6 +770,13 @@ then enter the mode again with the grammar in place."
 (defvar paredit-mode-map)
 (declare-function paredit-splice-sexp "paredit")
 
+;; Not in *scratch* or the Sly REPL: paredit binds RET and C-j, which there
+;; send the input and evaluate the sexp. *scratch* is lisp-interaction-mode,
+;; which derives from emacs-lisp-mode and so runs its hook too.
+(defun my/paredit-maybe ()
+  "Turn on `paredit-mode', except in `lisp-interaction-mode'."
+  (unless (derived-mode-p 'lisp-interaction-mode)
+    (paredit-mode 1)))
 (defun my/paredit-no-electric-pair ()
   "Turn `electric-pair-local-mode' off; paredit pairs the delimiters."
   (electric-pair-local-mode -1))
@@ -742,10 +785,14 @@ then enter the mode again with the grammar in place."
   ;; emacs-lisp-mode while it generates their autoloads, and the mode hook
   ;; would call a paredit that is not loadable yet.
   :if (locate-library "paredit")
-  :hook (((lisp-mode emacs-lisp-mode lisp-interaction-mode sly-mrepl-mode) . paredit-mode)
+  :hook (((lisp-mode emacs-lisp-mode) . my/paredit-maybe)
          (paredit-mode . my/paredit-no-electric-pair))
   :config
   (keymap-unset paredit-mode-map "M-s" t)
+  ;; M-? stays xref-find-references, and C-<left> and C-<right> stay windmove.
+  ;; C-) and C-} still slurp and barf.
+  (dolist (key '("M-?" "C-<left>" "C-<right>"))
+    (keymap-unset paredit-mode-map key t))
   (keymap-set paredit-mode-map "C-c s" #'paredit-splice-sexp))
 
 ;;;; Magit
@@ -774,8 +821,7 @@ then enter the mode again with the grammar in place."
 ;; refreshes them when it refreshes itself. The marks go in the margin, which a
 ;; terminal frame has, rather than the fringe, which it has not.
 (use-package diff-hl
-  :hook ((magit-pre-refresh  . diff-hl-magit-pre-refresh)
-         (magit-post-refresh . diff-hl-magit-post-refresh))
+  :hook (magit-post-refresh . diff-hl-magit-post-refresh)
   :init
   (global-diff-hl-mode 1)
   (diff-hl-margin-mode 1))
@@ -1030,8 +1076,10 @@ then enter the mode again with the grammar in place."
 
 ;;;; Server
 
+;; A daemon starts its server after the init, and a second start here would
+;; restart it.
 (require 'server)
-(unless (or noninteractive (server-running-p))
+(unless (or noninteractive (daemonp) (server-running-p))
   (server-start))
 
 ;;; init.el ends here

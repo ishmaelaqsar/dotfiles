@@ -15,11 +15,20 @@ system "c 2000 2000";
 .kdb.gridRows:$[count r:getenv`KDB_GRID_ROWS;"J"$r;5000];
 .kdb.gridN:0;
 
-/ Open the handle. Call again after a dropped connection.
+/ Open the handle, and load the schema for completion. The old handle closes
+/ first, so a reconnect does not leave a connection open on the server; after
+/ a failed open, .kdb.h is undefined, which .kdb.handleErr knows. hopen waits
+/ 5 seconds for a host that does not answer.
 .kdb.connect:{[]
-  .kdb.h:hopen `$":",":" sv .kdb.target[`host`port`user],enlist "";
+  if[`h in key `.kdb; @[hclose;.kdb.h;::]; delete h from `.kdb];
+  .kdb.h:hopen (`$":",":" sv .kdb.target[`host`port`user],enlist "";5000);
   -1 "kdb: connected to ",.kdb.target[`name]," (",.kdb.target[`host],":",.kdb.target[`port],")";
+  @[.kdb.schema;::;{-2 "schema: ",x}];
   .kdb.h};
+
+/ Connect, and print a failure as a marker line: kdb.el ends the q banner at
+/ this line, as at "kdb: connected".
+.kdb.reconnect:{[] @[.kdb.connect;::;{-2 "kdb: connect failed: ",x;}]};
 
 / Split TEXT into statements, the same rule as run.sh: a blank line or a
 / /-comment line separates statements, and consecutive lines join.
@@ -55,7 +64,7 @@ system "c 2000 2000";
   res:.kdb.try stmt;
   if[not first res; if[.kdb.handleErr last res;
     -1 "kdb: handle dropped, reconnecting";
-    @[.kdb.connect;::;{-2 "connect: ",x}];
+    .kdb.reconnect[];
     res:.kdb.try stmt]];
   $[first res;
     [.kdb.last:last res;show .kdb.last;if[.kdb.gridOn and .Q.qt .kdb.last;@[.kdb.grid;.kdb.last;{-2 "grid: ",x}]]];
@@ -73,5 +82,4 @@ system "c 2000 2000";
   hsym[`$path] 0: {" " sv string x,y}'[key d;value d];
   -1 "kdb-schema: ",path;};
 
-.kdb.connect[];
-@[.kdb.schema;::;{-2 "schema: ",x}];
+.kdb.reconnect[];

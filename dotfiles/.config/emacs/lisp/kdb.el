@@ -172,10 +172,10 @@ prefix is removed first, because the remote server does the display."
 
 (defun kdb--process-sentinel (process message)
   "Record that PROCESS ended with MESSAGE, and save the input history."
-  (comint-write-input-ring)
   (let ((buffer (process-buffer process)))
     (when (buffer-live-p buffer)
       (with-current-buffer buffer
+        (comint-write-input-ring)
         (goto-char (point-max))
         (insert-before-markers
          (format "\nProcess %s %s at %s\n" (process-name process)
@@ -209,7 +209,8 @@ A `kdb-grid:' line names a CSV file of a table result: load it into the
 grid.  A `kdb-schema:' line names the schema file: load it into
 `kdb--schemas'.  Both lines are removed when `kdb--driver-file-p' accepts
 the path; any other such line stays as output.  The first `kdb: connected'
-line ends the q banner: remove everything before it."
+or `kdb: connect failed' line ends the q banner: remove everything before
+it."
   (let ((proc (get-buffer-process (current-buffer)))
         (start (or (and comint-last-output-start
                         (marker-position comint-last-output-start))
@@ -241,7 +242,8 @@ line ends the q banner: remove everything before it."
         (when kdb--banner-pending
           (goto-char start)
           (forward-line 0)
-          (when (re-search-forward "^kdb: connected" (process-mark proc) t)
+          (when (re-search-forward "^kdb: connect\\(?:ed\\| failed\\)"
+                                   (process-mark proc) t)
             (delete-region (point-min) (line-beginning-position))
             (setq kdb--banner-pending nil)))))))
 
@@ -251,8 +253,17 @@ Derived from `q-shell-mode', so q-mode treats the buffer as a q shell."
   (setq-local comint-input-sender #'kdb--input-sender)
   (setq-local truncate-lines t)
   (font-lock-add-keywords nil '(("^ERR: .*" 0 'error t)
+                                ("^kdb: connect failed.*" 0 'error t)
                                 ("^kdb: connected.*" 0 'success t)))
   (add-hook 'comint-output-filter-functions #'kdb--output-filter nil t))
+
+(defun kdb--write-input-rings ()
+  "Write the input history of every kdb shell buffer."
+  (dolist (buffer (buffer-list))
+    (with-current-buffer buffer
+      (when (derived-mode-p 'kdb-shell-mode)
+        (comint-write-input-ring)))))
+(add-hook 'kill-emacs-hook #'kdb--write-input-rings)
 
 (defun kdb--target-environment (name plist)
   "Return the process environment for a shell on target NAME with PLIST."
@@ -282,6 +293,8 @@ Derived from `q-shell-mode', so q-mode treats the buffer as a q shell."
               header-line-format (kdb--header-line)
               comint-input-ring-file-name (expand-file-name "~/.q_history"))
         (comint-read-input-ring t)
+        ;; The sentinel does not run when the buffer is killed, or at exit.
+        (add-hook 'kill-buffer-hook #'comint-write-input-ring nil t)
         (let ((process-environment (kdb--target-environment name (cdr target))))
           (comint-exec buffer "kdb" q-program nil (list kdb-driver-file)))
         (set-process-sentinel (get-buffer-process buffer) #'kdb--process-sentinel)))
@@ -360,7 +373,7 @@ The target's shell starts, so its schema is loaded for completion."
 (defun kdb-reconnect ()
   "Open the remote handle of the current buffer's shell again."
   (interactive)
-  (kdb--send (concat kdb-local-prefix ".kdb.connect[]")))
+  (kdb--send (concat kdb-local-prefix ".kdb.reconnect[]")))
 
 (defun kdb-grid ()
   "Open the last remote result of the current buffer's shell in a grid."
@@ -854,9 +867,15 @@ statement.
         (setq kdb--capf-function (kdb--capf))
         (add-hook 'completion-at-point-functions kdb--capf-function nil t)
         (add-hook 'after-change-functions #'kdb--hints-schedule nil t)
-        ;; A saved query file names its target on the header line.
+        ;; A saved query file names its target on the header line. The
+        ;; target starts a q shell, so with no q the buffer takes the name
+        ;; only, and the file still opens.
         (let ((name (and (not kdb-buffer-target) (kdb--header-target))))
-          (when name (kdb-set-target name)))
+          (cond ((null name))
+                ((executable-find q-program) (kdb-set-target name))
+                (t (setq kdb-buffer-target name)
+                   (message "kdb: no %s on PATH, so no shell for %s"
+                            q-program name))))
         (kdb--hints-refresh))
     (remove-hook 'completion-at-point-functions kdb--capf-function t)
     (remove-hook 'after-change-functions #'kdb--hints-schedule t)
