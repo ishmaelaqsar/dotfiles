@@ -17,7 +17,17 @@ __run() {
     "$@"
 }
 
-# Report a problem, and keep it for the summary install.sh prints at the end.
+# __run with the command's output discarded. A redirect on __run itself would
+# discard the dry-run line too.
+__run_quiet() {
+    if [ "${DOTFILES_DRY_RUN:-0}" = "1" ]; then
+        printf '  [dry-run] %s\n' "$*"
+        return 0
+    fi
+    "$@" >/dev/null 2>&1
+}
+
+# Report a problem, and keep it for __warn_summary at the end of the run.
 # A warning in the middle of a long package run scrolls past unread.
 WARNING_LIST=""
 WARNING_COUNT=0
@@ -25,6 +35,15 @@ __warn() {
     echo "Warning: $*" >&2
     WARNING_LIST="${WARNING_LIST}  - $*"$'\n'
     WARNING_COUNT=$((WARNING_COUNT + 1))
+}
+
+# __warn_summary NOUN: repeat every warning, where it is the last thing on
+# screen. NOUN names what the count counts, for example "step(s)".
+__warn_summary() {
+    [ "$WARNING_COUNT" -gt 0 ] || return 0
+    echo
+    echo "$WARNING_COUNT $1 need attention:"
+    printf '%s' "$WARNING_LIST"
 }
 
 # Prefer the native manager over linuxbrew, and an AUR helper over pacman on

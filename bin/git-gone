@@ -39,9 +39,10 @@ done
 echo "Pruning remote-tracking refs..."
 git fetch --prune >/dev/null 2>&1
 
-# Branches whose upstream is gone. $1 is the '*' or '+' marker for a branch
-# that is checked out here or in a worktree, so the name moves to $2 there.
-branches=$(git branch -vv | awk '/: gone\]/ { if ($1 == "*" || $1 == "+") print $2; else print $1 }')
+# Branches whose upstream is gone. %(upstream:track) holds only the tracking
+# state, so a commit subject cannot match, as it can in `git branch -vv`.
+branches=$(git for-each-ref --format='%(refname:lstrip=2) %(upstream:track)' refs/heads \
+    | awk '$2 == "[gone]" { print $1 }')
 
 if [ -z "$branches" ]; then
     echo "No gone branches to clean up."

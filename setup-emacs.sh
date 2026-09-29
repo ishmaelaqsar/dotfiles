@@ -26,6 +26,8 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/pkg.sh"
+# Repeat the warnings at exit, also on an early exit or a failure.
+trap '__warn_summary "step(s)"' EXIT
 PKG_MGR="$(__detect_pkg_mgr)"
 __pkg_refresh "$PKG_MGR"
 
@@ -78,7 +80,7 @@ if [ -f "$INIT" ]; then
     echo "Installing the packages init.el selects..."
     emacs --batch -l "$EARLY_INIT" --eval '(package-initialize)' -l "$INIT" \
         --eval '(progn (package-refresh-contents) (package-install-selected-packages t) (package-quickstart-refresh))' \
-        || echo "Warning: package install failed. Run it from Emacs: M-x package-install-selected-packages" >&2
+        || __warn "package install failed. Run it from Emacs: M-x package-install-selected-packages"
 else
     echo "Note: $INIT is missing. Run ./install.sh to link it, then run this script again." >&2
 fi
@@ -93,7 +95,7 @@ if [[ "$OSTYPE" == darwin* ]] && command -v brew >/dev/null 2>&1; then
     else
         echo "Starting the Emacs daemon as a brew service..."
         brew services start emacs-plus@31 \
-            || echo "Warning: could not start the service. Start a daemon with 'emacs --daemon'." >&2
+            || __warn "could not start the service. Start a daemon with 'emacs --daemon'."
     fi
 fi
 

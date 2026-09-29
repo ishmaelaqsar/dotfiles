@@ -25,6 +25,8 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/pkg.sh"
+# Repeat the warnings at exit, also on an early exit or a failure.
+trap '__warn_summary "step(s)"' EXIT
 PKG_MGR="$(__detect_pkg_mgr)"
 __pkg_refresh "$PKG_MGR"
 

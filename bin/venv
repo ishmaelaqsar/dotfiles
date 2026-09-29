@@ -204,7 +204,14 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main():
     parser = build_parser()
-    args = parser.parse_args()
+    # An option that init does not know goes on to uv or to python -m venv, so
+    # `venv init --seed` needs no directory first. An option whose value is a
+    # separate word needs the = form, or the directory first.
+    args, unknown = parser.parse_known_args()
+    if unknown:
+        if args.command != "init":
+            parser.error(f"unrecognized arguments: {' '.join(unknown)}")
+        args.venv_options = unknown + args.venv_options
 
     if args.command in (None, "path"):
         # No command prints the path, so a script can read it.

@@ -196,6 +196,7 @@ def apply():
         # pre-dotfiles one, and a key added later gets recorded too.
         state.setdefault(f"{schema} {key}", current)
 
+    failed = 0
     for schema, key, value in SETTINGS:
         current = get(schema, key)
         if current is None:
@@ -206,6 +207,7 @@ def apply():
             continue
         ok, _ = gsettings("set", schema, key, value)
         print(f"  {'set ' if ok else 'FAIL'} {schema} {key} = {value}")
+        failed += not ok
 
     # Register the keybinding paths. GNOME reads a custom binding only when its
     # path is listed here.
@@ -215,12 +217,17 @@ def apply():
         merged = parse_list(bindings)
         missing = [kb_path(slug) for slug, *_ in LAUNCHERS if kb_path(slug) not in merged]
         if missing:
-            gsettings("set", MEDIA_KEYS, "custom-keybindings", format_list(merged + missing))
+            ok, _ = gsettings("set", MEDIA_KEYS, "custom-keybindings", format_list(merged + missing))
             for path in missing:
-                print(f"  set  {MEDIA_KEYS} custom-keybindings += {path}")
+                print(f"  {'set ' if ok else 'FAIL'} {MEDIA_KEYS} custom-keybindings += {path}")
+            failed += not ok
 
     save_state(state)
-    print(f"Applied. Previous values saved in {STATE_FILE}")
+    if failed:
+        print(f"{failed} key(s) failed. Previous values saved in {STATE_FILE}", file=sys.stderr)
+    else:
+        print(f"Applied. Previous values saved in {STATE_FILE}")
+    return failed
 
 
 def dump():
@@ -265,8 +272,9 @@ def main():
     if shutil.which("gsettings") is None:
         print("gsettings not found — not a GNOME machine. Nothing to do.")
         return 0
-    {"apply": apply, "dump": dump, "restore": restore}[sys.argv[1]]()
-    return 0
+    # Only apply returns a count: the number of keys that did not set.
+    failed = {"apply": apply, "dump": dump, "restore": restore}[sys.argv[1]]()
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

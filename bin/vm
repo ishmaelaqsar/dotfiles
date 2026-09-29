@@ -163,7 +163,7 @@ class VMBackend:
             {
                 "detect": "command -v pacman >/dev/null 2>&1",
                 "install": [
-                    "sudo pacman -Sy --noconfirm qemu-guest-agent",
+                    "sudo pacman -Syu --noconfirm qemu-guest-agent",
                     "sudo systemctl enable --now qemu-guest-agent",
                 ],
             },
@@ -666,7 +666,7 @@ def cmd_deploy(args):
     
     # The script runs as a separate file, so it does not get the SSH options
     # that cmd_ssh sets. The author of the script must set them.
-    subprocess.run(cmd)
+    sys.exit(subprocess.run(cmd).returncode)
 
 
 def cmd_setup(args):

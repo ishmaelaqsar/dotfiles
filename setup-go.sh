@@ -23,6 +23,8 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/pkg.sh"
+# Repeat the warnings at exit, also on an early exit or a failure.
+trap '__warn_summary "step(s)"' EXIT
 PKG_MGR="$(__detect_pkg_mgr)"
 __pkg_refresh "$PKG_MGR"
 
@@ -34,8 +36,8 @@ if ! command -v go >/dev/null 2>&1; then
 fi
 
 echo "Installing gopls (LSP) and delve (debugger)..."
-go install golang.org/x/tools/gopls@latest || echo "Warning: gopls install failed." >&2
-go install github.com/go-delve/delve/cmd/dlv@latest || echo "Warning: delve install failed." >&2
+go install golang.org/x/tools/gopls@latest || __warn "gopls install failed."
+go install github.com/go-delve/delve/cmd/dlv@latest || __warn "delve install failed."
 
 echo "Done. $(go version)"
 if [[ "$OSTYPE" == darwin* ]]; then

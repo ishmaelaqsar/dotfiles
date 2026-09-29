@@ -184,6 +184,9 @@ __active_tags
 __skip_bin_entry() {
     case "$(basename "$1")" in
         __pycache__|*.pyc) return 0 ;;
+        # The shim runs podman, which a container never gets, and ~/bin is
+        # first on PATH, so it would hide the container's own docker.
+        docker) [ "$IN_CONTAINER" -eq 1 ] && return 0 ;;
     esac
     return 1
 }
@@ -254,14 +257,18 @@ __check_install() {
     [ "$missing" -eq 0 ] && echo "  ok: every bin/ script is linked"
 
     echo "Fonts in $FONT_DIR:"
-    missing=0
-    for font in "$SCRIPT_DIR"/general/0xProto/*.ttf; do
-        [ -f "$FONT_DIR/$(basename "$font")" ] || missing=$((missing + 1))
-    done
-    if [ "$missing" -gt 0 ]; then
-        __check_fail "$missing 0xProto font file(s) missing"
+    if [ "$IN_CONTAINER" -eq 1 ]; then
+        echo "  [container] skipped: the install copies no fonts into a container"
     else
-        echo "  ok: the 0xProto family is installed"
+        missing=0
+        for font in "$SCRIPT_DIR"/general/0xProto/*.ttf; do
+            [ -f "$FONT_DIR/$(basename "$font")" ] || missing=$((missing + 1))
+        done
+        if [ "$missing" -gt 0 ]; then
+            __check_fail "$missing 0xProto font file(s) missing"
+        else
+            echo "  ok: the 0xProto family is installed"
+        fi
     fi
 
     echo "Generated config:"
@@ -280,7 +287,6 @@ __check_install() {
         primary="$(__pkg_primary "$commands")"
         __warn "$primary not on PATH (package $(__pkg_name "$PKG_MGR" "$primary"))."
     done < <(__pkg_select "${ACTIVE_TAGS[@]}")
-    command -v starship >/dev/null 2>&1 || __warn "starship not on PATH."
 
     # Live state, so a probe run cannot judge it
     if [ "$IS_HOME_INSTALL" -eq 0 ]; then
@@ -312,11 +318,7 @@ __check_install() {
     else
         echo "$CHECK_FAILURES check(s) failed. Run ./install.sh to repair."
     fi
-    if [ "$WARNING_COUNT" -gt 0 ]; then
-        echo
-        echo "$WARNING_COUNT package(s) need attention:"
-        printf '%s' "$WARNING_LIST"
-    fi
+    __warn_summary "package(s)"
 
     [ "$CHECK_FAILURES" -eq 0 ]
 }
@@ -483,6 +485,21 @@ for script_path in "$SOURCE_BIN_DIR"/*; do
 
         chmod +x "$script_path"
 
+        # ln -sf deletes what is at the path. A real file, or a link that
+        # points elsewhere, moves to <name>.bak first, as lib/sync-dotfiles
+        # does for the dotfiles.
+        if { [ -e "$target_path" ] || [ -L "$target_path" ]; } \
+           && [ "$(readlink "$target_path")" != "$script_path" ]; then
+            backup="$target_path.bak"
+            n=1
+            while [ -e "$backup" ] || [ -L "$backup" ]; do
+                backup="$target_path.bak.$n"
+                n=$((n + 1))
+            done
+            mv "$target_path" "$backup"
+            __warn "moved $target_path to $backup, to link $script_name there."
+        fi
+
         echo "  -> Linking $script_name"
         ln -sf "$script_path" "$target_path"
     fi
@@ -569,7 +586,7 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
     elif [ -f "/usr/local/bin/pinentry-mac" ]; then
         PINENTRY_PATH="/usr/local/bin/pinentry-mac"
     else
-        echo "Warning: pinentry-mac not found. Run: brew install pinentry-mac"
+        __warn "pinentry-mac not found. Run: brew install pinentry-mac"
     fi
 else
     if command -v pinentry-gnome3 >/dev/null; then
@@ -609,7 +626,7 @@ if [ -n "$PINENTRY_PATH" ]; then
     echo "  -> Set pinentry to $PINENTRY_PATH"
 else
     echo "# WARNING: No specific pinentry-program found during install" >> "$AGENT_CONF"
-    echo "  -> Warning: Could not detect pinentry program."
+    __warn "no pinentry program found; gpg-agent falls back to its default."
 fi
 
 fi
@@ -668,16 +685,17 @@ else
         echo "Importing public GPG key from $PUB_KEY..."
         __run gpg --import "$PUB_KEY"
 
-        FINGERPRINT=$(gpg --with-colons --import-options show-only --import "$PUB_KEY" \
-            | grep -m 1 "^fpr" | awk -F: '{print $10}')
-
-        if [ -n "$FINGERPRINT" ]; then
-            echo "Setting ultimate trust for $FINGERPRINT..."
-            # --import-ownertrust is the scriptable route. The interactive
-            # --edit-key trust flow exits non-zero and trips set -e.
-            if [ "$DRY_RUN" -eq 1 ]; then
-                echo "  [dry-run] set ultimate trust for $FINGERPRINT"
-            else
+        # The lookup runs gpg, and gpg creates its home directory on the
+        # first call, so a dry run only names the step.
+        if [ "$DRY_RUN" -eq 1 ]; then
+            echo "  [dry-run] set ultimate trust for the key in $PUB_KEY"
+        else
+            FINGERPRINT=$(gpg --with-colons --import-options show-only --import "$PUB_KEY" \
+                | grep -m 1 "^fpr" | awk -F: '{print $10}')
+            if [ -n "$FINGERPRINT" ]; then
+                echo "Setting ultimate trust for $FINGERPRINT..."
+                # --import-ownertrust is the scriptable route. The interactive
+                # --edit-key trust flow exits non-zero and trips set -e.
                 echo "$FINGERPRINT:6:" | gpg --import-ownertrust
             fi
         fi
@@ -696,7 +714,7 @@ elif ! command -v opencode >/dev/null 2>&1; then
     case "$PKG_MGR" in
         brew)             __run brew install anomalyco/tap/opencode || __warn "OpenCode install failed." ;;
         yay|paru|pacman)  __pkg_raw "$PKG_MGR" opencode || __warn "OpenCode install failed." ;;
-        *)                __run sh -c 'curl -fsSL https://opencode.ai/install | bash' || __warn "OpenCode install failed." ;;
+        *)                __run bash -o pipefail -c 'curl -fsSL https://opencode.ai/install | bash' || __warn "OpenCode install failed." ;;
     esac
 fi
 
@@ -866,8 +884,6 @@ fi
 # -----------------------------
 # Summary
 # -----------------------------
-# A warning in the middle of a long package run scrolls past unread, so
-# repeat them all at the end where they are the last thing on screen.
 if [ "$DRY_RUN" -eq 1 ]; then
     echo
     echo "Dry run complete — nothing changed."
@@ -875,8 +891,4 @@ else
     echo "Dotfiles installation complete."
 fi
 
-if [ "$WARNING_COUNT" -gt 0 ]; then
-    echo
-    echo "$WARNING_COUNT step(s) need attention:"
-    printf '%s' "$WARNING_LIST"
-fi
+__warn_summary "step(s)"

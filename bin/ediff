@@ -15,5 +15,10 @@ if ! command -v emacs >/dev/null 2>&1; then
     echo "ediff needs Emacs. Run setup-emacs.sh, or install the emacs package." >&2
     exit 1
 fi
+# q in the control buffer ends Emacs too, so pacdiff goes on to the next file.
+# The hook is appended, so ediff cleans up first, and a changed buffer still
+# asks to be saved.
 EDIFF_A="$1" EDIFF_B="$2" \
-    exec emacs -nw -q --eval '(ediff-files (getenv "EDIFF_A") (getenv "EDIFF_B"))'
+    exec emacs -nw -q --eval '(progn
+  (add-hook (quote ediff-quit-hook) (function save-buffers-kill-emacs) t)
+  (ediff-files (getenv "EDIFF_A") (getenv "EDIFF_B")))'

@@ -25,6 +25,8 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/pkg.sh"
+# Repeat the warnings at exit, also on an early exit or a failure.
+trap '__warn_summary "step(s)"' EXIT
 PKG_MGR="$(__detect_pkg_mgr)"
 __pkg_refresh "$PKG_MGR"
 
@@ -55,16 +57,16 @@ EOF
 fi
 
 # </dev/null makes sdk's "set as default?" prompt take its default (yes)
-command -v java >/dev/null 2>&1 || sdk install java < /dev/null || echo "Warning: java install failed." >&2
-command -v mvn >/dev/null 2>&1  || sdk install maven < /dev/null || echo "Warning: maven install failed." >&2
-command -v gradle >/dev/null 2>&1 || sdk install gradle < /dev/null || echo "Warning: gradle install failed." >&2
+command -v java >/dev/null 2>&1 || sdk install java < /dev/null || __warn "java install failed."
+command -v mvn >/dev/null 2>&1  || sdk install maven < /dev/null || __warn "maven install failed."
+command -v gradle >/dev/null 2>&1 || sdk install gradle < /dev/null || __warn "gradle install failed."
 set -u
 
 # jdtls (LSP): packaged for brew and the AUR only
 if ! command -v jdtls >/dev/null 2>&1; then
     case "$PKG_MGR" in
-        brew|yay|paru) __pkg_raw "$PKG_MGR" jdtls || echo "Warning: jdtls install failed." >&2 ;;
-        pacman)   echo "Warning: jdtls is AUR-only and this box has no AUR helper. Run install.sh to bootstrap yay, then re-run this script." >&2 ;;
+        brew|yay|paru) __pkg_raw "$PKG_MGR" jdtls || __warn "jdtls install failed." ;;
+        pacman)   __warn "jdtls is AUR-only and this box has no AUR helper. Run install.sh to bootstrap yay, then re-run this script." ;;
         *)        echo "Note: no jdtls package for $PKG_MGR — install manually or let the editor manage it." ;;
     esac
 fi
