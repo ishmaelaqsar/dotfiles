@@ -47,8 +47,27 @@
         transient-history-file (expand-file-name "transient/history.el" my/state-dir)
         transient-levels-file (expand-file-name "transient/levels.el" my/state-dir)
         transient-values-file (expand-file-name "transient/values.el" my/state-dir)
+        tramp-persistency-file-name (expand-file-name "tramp" my/state-dir)
         ;; Cookies, the cache, and the history of every URL Emacs fetches.
         url-configuration-directory (expand-file-name "url/" my/state-dir))
+
+;; A file opened as another user, through /sudo:: or a sudo hop, keeps no
+;; backup and no auto-save. Both go under `my/state-dir', so the copy of a file
+;; that only root may read would belong to you.
+(defun my/su-file-p (file)
+  "Return non-nil when FILE opens through su, sudo, sudoedit, or doas."
+  (member (file-remote-p file 'method) '("su" "sudo" "sudoedit" "doas")))
+
+(defun my/backup-enable-p (name)
+  "Back up NAME as `normal-backup-enable-predicate' does, unless it is a su file."
+  (and (normal-backup-enable-predicate name) (not (my/su-file-p name))))
+(setq backup-enable-predicate #'my/backup-enable-p)
+
+(defun my/su-no-auto-save ()
+  "Turn auto-save off in a buffer that visits a su file."
+  (when (and buffer-file-name (my/su-file-p buffer-file-name))
+    (auto-save-mode -1)))
+(add-hook 'find-file-hook #'my/su-no-auto-save)
 
 ;;;; Packages
 
@@ -154,6 +173,8 @@
         ;; A delete is recoverable: macOS takes the file to ~/.Trash, Linux to
         ;; the freedesktop trash.
         delete-by-moving-to-trash t
+        ;; The trash is local, so the move would first copy a remote file here.
+        remote-file-name-inhibit-delete-by-moving-to-trash t
         ;; The help window takes focus, so q closes it without a C-x o first.
         help-window-select t
         ;; The search rings survive a restart. The kill ring does not: it
@@ -315,6 +336,24 @@ there and the theme's faces are computed for a dumb terminal. Every frame
   (dired-kill-when-opening-new-dired-buffer t)
   (dired-auto-revert-buffer t))
 
+;;;; Remote files: TRAMP
+
+;; C-x C-f /ssh:<host>:<path> opens a file on another machine. The host's login
+;; PATH comes first: TRAMP's own list has no ~/.local/bin, ~/go/bin or
+;; ~/.cargo/bin, where .bash_profile puts ruff, gopls, and the other tools that
+;; eglot and the formatters run.
+;; A process on the host, such as a language server or a git call from Magit,
+;; gets its own ssh on TRAMP's shared connection, and no remote shell starts it.
+;; Such a process cannot answer a PIN or a touch prompt; the shared connection
+;; has already authenticated. A multi-hop or sudo path uses the shell.
+(defvar tramp-remote-path)
+(with-eval-after-load 'tramp
+  (add-to-list 'tramp-remote-path 'tramp-own-remote-path)
+  (connection-local-set-profile-variables
+   'my/tramp-direct-async '((tramp-direct-async-process . t)))
+  (connection-local-set-profiles
+   '(:application tramp :protocol "ssh") 'my/tramp-direct-async))
+
 ;;;; isearch
 
 ;; A match count in the prompt, and a search that survives C-a, C-e and a
@@ -388,11 +427,6 @@ there and the theme's faces are computed for a dumb terminal. Every frame
   :custom
   ;; < narrows the candidates to one group: b for buffers, f for files.
   (consult-narrow-key "<")
-  ;; Debian and Ubuntu ship the binary as fdfind, which is why .aliases wraps
-  ;; it. consult defaults to the literal "fd", so name whichever is here.
-  (consult-fd-args
-   (list (or (executable-find "fd") (executable-find "fdfind") "fd")
-         "--full-path --color=never"))
   ;; C-x b lists the buffers of the current project, then the buffers of no
   ;; project: the scratch buffer, Gnus, a shell in the home directory. Another
   ;; project's buffers wait behind the narrow key `a', so the way to them is
@@ -687,20 +721,27 @@ then enter the mode again with the grammar in place."
 ;; uv tool by setup-python.sh, so run it on save: first the import sorter
 ;; (rule set I, the isort rules), then the formatter, the order ruff itself
 ;; documents. The replace keeps point and marks in place.
+;; ruff runs on the host of the file, so a remote file formats with the
+;; pyproject.toml beside it. `process-file' goes to that host, and takes its
+;; input from a file there, not from the buffer.
 (defun my/ruff--pipe (args)
   "Pipe the buffer through ruff with ARGS. Return the output buffer, or nil."
-  (let ((out (generate-new-buffer " *ruff*")))
-    ;; stdout only: a warning on stderr would land in the formatted text.
-    (if (zerop (apply #'call-process-region (point-min) (point-max) "ruff" nil
-                      (list out nil) nil args))
-        out
-      (kill-buffer out)
-      nil)))
+  (let ((in (make-nearby-temp-file "ruff"))
+        (out (generate-new-buffer " *ruff*")))
+    (unwind-protect
+        (progn
+          (write-region (point-min) (point-max) in nil 'silent)
+          ;; stdout only: a warning on stderr would land in the formatted text.
+          (if (zerop (apply #'process-file "ruff" in (list out nil) nil args))
+              out
+            (kill-buffer out)
+            nil))
+      (delete-file in))))
 
 (defun my/ruff-format-buffer ()
   "Sort the imports and format the buffer with ruff, when ruff is on PATH."
-  (when (executable-find "ruff")
-    (let ((file (or (buffer-file-name) "stdin.py")))
+  (when (executable-find "ruff" t)
+    (let ((file (file-local-name (or (buffer-file-name) "stdin.py"))))
       (dolist (args `(("check" "--fix" "--select" "I" "--quiet" "--stdin-filename" ,file "-")
                       ("format" "--stdin-filename" ,file "-")))
         (let ((out (my/ruff--pipe args)))
@@ -826,9 +867,12 @@ then enter the mode again with the grammar in place."
       (delete-frame)
     (magit-mode-quit-window kill-buffer)))
 
+(defvar magit-tramp-pipe-stty-settings)
 (use-package magit
   :bind ("C-x g" . magit-status)
-  :custom (magit-bury-buffer-function #'my/magit-bury-buffer))
+  :custom (magit-bury-buffer-function #'my/magit-bury-buffer)
+  ;; Over TRAMP's direct processes, a hunk stage hangs on a pipe, not on a pty.
+  :config (setq magit-tramp-pipe-stty-settings 'pty))
 
 ;; Bars beside the buffer mark the lines that differ from git, and magit
 ;; refreshes them when it refreshes itself. The marks go in the margin, which a
