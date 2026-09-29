@@ -1,23 +1,23 @@
-if [[ -f /etc/profile ]]; then
-    . /etc/profile
-fi
-
 # ============================================================
 # PATH
 # ============================================================
 
-# Find /opt/homebrew/bin/bash before /bin/bash (no-op on Linux)
-if [[ -d "/opt/homebrew/bin" ]]; then
-    export PATH="/opt/homebrew/bin:$PATH"
-fi
-
+# Put DIR first, and remove it from anywhere else. A nested login shell, such
+# as a tmux pane, reads /etc/profile again, and on macOS path_helper then puts
+# the system directories back in front of these.
 __add_path() {
     local dir="$1"
-    if [[ -d "$dir" && ":$PATH:" != *":$dir:"* ]]; then
-        PATH="$dir:$PATH"
-    fi
+    [[ -d "$dir" ]] || return 0
+    PATH=":$PATH:"
+    while [[ "$PATH" == *":$dir:"* ]]; do
+        PATH="${PATH//:$dir:/:}"
+    done
+    PATH="${PATH#:}"
+    PATH="$dir:${PATH%:}"
 }
 
+# Find /opt/homebrew/bin/bash before /bin/bash (no-op on Linux)
+__add_path "/opt/homebrew/bin"
 __add_path "$HOME/bin"
 __add_path "$HOME/.local/bin"
 __add_path "$HOME/.cargo/bin"

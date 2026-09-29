@@ -99,8 +99,10 @@ fi
 # ============================================================
 
 if ! shopt -oq posix; then
-    if [[ -f /opt/homebrew/etc/bash_completion ]]; then
-        . /opt/homebrew/etc/bash_completion
+    # bash-completion@2 on macOS. It returns at once under a bash older than
+    # 4.2, such as /bin/bash.
+    if [[ -f /opt/homebrew/etc/profile.d/bash_completion.sh ]]; then
+        . /opt/homebrew/etc/profile.d/bash_completion.sh
     elif [[ -f /usr/share/bash-completion/bash_completion ]]; then
         . /usr/share/bash-completion/bash_completion
     elif [[ -f /etc/bash_completion ]]; then
@@ -110,9 +112,10 @@ fi
 
 # fzf keys: C-r searches the history, C-t picks a file, M-c picks a directory
 # and enters it. The pickers walk with fd where it exists. `fzf --bash` prints
-# the key bindings; an old fzf has no such flag, hence the second test.
-if command -v fzf >/dev/null 2>&1 && fzf --bash >/dev/null 2>&1; then
-    eval "$(fzf --bash)"
+# the key bindings. fzf before 0.48 has no such flag and fails, so the output
+# is used only when the call succeeds.
+if command -v fzf >/dev/null 2>&1 && __fzf_init="$(fzf --bash 2>/dev/null)"; then
+    eval "$__fzf_init"
     __fd_bin="$(command -v fd || command -v fdfind)"
     if [[ -n "$__fd_bin" ]]; then
         export FZF_CTRL_T_COMMAND="$__fd_bin --type f --hidden --exclude .git"
@@ -120,10 +123,19 @@ if command -v fzf >/dev/null 2>&1 && fzf --bash >/dev/null 2>&1; then
     fi
     unset __fd_bin
 fi
+unset __fzf_init
 
-if command -v kubectl >/dev/null 2>&1; then
-    source <(kubectl completion bash)
+# kubectl builds its completion script on every call, which costs more than
+# the rest of this file. The cache holds the script until kubectl changes.
+__kubectl_bin="$(command -v kubectl 2>/dev/null)"
+if [[ -n "$__kubectl_bin" ]]; then
+    __kubectl_comp="${XDG_CACHE_HOME:-$HOME/.cache}/dotfiles/kubectl-completion.bash"
+    if [[ ! -s "$__kubectl_comp" || "$__kubectl_bin" -nt "$__kubectl_comp" ]]; then
+        mkdir -p "${__kubectl_comp%/*}" && kubectl completion bash > "$__kubectl_comp"
+    fi
+    . "$__kubectl_comp"
 fi
+unset __kubectl_bin __kubectl_comp
 
 # podman completion. bin/docker is a shell script that runs podman, so the
 # same completer serves `docker`. head reads the first lines of the shim, and
