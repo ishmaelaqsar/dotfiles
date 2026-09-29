@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Fail the commit when it would contain a cleartext secret.
 # The gate reads the INDEX, not the work tree: the index is what commits.
-set -u
+set -uo pipefail
 fail() { printf 'pre-commit: %s\n' "$*" >&2; exit 1; }
 
 REPO_ROOT="$(git rev-parse --show-toplevel)" || fail "cannot find the repository root"

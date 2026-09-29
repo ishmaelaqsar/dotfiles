@@ -11,13 +11,22 @@ STRICT='-----BEGIN [A-Z ]*PRIVATE KEY|(AKIA|ASIA)[0-9A-Z]{16}|gh[pousr]_[A-Za-z0
 # paths do not match.
 LOOSE='(password|passwd|secret|token|api_?key)["'"'"']?[[:space:]]*[=:][[:space:]]*["'"'"']?[A-Za-z0-9_=-]{16,}'
 
-# Keep the added lines, and prefix each with its file name.
+# Keep the added lines, and prefix each with its file name. The file header
+# runs from `diff --git` to the first hunk. Only there is `+++` a file name:
+# in a hunk, an added line whose text starts with `++` shows as `+++` too.
 annotated="$(
     file='?'
+    header=0
     while IFS= read -r line; do
         case "$line" in
-            +++\ b/*) file="${line#+++ b/}" ;;
-            +++*) ;;
+            'diff --git '*) header=1 ;;
+            @@*) header=0 ;;
+        esac
+        if [ "$header" -eq 1 ]; then
+            case "$line" in +++\ b/*) file="${line#+++ b/}" ;; esac
+            continue
+        fi
+        case "$line" in
             +*)
                 added="${line#+}"
                 case "$added" in *'secretscan: allow'*) ;; *) printf '%s: %s\n' "$file" "$added" ;; esac
