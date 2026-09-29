@@ -3,6 +3,16 @@ case $- in
       *) return;;
 esac
 
+# A TRAMP login from Emacs. TRAMP waits for a prompt that ends in #, $, %, >
+# or ], and the starship prompt ends in another character, so the login would
+# hang until its timeout. TRAMP logs in with a dumb TERM, and ssh does not pass
+# INSIDE_EMACS on. A local M-x shell also has a dumb TERM, but comint sets
+# INSIDE_EMACS, so that shell reads the rest of this file.
+if [[ $TERM == dumb && -z ${INSIDE_EMACS:-} ]]; then
+    PS1='$ '
+    return
+fi
+
 # ============================================================
 # Prompt
 # ============================================================
