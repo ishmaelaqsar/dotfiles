@@ -3,8 +3,8 @@ description: "Digest the Obsidian vault at $OBSIDIAN_VAULT (due reminders, proje
 ---
 
 Produce a concise terminal digest of the second-brain vault at `$OBSIDIAN_VAULT` (resolve from
-the environment; default `~/vault`). **Read-only by default**: report, and modify notes only if the
-user explicitly asks (for example "mark X done", "bump that project"). Never git commit.
+the environment; default `~/vault`). **Read-only by default**: report, and modify notes only on a
+direct request from the user (for example "mark X done", "bump that project"). Never git commit.
 
 Use today's date for all date math. Gather and report, in this order:
 

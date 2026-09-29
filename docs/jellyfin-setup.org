@@ -1,4 +1,4 @@
-* Raspberry Pi 5 Media Stack
+* Raspberry Pi 5 media stack
 This configuration is for a *2GB Raspberry Pi 5*.
 
 --------------
@@ -59,7 +59,7 @@ sudo systemctl edit docker.service
 RequiresMountsFor=/mnt/media
 #+end_src
 
-=nofail= in fstab still lets the Pi boot without the drive. This drop-in only prevents a race between Docker and the mount.
+With this drop-in in place, =nofail= in fstab lets the Pi boot without the drive. The drop-in only prevents a race between Docker and the mount.
 
 --------------
 
@@ -209,7 +209,7 @@ jellyfin.<your-domain>.dev {
 #+begin_src sh
 cd ~/media-stack
 
-# 1. Pre-initialize the FileBrowser database.
+# 1. Pre-initialise the FileBrowser database.
 # Docker creates a directory for a bind mount whose source is absent, so the
 # file must exist first. `touch` gives it your UID, which matches the
 # container's 1000:1000 — no chmod is needed.
@@ -305,7 +305,7 @@ findmnt /mnt/media            # must show ext4, not only autofs
 The 502 log line is misleading. It gives the *host* address, not a container:
 
 #+begin_example
-dial tcp 192.168.1.252:8096: connect: connection refused
+dial tcp <pi-address>:8096: connect: connection refused
 #+end_example
 
 The embedded DNS of Docker has no record for =jellyfin= when the container is absent. Caddy then asks the host resolver, which is often the LAN DNS server. That resolver answers with the address of the Pi. No service listens on that port. The Caddyfile is not at fault.

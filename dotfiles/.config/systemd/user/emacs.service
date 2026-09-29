@@ -13,8 +13,9 @@ Documentation=info:emacs man:emacs(1) https://gnu.org/software/emacs/
 [Service]
 Type=notify
 # systemd tracks a foreground process, hence --fg-daemon rather than --daemon.
-# `emacs` unqualified: the distro packages put it in /usr/bin, which is on the
-# PATH of a systemd user session. A build elsewhere needs the full path here.
+# `emacs` unqualified: systemd looks up a bare name in its own fixed search
+# path, not in PATH. That path holds /usr/bin, where the distro packages put
+# Emacs. A build elsewhere needs the full path here.
 ExecStart=emacs --fg-daemon
 
 # Emacs exits with status 15 after SIGTERM, which is what systemd sends to

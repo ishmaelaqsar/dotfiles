@@ -10,7 +10,7 @@ Do **not** git commit. Leave sync to the vault's own mechanism.
 1. **Parse the subject and the due date** from `$ARGUMENTS`:
    - Resolve relative phrasing against today's date ("tomorrow", "next Monday", "in 3 days",
      "end of month") to an absolute ISO `due:` date. Add `THH:MM` only if a time was given.
-   - If the date is genuinely ambiguous, ask. A reminder with the wrong date is worse than none.
+   - If the date has more than one meaning, ask. A reminder with the wrong date is worse than none.
 2. **Write** `Reminders/<short-slug>.md` with frontmatter:
    ```yaml
    ---

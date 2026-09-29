@@ -5,5 +5,3 @@ Build notes, in Org. Open them in Emacs: =S-TAB= folds to the overview, =C-c '= 
 |----------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | =forgejo-setup.org=  | Build notes for a self-hosted Forgejo git server on a Raspberry Pi Zero 2W: msmtp relay, Caddy with DNS-01 TLS, a Cloudflare tunnel, fail2ban, and rclone backups. |
 | =jellyfin-setup.org= | Build notes for a Raspberry Pi 5 media stack: Jellyfin, qBittorrent, MeTube, FileBrowser and Caddy, all under Docker Compose.                                      |
-
-The redacted =.example= templates these notes refer to are in =general/=.

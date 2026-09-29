@@ -13,6 +13,6 @@ Do **not** git commit. Leave sync to the vault's own mechanism.
    - Inline-tag the topic, for example `* #homelab <note>`.
    - Put commands/code in a fenced block under the bullet.
    - Keep it terse. This is an inbox, not a polished note.
-3. If the captured item is clearly durable (reusable knowledge, a real project, a reminder),
-   say so and suggest `/kb`, `/project`, or `/remind` for it. Still capture it here now.
+3. If the captured item is durable (reusable knowledge, a real project, a reminder), say so and
+   suggest `/kb`, `/project`, or `/remind` for it. Capture it here as well.
 4. Report the line(s) appended.

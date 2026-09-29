@@ -177,6 +177,8 @@ __git_unset_if() {
 }
 if command -v git >/dev/null 2>&1; then
     echo "Unsetting global git config set by install.sh..."
+    # core.hooksPath stays. It is in this checkout's .git/config, not in
+    # $HOME, and it keeps the secret hooks on for a commit made after this.
     # Both lists, so every key install.sh writes comes back out.
     while IFS='=' read -r key value; do
         __git_unset_if "$key" "$value"

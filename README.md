@@ -57,9 +57,9 @@ dotfiles doctor                # the same report, by its shorter name
 ```
 
 The check reads the machine, changes nothing, and exits non-zero when a repair is necessary. A
-missing symlink, script link, font, `gpg-agent.conf`, or git setting is a failure. A package
-command that is not on `PATH` is a warning, because packages are best-effort. Run `./install.sh`
-to repair what it reports.
+missing symlink, script link, font, `gpg-agent.conf`, git setting, hooks path, or `~/workspace` is
+a failure. A package command that is not on `PATH`, or a user unit that is not enabled, is a
+warning, because both steps are best-effort. Run `./install.sh` to repair what it reports.
 
 ### Packages
 
@@ -92,7 +92,8 @@ init to `~/.bashrc.d/` with a marker, so cleanup can find it, and never write a 
 `./cleanup.sh` undoes an install: the symlinks, the managed `~/.bashrc.d` files, the fonts, the
 generated config, and the git settings. `-a` also removes the toolchains, but never `~/go`. It
 refuses to run on a machine that a different checkout owns, and it never uninstalls a system
-package; it prints the list instead.
+package; it prints the list instead. The machine-local `config.local` and `local.conf` stay,
+because you edit them, and the list names them too.
 
 ---
 
@@ -109,7 +110,7 @@ reaches the symlink engine.
 | `venv` | Create and inspect Python virtual environments, with uv. | Prints the environment path. |
 | `vm` | Manage one QEMU machine through virsh and virt-install. | Picks a machine and prints its status. |
 | `gnome-settings` | Apply, dump, or restore the managed GNOME keys. | Prints the help. |
-| `ediff` | Compare two files in Emacs, in the terminal. `pacnew` runs it as `DIFFPROG`. | Prints an Emacs error. |
+| `ediff` | Compare two files in Emacs, in the terminal. `pacnew` runs it as `DIFFPROG`. | Prints the usage. |
 | `md2org` | Convert markdown files to Org with `pandoc`, one `.org` beside each. | Prints the usage. |
 | `docker` | Run `podman` under the name that lazydocker and compose files call. | Prints the podman help. |
 | `git-gone` | Delete every local branch whose upstream is gone. `git gone` runs it too. | Deletes the merged ones; `--force` takes the rest. |
@@ -144,9 +145,12 @@ CI runs on every push to `main` and on every pull request, from `.github/workflo
 - **parity**: `test/pkg-parity.sh` proves that `lib/pkg.sh` and `lib/pkgconf.py` read every row of
   `lib/packages.conf` the same way.
 - **shellcheck**: every tracked file with a `sh` or `bash` shebang, at warning level and up.
+- **hooks**: `test/hooks.sh` runs the git hooks in a scratch repository. They must stop a token, a
+  `--no-verify` commit at the push, and a push whose commits they cannot list.
 - **python**: every Python entry point byte-compiles.
-- **elisp**: in a Debian container, the selected packages install, `lisp/*.el` byte-compiles with
-  warnings as errors, and `init.el` loads in batch.
+- **elisp**: in a Debian container, the selected packages install, and `lisp/*.el`,
+  `early-init.el`, and `init.el` byte-compile with warnings as errors. Then `init.el` loads in
+  batch, where an error in a stanza stops the job.
 - **smoke**: `test/linux-smoke.sh quick` in a Debian container. A dry run changes nothing,
   `install.sh` runs with no terminal, the doctor passes, and `cleanup.sh -a` removes it all.
 
@@ -154,6 +158,7 @@ The same checks run locally:
 
 ```bash
 bash test/pkg-parity.sh
+bash test/hooks.sh
 docker run --rm -v "$PWD":/repo:ro debian:stable bash /repo/test/linux-smoke.sh quick
 emacs --batch -l dotfiles/.config/emacs/early-init.el --eval '(package-initialize)' \
   -l dotfiles/.config/emacs/init.el --eval '(kill-emacs)'
@@ -172,9 +177,9 @@ one machine, export the three variables from a file in `~/.bashrc.d/`, which is 
 `setup-emacs.sh` keeps a daemon warm: the systemd user unit in
 `dotfiles/.config/systemd/user/emacs.service` on Linux, `brew services` on macOS. Restart it
 after an init change with `emacsclient -e '(kill-emacs)'`. Plain `emacs` on macOS opens the GUI
-app and holds the terminal; use `emacsclient -t` for a terminal frame. Three openers: `e file` opens a file in the terminal. `ce` picks a directory
-under `$WORKSPACE` and opens it in a frame. `alt+shift+o` in Ghostty opens the current directory
-in a frame.
+app and holds the terminal; use `emacsclient -t` for a terminal frame. Three openers: `e file`
+opens a file in the terminal. `ce` picks a directory under `$WORKSPACE` and opens it in a frame.
+`alt+shift+o` in Ghostty opens the current directory in a frame.
 
 The init is `dotfiles/.config/emacs/init.el`, on the built-in `use-package` for Emacs 30 and
 31. Its comments explain each choice. In outline: `eglot` over the language servers the
@@ -247,8 +252,9 @@ machine smtp.gmail.com login YOU@gmail.com port 587 password APP-PASSWORD
 
 The password is a Google app password, which needs two-step verification on the account. A
 normal password is refused. Make a new one rather than reuse the app password the mail relay in
-`docs/forgejo-setup.org` holds, so that revoking either leaves the other alone. Gmail rewrites a From address it does not know, so either add the
-address as a "send mail as" alias, or set `user-mail-address` to the account address.
+`docs/forgejo-setup.org` holds, so that revoking either leaves the other alone. Gmail rewrites a
+From address it does not know, so either add the address as a "send mail as" alias, or set
+`user-mail-address` to the account address.
 
 Two archive servers are configured and need no account: `lore` carries the kernel lists and
 their neighbours, and `gmane` carries the GNU and Emacs ones. `A A` in the group buffer lists
@@ -292,8 +298,8 @@ every outgoing commit, which catches `--no-verify`, an amend, or a rebase. `HIST
 
 [yk](https://github.com/ishmaelaqsar/yk) renews, rotates, and reports on the subkeys.
 `setup-yk.sh` installs it, and `.bash_profile` exports `YK_PUBKEY`, so `yk status` and
-`yk remind` need no argument. The first shell of each day runs `yk remind`, which prints nothing
-while every subkey is more than 90 days from its expiry.
+`yk remind` need no argument. The first shell 24 hours after the last check runs `yk remind`,
+which prints nothing while every subkey is more than 90 days from its expiry.
 
 ---
 
@@ -323,11 +329,11 @@ needs.
 The config is `dotfiles/.config/tmux/tmux.conf`, and the menus it reads are in
 `dotfiles/.config/tmux/menu/`. It needs tmux 3.2 or newer. **C-x is the leader**, as in Emacs:
 it opens a menu of the keys it accepts, the way `which-key` does, and the keys work without
-reading the menu. Five rows open a submenu:
+reading the menu. Six rows open a submenu:
 
 | Key | Menu | Holds |
 | --- | ---- | ----- |
-| `C-x C-p` | pane | focus with `h j k l`, move with `H J K L`, split, mark and join, break out |
+| `C-x C-p` | pane | focus with `h j k l`, move with `H J K L`, mark and join, break out |
 | `C-x C-t` | window | new, rename, next, previous, reorder, find, kill |
 | `C-x C-n` | resize | `h j k l` by a step, `H J K L` by one cell, tile evenly |
 | `C-x C-o` | session | pick, next, previous, new, rename, detach, kill, reload the config |
@@ -423,10 +429,11 @@ because a dynamic count has nothing to jump to.
 ### Hyprland
 
 When `Hyprland` is on `PATH`, `install.sh` activates the `hyprland` tag: `fuzzel`, `waybar`,
-`mako`, `hyprlock`, `hypridle`, `grim` and `slurp`, `brightnessctl`, and two portals, with their
-configs under `dotfiles/.config/`. It does not install Hyprland itself. Machine-local settings,
-such as monitors, scale, wallpaper, and `kb_layout`, go in `~/.config/hypr/local.conf`, which
-`install.sh` creates empty. The main config sources it last, so a line there wins.
+`mako`, `hyprlock`, `hypridle`, `grim` and `slurp`, `brightnessctl`, `pavucontrol`, and two
+portals, with their configs under `dotfiles/.config/`. It does not install Hyprland itself.
+Machine-local settings, such as monitors, scale, wallpaper, and `kb_layout`, go in
+`~/.config/hypr/local.conf`, which `install.sh` creates with a commented example. The main config
+sources it last, so a line there wins.
 
 Three things GNOME does for free, which Hyprland does only when told. `hypridle` dims, locks,
 and blanks the screen on a timer. The volume, mute, and brightness keys are bound to `wpctl` and
@@ -463,9 +470,9 @@ Hyprland needs no extension. `hyprland.conf` starts one Ghostty window on the sp
 
 ### SSH agent
 
-`.bashrc` points `SSH_AUTH_SOCK` at gpg-agent, but that covers interactive shells only. Graphical apps
-read the systemd user environment, where the GNOME agent would claim the variable and never ask
-the YubiKey. Three parts fix it: `dotfiles/.config/environment.d/10-gpg-ssh.conf` sets
+`.bashrc` points `SSH_AUTH_SOCK` at gpg-agent, but that covers interactive shells only. Graphical
+apps read the systemd user environment, where the GNOME agent would claim the variable and never
+ask the YubiKey. Three parts fix it: `dotfiles/.config/environment.d/10-gpg-ssh.conf` sets
 `SSH_AUTH_SOCK` for the session, `install.sh` enables `gpg-agent-ssh.socket`, and `install.sh`
 masks the GNOME SSH agent. Log out and back in after the first install.
 
@@ -490,5 +497,5 @@ aliases wrap the rest:
 
 `install.sh` and the `setup-*.sh` scripts run `pacman -Syu` before they install. A plain `-S`
 asks the mirrors for the versions the local database lists, and a stale database gets 404 from
-every mirror. So an install is also an upgrade. `dotfiles/.makepkg.conf` builds AUR packages with every
-core and skips package compression.
+every mirror. So an install is also an upgrade. `dotfiles/.makepkg.conf` builds AUR packages
+with every core and skips package compression.

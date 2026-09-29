@@ -1,7 +1,6 @@
 # Get editor completion based on the config schema
 "$schema" = 'https://starship.rs/config-schema.json'
 
-# No blank line between the prompt and the command above it
 add_newline = false
 
 [python]

@@ -2,26 +2,26 @@
 *Hardware:* Raspberry Pi Zero 2W (512MB RAM)\\
 *OS:* Raspberry Pi OS Lite (64-bit)\\
 *Security:* AppArmor (Enforced) + fail2ban (Active) + Caddy (DNS-01 TLS)\\
-*Goal:* Send trusted mail. Push to Git quickly on the LAN. Keep global access secure.
+*Goal:* Send trusted mail. Push to Git over the LAN at full speed. Keep global access secure.
 
 --------------
 
 ** Phase 1: system foundation
 *** 1. OS and security preparation
 - *OS:* Raspberry Pi OS Lite (64-bit).
-- *Enable AppArmor:* append = lsm=apparmor= to the single line in =/boot/firmware/cmdline.txt=. Edit the file by hand. The =sed= command below is not idempotent. A kernel package upgrade can also rewrite the file. Check the flag again after each upgrade.
+- *Enable AppArmor:* append = lsm=apparmor= to the single line in =/boot/firmware/cmdline.txt=. Edit the file by hand. The =sed= command in the next block is not idempotent. A kernel package upgrade can also rewrite the file. Check the flag again after each upgrade.
   #+begin_src sh
   sudo sed -i '$ s/$/ lsm=apparmor/' /boot/firmware/cmdline.txt   # once only
   sudo reboot
   #+end_src
 
-  Check the result after the reboot. If =aa-status= reports =apparmor filesystem is not mounted=, the flag did not take effect. Every profile below is then inert:
+  Check the result after the reboot. If =aa-status= reports =apparmor filesystem is not mounted=, the flag did not take effect. Every AppArmor profile in these notes is then inert:
   #+begin_src sh
   grep -o 'lsm=[a-z,]*' /proc/cmdline
   sudo aa-status
   #+end_src
 
-- *Install Core Utilities & Security:*
+- *Install the core utilities and the security tools:*
   #+begin_src sh
   sudo apt update && sudo apt upgrade -y
   sudo apt install apparmor apparmor-utils msmtp msmtp-mta fail2ban ca-certificates curl wget rclone -y

@@ -1,5 +1,6 @@
-// waybar — the bar Hyprland starts. Workspaces, the window title, and the
-// clock, tray, network, and battery. style.css holds the look.
+// waybar — the bar Hyprland starts. Workspaces and the submap, the window
+// title, and the tray, network, volume, battery, and clock. style.css holds
+// the look.
 {
     "layer": "top",
     "position": "top",
