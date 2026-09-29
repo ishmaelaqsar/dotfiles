@@ -5,10 +5,11 @@ esac
 
 # A TRAMP login from Emacs. TRAMP waits for a prompt that ends in #, $, %, >
 # or ], and the starship prompt ends in another character, so the login would
-# hang until its timeout. TRAMP logs in with a dumb TERM, and ssh does not pass
-# INSIDE_EMACS on. A local M-x shell also has a dumb TERM, but comint sets
-# INSIDE_EMACS, so that shell reads the rest of this file.
-if [[ $TERM == dumb && -z ${INSIDE_EMACS:-} ]]; then
+# hang until its timeout. TRAMP logs in over ssh with a dumb TERM. The ssh test
+# matters, because bash makes an unset TERM dumb, as in a container with no
+# tty. A local M-x shell also has a dumb TERM, but comint sets INSIDE_EMACS,
+# which ssh does not pass on.
+if [[ $TERM == dumb && -n ${SSH_CONNECTION:-} && -z ${INSIDE_EMACS:-} ]]; then
     PS1='$ '
     return
 fi

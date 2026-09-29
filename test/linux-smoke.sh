@@ -154,6 +154,11 @@ bash -lic 'type ll' >/dev/null 2>&1 && pass "aliases load in interactive shell" 
 # and would hide the function.
 [ "$(bash -lic 'type -t dotfiles' 2>/dev/null | tr -d '\r')" = "function" ] \
     && pass "dotfiles is a shell function" || flunk "dotfiles is not a function"
+# A TRAMP login comes over ssh with a dumb TERM, and .bashrc gives it a prompt
+# that TRAMP reads. The shells before this one have no TERM, which bash makes
+# dumb, so they prove that a dumb TERM alone still loads the whole file.
+[ "$(SSH_CONNECTION='192.0.2.1 50000 192.0.2.2 22' TERM=dumb bash -lic 'printf %s "$PS1"' 2>/dev/null | tr -d '\r')" = '$ ' ] \
+    && pass "a TRAMP login gets a plain prompt" || flunk "a TRAMP login gets the full prompt"
 [ "$(dotfiles path)" = "$HOME/dotfiles" ] \
     && pass "dotfiles path finds the repository" || flunk "dotfiles path is wrong"
 dotfiles status >/dev/null 2>&1 \
