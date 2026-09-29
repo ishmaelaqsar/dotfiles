@@ -16,7 +16,8 @@
                      (or (getenv "XDG_STATE_HOME") "~/.local/state/"))))
 
 ;; One autoload file for every package, instead of one per package.
-;; setup-emacs.sh refreshes it after an install; so must M-x package-install.
+;; Each install refreshes it: M-x package-install does, and so does
+;; setup-emacs.sh.
 ;; The file is generated, so it lives with the other generated files.
 ;; setq, not setopt: setopt checks the type of an option, and to know the type
 ;; of these two it loads package.el, which the quickstart file exists to skip.

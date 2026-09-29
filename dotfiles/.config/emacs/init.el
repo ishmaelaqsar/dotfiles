@@ -68,9 +68,7 @@
 
 ;; use-package is built in. Nothing here uses :ensure: the setup script
 ;; installs, and a missing package logs a warning instead of stopping the load.
-;; After M-x package-install, run M-x package-quickstart-refresh, because
-;; early-init.el turns package-quickstart on. M-x use-package-report measures
-;; load times when a package feels slow.
+;; M-x use-package-report measures load times when a package feels slow.
 (require 'use-package)
 
 ;; A daemon under launchd starts from launchd's environment, not the login
@@ -116,7 +114,7 @@
         ;; The async compiler logs its warnings instead of raising a window.
         native-comp-async-report-warnings-errors 'silent
         ;; A kill saves the clipboard to the ring first, so a copy from another
-        ;; program survives it, and a kill never adds a duplicate entry.
+        ;; program survives it. A kill that repeats the last entry adds none.
         save-interprogram-paste-before-kill t
         kill-do-not-save-duplicates t
         ;; File notifications, not a poll every five seconds.
@@ -629,7 +627,8 @@ then enter the mode again with the grammar in place."
   ;; No events log. Set :size to a number to debug a server.
   (eglot-events-buffer-config '(:size 0))
   :config
-  ;; basedpyright is not in eglot's default table.
+  ;; First in the list, so eglot picks basedpyright over the other Python
+  ;; servers that its own table names.
   (add-to-list 'eglot-server-programs
                '((python-mode python-ts-mode) . ("basedpyright-langserver" "--stdio"))))
 
@@ -647,11 +646,11 @@ then enter the mode again with the grammar in place."
 
 ;; gopls, jdtls and clangd implement textDocument/formatting, so any buffer
 ;; whose server reports the capability formats before a save; Go also gets its
-;; imports organised first, which is what goimports does. basedpyright reports
-;; no such capability, so Python stays with ruff. jdtls needs no
-;; profile: eglot sends tab-width and indent-tabs-mode as the formatting
-;; options, so Java gets 4 spaces from `tab-width'; a project that
-;; wants a style ships its own java.format.settings.url.
+;; imports organised first, which is what goimports does. Python formats with
+;; ruff, in the next section. jdtls needs no profile: eglot sends tab-width and
+;; indent-tabs-mode as the formatting options, so Java gets 4 spaces from
+;; `tab-width'; a project that wants a style ships its own
+;; java.format.settings.url.
 (declare-function eglot-managed-p "eglot")
 (declare-function eglot-server-capable "eglot")
 (declare-function eglot-format-buffer "eglot")
