@@ -130,6 +130,9 @@ Its height when at the bottom, its width when at the right."
 (defvar kdb--schemas (make-hash-table :test #'equal)
   "Schema of each target: its name to an alist of (TABLE . COLUMNS), all strings.")
 
+(defvar kdb--driver-directory nil
+  "The private directory of this session for the files kdb-driver.q writes.")
+
 (declare-function cape-capf-super "cape")
 
 ;;;; Shell buffer
@@ -178,12 +181,35 @@ prefix is removed first, because the remote server does the display."
          (format "\nProcess %s %s at %s\n" (process-name process)
                  (string-trim-right message) (current-time-string)))))))
 
+(defun kdb--driver-directory ()
+  "Return `kdb--driver-directory', made on first use and removed at exit.
+Mode 700, so no other user can plant a file for `kdb--read-lines'."
+  (unless (and kdb--driver-directory (file-directory-p kdb--driver-directory))
+    (setq kdb--driver-directory (make-temp-file "kdb-" t))
+    (add-hook 'kill-emacs-hook #'kdb--delete-driver-directory))
+  kdb--driver-directory)
+
+(defun kdb--delete-driver-directory ()
+  "Delete `kdb--driver-directory' and the files in it."
+  (when (and kdb--driver-directory (file-directory-p kdb--driver-directory))
+    (delete-directory kdb--driver-directory t)))
+
+(defun kdb--driver-file-p (path name-regexp)
+  "Return non-nil when PATH is in `kdb--driver-directory' and matches NAME-REGEXP.
+A marker line is ordinary output, so a remote value can print one.  Emacs
+reads and deletes only a file that kdb-driver.q wrote."
+  (and kdb--driver-directory
+       (equal (file-name-directory path)
+              (file-name-as-directory kdb--driver-directory))
+       (string-match-p name-regexp (file-name-nondirectory path))))
+
 (defun kdb--output-filter (_output)
   "Act on the marker lines of the shell process, after each output chunk.
 A `kdb-grid:' line names a CSV file of a table result: load it into the
 grid.  A `kdb-schema:' line names the schema file: load it into
-`kdb--schemas'.  Both lines are removed.  The first `kdb: connected' line
-ends the q banner: remove everything before it."
+`kdb--schemas'.  Both lines are removed when `kdb--driver-file-p' accepts
+the path; any other such line stays as output.  The first `kdb: connected'
+line ends the q banner: remove everything before it."
   (let ((proc (get-buffer-process (current-buffer)))
         (start (or (and comint-last-output-start
                         (marker-position comint-last-output-start))
@@ -196,20 +222,22 @@ ends the q banner: remove everything before it."
                                   (process-mark proc) t)
           (let ((path (match-string 1))
                 (total (string-to-number (match-string 2))))
-            (delete-region (match-beginning 0)
-                           (min (1+ (match-end 0)) (point-max)))
-            (condition-case err
-                (kdb--grid-load path total (car kdb--target))
-              (error (message "kdb grid: %s" (error-message-string err))))))
+            (when (kdb--driver-file-p path "\\`kdb-grid-[0-9]+-[0-9]+\\.csv\\'")
+              (delete-region (match-beginning 0)
+                             (min (1+ (match-end 0)) (point-max)))
+              (condition-case err
+                  (kdb--grid-load path total (car kdb--target))
+                (error (message "kdb grid: %s" (error-message-string err)))))))
         (goto-char start)
         (forward-line 0)
         (while (re-search-forward "^kdb-schema: \\(.+\\)$" (process-mark proc) t)
           (let ((path (match-string 1)))
-            (delete-region (match-beginning 0)
-                           (min (1+ (match-end 0)) (point-max)))
-            (condition-case err
-                (kdb--schema-load path (car kdb--target))
-              (error (message "kdb schema: %s" (error-message-string err))))))
+            (when (kdb--driver-file-p path "\\`kdb-schema-[0-9]+\\.txt\\'")
+              (delete-region (match-beginning 0)
+                             (min (1+ (match-end 0)) (point-max)))
+              (condition-case err
+                  (kdb--schema-load path (car kdb--target))
+                (error (message "kdb schema: %s" (error-message-string err)))))))
         (when kdb--banner-pending
           (goto-char start)
           (forward-line 0)
@@ -234,8 +262,7 @@ Derived from `q-shell-mode', so q-mode treats the buffer as a q shell."
                 (format "KDB_PORT=%s" (plist-get plist :port))
                 (concat "KDB_USER=" (or (plist-get plist :user) ""))
                 (concat "KDB_GRID=" (if kdb-grid-auto "1" "0"))
-                (concat "KDB_GRID_DIR="
-                        (directory-file-name (expand-file-name temporary-file-directory)))
+                (concat "KDB_GRID_DIR=" (directory-file-name (kdb--driver-directory)))
                 (format "KDB_GRID_ROWS=%d" kdb-grid-max-rows))
           (when kdb-qhome
             (list (concat "QHOME=" (expand-file-name kdb-qhome))))

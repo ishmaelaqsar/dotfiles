@@ -83,10 +83,10 @@
   ;; and .bashrc returns at once when the shell is not interactive. gpg-agent
   ;; names the socket itself. Without this, git over ssh reaches the launchd
   ;; agent, which holds no card key.
-  (let ((sock (string-trim (shell-command-to-string
-                            "gpgconf --list-dirs agent-ssh-socket"))))
-    (unless (string-empty-p sock)
-      (setenv "SSH_AUTH_SOCK" sock))))
+  (when-let* ((gpgconf (executable-find "gpgconf"))
+              (sock (car (ignore-errors
+                           (process-lines gpgconf "--list-dirs" "agent-ssh-socket")))))
+    (setenv "SSH_AUTH_SOCK" sock)))
 
 ;;;; Defaults
 
@@ -147,9 +147,11 @@
         delete-by-moving-to-trash t
         ;; The help window takes focus, so q closes it without a C-x o first.
         help-window-select t
-        ;; The kill ring and the search rings survive a restart.
+        ;; The search rings survive a restart. The kill ring does not: it
+        ;; holds what the clipboard held, passwords too, and the file is
+        ;; cleartext.
         history-length 300
-        savehist-additional-variables '(kill-ring search-ring regexp-search-ring)
+        savehist-additional-variables '(search-ring regexp-search-ring)
         ;; Dired and the buffer list revert too, not files alone.
         global-auto-revert-non-file-buffers t
         ;; C-u C-SPC, then C-SPC again, walks back through the mark ring.
@@ -642,7 +644,9 @@ then enter the mode again with the grammar in place."
 (defun my/ruff--pipe (args)
   "Pipe the buffer through ruff with ARGS. Return the output buffer, or nil."
   (let ((out (generate-new-buffer " *ruff*")))
-    (if (zerop (apply #'call-process-region (point-min) (point-max) "ruff" nil out nil args))
+    ;; stdout only: a warning on stderr would land in the formatted text.
+    (if (zerop (apply #'call-process-region (point-min) (point-max) "ruff" nil
+                      (list out nil) nil args))
         out
       (kill-buffer out)
       nil)))
@@ -835,18 +839,34 @@ then enter the mode again with the grammar in place."
    '((emacs-lisp . t) (shell . t) (python . t) (C . t) (lisp . t) (sqlite . t))))
 
 ;; A :session is an interpreter in a comint buffer, and Org never stops it.
-;; Python sessions come from run-python (inferior-python-mode), shell sessions
-;; from shell (shell-mode). Sly is left alone: it is your own REPL, and Babel
+;; The advice records each buffer that a Python or shell session start
+;; returns, so the kill takes those and leaves your own M-x shell and
+;; run-python alone. Sly is left alone too: it is your own REPL, and Babel
 ;; only borrows it.
+(defvar my/org-babel-session-buffers nil
+  "The buffers that Babel started, or took, as a :session interpreter.")
+
+(defun my/org-babel-record-session (session)
+  "Record the buffer of SESSION, a session start's return value, and return it."
+  (when-let* ((buf (and session (get-buffer session))))
+    (add-to-list 'my/org-babel-session-buffers buf))
+  session)
+
+(with-eval-after-load 'ob-python
+  (advice-add 'org-babel-python-initiate-session :filter-return
+              #'my/org-babel-record-session))
+(with-eval-after-load 'ob-shell
+  (advice-add 'org-babel-sh-initiate-session :filter-return
+              #'my/org-babel-record-session))
+
 (defun my/org-babel-kill-sessions ()
   "Kill every Babel session interpreter and its buffer."
   (interactive)
-  (dolist (buf (buffer-list))
-    (when (and (get-buffer-process buf)
-               (with-current-buffer buf
-                 (derived-mode-p 'inferior-python-mode 'shell-mode)))
+  (dolist (buf my/org-babel-session-buffers)
+    (when (buffer-live-p buf)
       (let ((kill-buffer-query-functions nil))
-        (kill-buffer buf)))))
+        (kill-buffer buf))))
+  (setq my/org-babel-session-buffers nil))
 
 (defun my/org-kill-sessions-when-last ()
   "Kill the Babel sessions when the last Org buffer closes."
