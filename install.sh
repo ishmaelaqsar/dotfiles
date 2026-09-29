@@ -462,37 +462,6 @@ elif ! python3 "$SCRIPT_DIR/lib/sync-dotfiles" "$TARGET_DIR"; then
 fi
 
 # -----------------------------
-# Files that must not exist
-# -----------------------------
-# .helpers defines a `dotfiles` shell function, which calls bin/dotfiles. An
-# alias expands before the shell looks for a function, so an alias at this path
-# would hide the function.
-ALIAS_FILE="$TARGET_DIR/.bashrc.d/dotfiles_alias"
-
-if [ -f "$ALIAS_FILE" ]; then
-    if [ "$DRY_RUN" -eq 1 ]; then
-        echo "  [dry-run] remove the old alias file $ALIAS_FILE"
-    else
-        echo "Removing the old dotfiles alias at '$ALIAS_FILE'."
-        rm "$ALIAS_FILE"
-    fi
-fi
-
-# The sync engine is lib/sync-dotfiles, and bin/ holds only the commands a
-# person runs. A link at this path points at nothing. `dotfiles sync` is the
-# command.
-STALE_SYNC_LINK="$TARGET_BIN_DIR/sync-dotfiles"
-
-if [ -L "$STALE_SYNC_LINK" ] && [ "$(readlink "$STALE_SYNC_LINK")" = "$SOURCE_BIN_DIR/sync-dotfiles" ]; then
-    if [ "$DRY_RUN" -eq 1 ]; then
-        echo "  [dry-run] remove the stale link $STALE_SYNC_LINK"
-    else
-        echo "Removing the stale sync-dotfiles link at '$STALE_SYNC_LINK'."
-        rm "$STALE_SYNC_LINK"
-    fi
-fi
-
-# -----------------------------
 # Workspace directory
 # -----------------------------
 # .bash_profile exports WORKSPACE, and the fuzzy-find helpers search it. The
@@ -909,8 +878,6 @@ else
     echo "Pointing git hooks at hooks/ ..."
     git -C "$SCRIPT_DIR" config core.hooksPath hooks
     chmod +x "$SCRIPT_DIR/hooks/pre-commit" "$SCRIPT_DIR/hooks/pre-push" "$SCRIPT_DIR/hooks/scan-added-lines"
-    # A hook in .git/hooks is dead under core.hooksPath, so remove it.
-    rm -f "$(git -C "$SCRIPT_DIR" rev-parse --path-format=absolute --git-common-dir)/hooks/pre-commit"
 fi
 
 

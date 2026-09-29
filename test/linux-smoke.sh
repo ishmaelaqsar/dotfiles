@@ -151,9 +151,7 @@ else
 fi
 bash -lic 'type ll' >/dev/null 2>&1 && pass "aliases load in interactive shell" || flunk "aliases failed to load"
 # `dotfiles` must be the shell function, not an alias: an alias expands first
-# and would hide the function. install.sh removes an alias file at this path.
-[ ! -f "$HOME/.bashrc.d/dotfiles_alias" ] \
-    && pass "no stale dotfiles alias file" || flunk "the old dotfiles alias file survived"
+# and would hide the function.
 [ "$(bash -lic 'type -t dotfiles' 2>/dev/null | tr -d '\r')" = "function" ] \
     && pass "dotfiles is a shell function" || flunk "dotfiles is not a function"
 [ "$(dotfiles path)" = "$HOME/dotfiles" ] \
@@ -164,9 +162,6 @@ dotfiles doctor >/dev/null 2>&1 \
     && pass "dotfiles doctor passes after an install" || flunk "dotfiles doctor failed"
 dotfiles sync --check >/dev/null 2>&1 \
     && pass "dotfiles sync --check passes" || flunk "dotfiles sync --check failed"
-# The sync engine is lib/sync-dotfiles, so nothing links it into ~/bin.
-[ ! -e "$HOME/bin/sync-dotfiles" ] \
-    && pass "the sync engine is not linked into ~/bin" || flunk "\$HOME/bin/sync-dotfiles still exists"
 
 say "parser parity (lib/pkg.sh vs lib/pkgconf.py)"
 bash test/pkg-parity.sh > /tmp/parity.log 2>&1 \

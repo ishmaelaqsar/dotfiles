@@ -185,15 +185,6 @@ if command -v git >/dev/null 2>&1; then
     done <<< "$GIT_BASE_CONFIG
 $GIT_DELTA_CONFIG"
 
-    # The clean-gone alias, which this repository does not write. bin/git-gone
-    # is the command. The value is a shell pipeline, so match a fragment.
-    case "$(git config --global --get alias.clean-gone 2>/dev/null)" in
-        *"branch -vv"*)
-            __run git config --global --unset alias.clean-gone
-            removed=$((removed + 1))
-            ;;
-    esac
-
     # The path varies by distro, so match on the helper name
     case "$(git config --global --get credential.helper 2>/dev/null)" in
         */git-credential-libsecret)
