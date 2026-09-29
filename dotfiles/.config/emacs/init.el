@@ -238,6 +238,9 @@
         modus-themes-mixed-fonts t)
 (load-theme 'modus-operandi-tinted :no-confirm)
 
+;; A build with no GUI, such as Debian's emacs-nox, does not define it. The
+;; call runs only on a graphical frame.
+(declare-function scroll-bar-mode "scroll-bar")
 (defun my/apply-frame-settings (&optional frame)
   "Apply what depends on the frame: bars, font, and the theme's faces.
 A daemon loads the init with no frame, so `display-graphic-p' is false
@@ -363,6 +366,7 @@ there and the theme's faces are computed for a dumb terminal. Every frame
 (declare-function consult--buffer-query "consult")
 (declare-function consult--buffer-state "consult")
 (declare-function consult--project-root "consult")
+(declare-function my/buffer-projectless-p "init" (buffer))
 
 (use-package consult
   :bind (("C-x b"   . consult-buffer)
@@ -816,6 +820,7 @@ then enter the mode again with the grammar in place."
   (set-frame-parameter nil 'my-magit-popup t)
   (magit-status))
 
+(declare-function magit-mode-quit-window "magit-mode")
 (defun my/magit-bury-buffer (kill-buffer)
   "Close the tmux popup frame, or bury the buffer as magit normally does."
   (if (frame-parameter nil 'my-magit-popup)
