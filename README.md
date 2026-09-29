@@ -200,6 +200,13 @@ keys.
 save-time formatting off under a shared repository, so its diffs stay small. Diagnostics show at
 the end of the line; `M-n` and `M-p` walk them, and `M-g f` lists them.
 
+### Remote files
+
+`C-x C-f /ssh:<host>:<path>` opens a file on another machine through TRAMP. eglot, ruff, `rg`,
+and `fd` run on that host, from its login `PATH`. A file opened through su, sudo, sudoedit, or
+doas keeps no backup and no auto-save. `.bashrc` gives a TRAMP login a plain prompt, which TRAMP
+can read.
+
 ### Shells
 
 `C-c t` opens a bash in an [eat](https://codeberg.org/akib/emacs-eat) buffer, and `C-x p s`
