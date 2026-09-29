@@ -18,10 +18,12 @@
 ;; One autoload file for every package, instead of one per package.
 ;; setup-emacs.sh refreshes it after an install; so must M-x package-install.
 ;; The file is generated, so it lives with the other generated files.
-(setopt package-quickstart t
-        package-quickstart-file
-        (expand-file-name "emacs/package-quickstart.el"
-                          (or (getenv "XDG_STATE_HOME") "~/.local/state/")))
+;; setq, not setopt: setopt checks the type of an option, and to know the type
+;; of these two it loads package.el, which the quickstart file exists to skip.
+(setq package-quickstart t
+      package-quickstart-file
+      (expand-file-name "emacs/package-quickstart.el"
+                        (or (getenv "XDG_STATE_HOME") "~/.local/state/")))
 
 ;; No collection during startup. The startup hook restores a threshold that
 ;; keeps pauses short in an editing session.

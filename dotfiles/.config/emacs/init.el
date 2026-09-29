@@ -15,8 +15,8 @@
 ;; there: clangd, basedpyright, gopls, jdtls. Nothing here names a server path.
 ;;
 ;; Generated files go under ~/.local/state/emacs/, so ~/.config/emacs/ holds
-;; the tracked init and the package directory only. early-init.el sends the
-;; native-compilation cache there as well.
+;; the tracked init, the package directory, and the tree-sitter grammars.
+;; early-init.el sends the native-compilation cache there as well.
 
 ;;; Code:
 
@@ -42,13 +42,20 @@
         eshell-directory-name (expand-file-name "eshell/" my/state-dir)
         bookmark-default-file (expand-file-name "bookmarks.eld" my/state-dir)
         eww-bookmarks-directory my/state-dir
+        project-list-file (expand-file-name "projects.eld" my/state-dir)
+        nsm-settings-file (expand-file-name "network-security.eld" my/state-dir)
+        transient-history-file (expand-file-name "transient/history.el" my/state-dir)
+        transient-levels-file (expand-file-name "transient/levels.el" my/state-dir)
+        transient-values-file (expand-file-name "transient/values.el" my/state-dir)
         ;; Cookies, the cache, and the history of every URL Emacs fetches.
         url-configuration-directory (expand-file-name "url/" my/state-dir))
 
 ;;;; Packages
 
-(require 'package)
-(add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
+;; After the load, because package.el costs time at startup, and nothing here
+;; needs it until you install.
+(with-eval-after-load 'package
+  (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t))
 ;; Through Custom, not setopt: custom.el holds its saved value in the `user'
 ;; theme, and every `enable-theme' call (use-package and Modus both make one)
 ;; re-applies that theme. A Custom set replaces the theme value; setopt does
@@ -171,13 +178,14 @@
 (global-so-long-mode 1)
 
 (savehist-mode 1)
-;; The mode cleans the list when it starts, and early-init.el has taken the
-;; file-name handlers away until startup ends. Without them no path is remote,
-;; so every /ssh: entry would fail the readable test and drop out.
-(let ((file-name-handler-alist (if (boundp 'my/file-name-handler-alist)
-                                   my/file-name-handler-alist
-                                 file-name-handler-alist)))
-  (recentf-mode 1))
+;; The list is cleaned once, when Emacs is first idle, not when the mode starts.
+;; During startup early-init.el has taken the file-name handlers away, so no
+;; path is remote and every /ssh: entry would drop out. With the handlers, a
+;; remote entry loads TRAMP, which is a cost for later, not for the start.
+(declare-function recentf-cleanup "recentf")
+(setopt recentf-auto-cleanup 'never)
+(recentf-mode 1)
+(run-with-idle-timer 10 nil #'recentf-cleanup)
 (save-place-mode 1)
 (global-auto-revert-mode 1)
 (delete-selection-mode 1)
@@ -446,12 +454,13 @@ a connection to answer."
 ;; Act on the candidate or the thing at point. C-h after a prefix key lists the
 ;; commands under it in the minibuffer, where you can filter them.
 (use-package embark
-  :demand t
   :bind (("C-."   . embark-act)
          ("C-;"   . embark-dwim)
          ("C-h B" . embark-bindings))
-  :custom
-  (prefix-help-command #'embark-prefix-help-command))
+  ;; A core option, so it is set at startup, not when embark loads. The
+  ;; command is autoloaded, and the first C-h after a prefix loads embark.
+  :init
+  (setopt prefix-help-command #'embark-prefix-help-command))
 
 ;; A prefix key, and a one-second pause, lists the commands under it in a window
 ;; at the bottom.
@@ -531,12 +540,12 @@ Elsewhere, turn on `completion-preview-mode'."
         xref-show-xrefs-function #'consult-xref
         xref-show-definitions-function #'consult-xref)
 ;; grep appends /dev/null to a command so that grep names the file of a match,
-;; and rg would search that path too. -H names the file instead.
-(use-package grep
-  :defer t
-  :custom
-  (grep-command "rg -nS -H --no-heading ")
-  (grep-use-null-device nil))
+;; and rg would search that path too. -H names the file instead. setq, not
+;; :custom: grep-command is an autoloaded option, so a Custom set loads grep
+;; and compile at startup to check the type. grep keeps these when it loads.
+(defvar grep-use-null-device)
+(setq grep-command "rg -nS -H --no-heading "
+      grep-use-null-device nil)
 
 ;;;; Tree-sitter
 
@@ -820,9 +829,12 @@ then enter the mode again with the grammar in place."
 ;; Bars beside the buffer mark the lines that differ from git, and magit
 ;; refreshes them when it refreshes itself. The marks go in the margin, which a
 ;; terminal frame has, rather than the fringe, which it has not.
+;; One idle second after startup, because the modes load vc, log-view, and
+;; diff-mode. A buffer that is already open gets its margin then.
 (use-package diff-hl
+  :defer 1
   :hook (magit-post-refresh . diff-hl-magit-post-refresh)
-  :init
+  :config
   (global-diff-hl-mode 1)
   (diff-hl-margin-mode 1))
 
@@ -1010,13 +1022,14 @@ then enter the mode again with the grammar in place."
 ;; The address is the one Gmail sends as; an alias it does not know about it
 ;; rewrites. Left alone, Gnus fills ~/News and ~/Mail, writes ~/.newsrc, and
 ;; drops an autosaved draft in the home directory.
+;; setq, not setopt: to check the type, setopt loads sendmail at startup. Gnus
+;; sends with message, and message follows send-mail-function when it loads.
+(setq send-mail-function #'smtpmail-send-it)
 (setopt user-full-name "Ishmael Aqsar"
         user-mail-address "ishmael-dev@aqsar.dev"
         ;; One file, and an encrypted one. A plaintext ~/.authinfo is never
         ;; read, and the credentials keep out of the home directory.
         auth-sources (list (locate-user-emacs-file "authinfo.gpg"))
-        send-mail-function #'smtpmail-send-it
-        message-send-mail-function #'smtpmail-send-it
         smtpmail-smtp-server "smtp.gmail.com"
         smtpmail-smtp-service 587
         smtpmail-stream-type 'starttls
