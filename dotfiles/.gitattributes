@@ -1,7 +1,7 @@
 ############################################################
 # Default behaviour
 ############################################################
-# LF in the repository, native line endings on checkout.
+# Git detects text, and stores and checks it out with LF on every platform.
 * text=auto eol=lf
 
 ############################################################
@@ -67,14 +67,8 @@
 *.jar binary
 
 ############################################################
-# Merge and diff
+# Diff
 ############################################################
-# A lock file merges line by line, because the lines are independent.
-*.lock merge=union
-package-lock.json merge=union
-poetry.lock merge=union
-yarn.lock merge=union
-
 *.png -diff
 *.jpg -diff
 *.jpeg -diff
