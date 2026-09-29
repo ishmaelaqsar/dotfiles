@@ -68,12 +68,16 @@
 
 ;; A daemon under launchd starts from launchd's environment, not the login
 ;; shell's, so eglot finds no language server and consult no rg or fd. This
-;; copies PATH across, and KDB_QUERY_DIR, which kdb.el reads. A terminal frame
-;; inherits the shell already, hence the guard.
+;; copies PATH across, and KDB_QUERY_DIR, which kdb.el reads. The eat shell is
+;; not a login shell, so it reads only what the daemon passes on: the rest of
+;; the list is what .bash_profile exports for the .aliases and .helpers
+;; functions. A terminal frame inherits the shell already, hence the guard.
 (use-package exec-path-from-shell
   :if (or (daemonp) (memq window-system '(ns mac)))
   :custom
-  (exec-path-from-shell-variables '("PATH" "MANPATH" "KDB_QUERY_DIR"))
+  (exec-path-from-shell-variables
+   '("PATH" "MANPATH" "KDB_QUERY_DIR" "WORKSPACE" "ORG_DIR" "IDENTITY" "YK_PUBKEY"
+     "EDITOR" "VISUAL" "GIT_EDITOR"))
   ;; A login shell, not an interactive one: .bash_profile sets the variables,
   ;; and .bashrc would add two seconds to the start.
   (exec-path-from-shell-arguments '("-l"))
