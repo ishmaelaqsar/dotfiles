@@ -1,4 +1,4 @@
-* Forgejo self-hosted git server
+- Forgejo self-hosted git server
 
 *Hardware:* Raspberry Pi Zero 2W (512MB RAM)\\
 *OS:* Raspberry Pi OS Lite (64-bit)\\
@@ -50,7 +50,7 @@ Create the =git= user and group now so =/etc/msmtprc= can grant read access to b
 sudo adduser --system --shell /bin/bash --group --disabled-password --home /home/git git
 #+end_src
 
-*** 2. Configure the relay: =sudo nano /etc/msmtprc=
+*** 2. Configure the relay: =sudo vi /etc/msmtprc=
 Use =syslog LOG_MAIL= instead of a shared log file. A file in =/var/log/msmtp.log= triggers AppArmor =owner= lock errors when both =root= and =git= send mail.
 
 #+begin_src text
@@ -106,17 +106,20 @@ sudo mkdir -p /var/lib/forgejo/{custom,data,log} /etc/forgejo
 sudo chown -R git:git /var/lib/forgejo/
 sudo chown root:git /etc/forgejo && sudo chmod 770 /etc/forgejo
 
-BASE=https://codeberg.org/forgejo/forgejo/releases/download/v14.0.1
-wget "$BASE/forgejo-14.0.1-linux-arm64" "$BASE/forgejo-14.0.1-linux-arm64.sha256"
+VER=15.0.11
+BASE="https://codeberg.org/forgejo/forgejo/releases/download/v${VER}"
+wget "$BASE/forgejo-${VER}-linux-arm64" "$BASE/forgejo-${VER}-linux-arm64.sha256"
 
 # Verify before you install. This binary runs as a service.
-sha256sum -c forgejo-14.0.1-linux-arm64.sha256 || { echo "CHECKSUM FAILED"; exit 1; }
+sha256sum -c "forgejo-${VER}-linux-arm64.sha256" || { echo "CHECKSUM FAILED"; exit 1; }
 
-sudo mv forgejo-14.0.1-linux-arm64 /usr/local/bin/forgejo
-sudo chmod +x /usr/local/bin/forgejo
+sudo mv "forgejo-${VER}-linux-arm64" /usr/local/bin/forgejo
+sudo chown root:root /usr/local/bin/forgejo
+sudo chmod 755 /usr/local/bin/forgejo
+rm "forgejo-${VER}-linux-arm64.sha256"
 #+end_src
 
-*** 2. Config: =sudo nano /etc/forgejo/app.ini=
+*** 2. Config: =sudo vi /etc/forgejo/app.ini=
 Replace =<dev-alias>@<your-domain>.dev= with your actual alias (keep single angle brackets around the email address, e.g. =<dev@example.dev>=):
 
 #+begin_src ini
@@ -134,7 +137,7 @@ FROM = "Forgejo Hub" <<dev-alias>@<your-domain>.dev>
 
 =TRUSTED_PROXIES= gives Forgejo the true client IP from Caddy. Do *not* add =REVERSE_PROXY_AUTHENTICATION_USER= here. That key names the header which holds an authenticated *username*. Its default is =X-WEBAUTH-USER=. It does not name the client IP. If you set it to =X-Forwarded-For=, the client controls a login name. This becomes a risk when you set =[service] ENABLE_REVERSE_PROXY_AUTHENTICATION= to true.
 
-*** 3. Service: =sudo nano /etc/systemd/system/forgejo.service=
+*** 3. Service: =sudo vi /etc/systemd/system/forgejo.service=
 #+begin_src ini
 [Unit]
 Description=Forgejo Git Server
@@ -171,7 +174,7 @@ caddy version
 caddy list-modules | grep cloudflare
 #+end_src
 
-*** 2. Caddyfile: =nano ~/Caddyfile=
+*** 2. Caddyfile: =vi ~/Caddyfile=
 #+begin_src caddy
 {
     email <your-email>
@@ -188,7 +191,7 @@ git.<your-domain>.dev {
 }
 #+end_src
 
-*** 3. Caddy service: =sudo nano /etc/systemd/system/caddy.service=
+*** 3. Caddy service: =sudo vi /etc/systemd/system/caddy.service=
 #+begin_src ini
 [Unit]
 Description=Caddy SSL Gateway
@@ -229,7 +232,7 @@ cloudflared tunnel create forgejo-tunnel
 cloudflared tunnel route dns forgejo-tunnel git.<your-domain>.dev
 #+end_src
 
-*** 2. Config: =sudo nano /etc/cloudflared/config.yml=
+*** 2. Config: =sudo vi /etc/cloudflared/config.yml=
 #+begin_src yaml
 tunnel: <TUNNEL-UUID>
 credentials-file: /home/<your-username>/.cloudflared/<TUNNEL-UUID>.json
@@ -245,14 +248,14 @@ ingress:
 --------------
 
 ** Phase 6: active defence (fail2ban)
-*** 1. Filter: =sudo nano /etc/fail2ban/filter.d/forgejo.conf=
+*** 1. Filter: =sudo vi /etc/fail2ban/filter.d/forgejo.conf=
 #+begin_src text
 [Definition]
 failregex = ^.*Failed authentication attempt for .* from <HOST>
             ^.*Invalid user .+ from <HOST>
 #+end_src
 
-*** 2. Jail: =sudo nano /etc/fail2ban/jail.d/forgejo.local=
+*** 2. Jail: =sudo vi /etc/fail2ban/jail.d/forgejo.local=
 #+begin_src text
 [forgejo]
 enabled = true
@@ -266,7 +269,7 @@ bantime = 1h
 
 --------------
 
-** Phase 7: backups and automation
+** Phase 7: backups, automation, and manual upgrades
 *Run the whole job as root.* =/var/lib/forgejo= is =git:git= and mode 750. A normal user cannot read it, and rclone then stops with =permission denied=. Root also reads =/etc/msmtprc=. Root removes both problems, and it needs no sudo rules.
 
 *** 1. Give root its own rclone remote
@@ -295,7 +298,7 @@ sudo chmod 600 /etc/backup-forgejo.env
 
 Edit =/etc/backup-forgejo.env= to set your real =NOTIFY_EMAIL= address. A self-hosted healthchecks instance works the same way. But put the watchdog on a different host. A watchdog on the host that it watches is worth much less.
 
-*** 3. Backup script: =sudo nano /usr/local/bin/backup-forgejo.sh=
+*** 3. Backup script: =sudo vi /usr/local/bin/backup-forgejo.sh=
 #+begin_src sh
 #!/bin/bash
 set -euo pipefail
@@ -398,6 +401,54 @@ sudo rclone check /var/lib/forgejo/ gdrive:Forgejo_Backup --one-way \
 #+end_src
 
 Use the same exclusions as the sync. The previous run restarts Forgejo at its end, and that restart rewrites the queue, the index and the SQLite scratch files. Without the exclusions, the check always reports these differences.
+
+*** 6. Manual binary upgrade script (Caddy & Forgejo)
+Because =caddy= and =forgejo= live in =/usr/local/bin/=, =apt-get upgrade= does not touch them. Install =/usr/local/bin/upgrade-stack.sh= to upgrade Caddy in place (preserving the Cloudflare DNS plugin and =CAP_NET_BIND_SERVICE= capability) and optionally upgrade Forgejo after taking a fresh backup:
+
+#+begin_src sh
+sudo tee /usr/local/bin/upgrade-stack.sh >/dev/null <<'EOF'
+#!/bin/bash
+set -euo pipefail
+
+FORGEJO_VER="${1:-}"
+
+echo "==> Upgrading Caddy..."
+/usr/local/bin/caddy upgrade
+rm -f /usr/local/bin/caddy.tmp
+setcap CAP_NET_BIND_SERVICE=+eip /usr/local/bin/caddy
+systemctl restart caddy
+echo "==> Caddy active: $(/usr/local/bin/caddy version)"
+
+if [ -n "$FORGEJO_VER" ]; then
+    echo "==> Running pre-upgrade backup before installing Forgejo v${FORGEJO_VER}..."
+    /usr/local/bin/backup-forgejo.sh
+
+    TMP_DIR="$(mktemp -d)"
+    trap 'rm -rf "$TMP_DIR"' EXIT
+    cd "$TMP_DIR"
+
+    BASE="https://codeberg.org/forgejo/forgejo/releases/download/v${FORGEJO_VER}"
+    BIN="forgejo-${FORGEJO_VER}-linux-arm64"
+
+    wget -q --show-progress "$BASE/$BIN" "$BASE/${BIN}.sha256"
+    sha256sum -c "${BIN}.sha256"
+
+    systemctl stop forgejo
+    mv "$BIN" /usr/local/bin/forgejo
+    chown root:root /usr/local/bin/forgejo
+    chmod 755 /usr/local/bin/forgejo
+    systemctl start forgejo
+
+    echo "==> Forgejo active: $(/usr/local/bin/forgejo --version)"
+else
+    echo "==> No Forgejo version passed. (Usage: sudo $(basename "$0") [forgejo-version])"
+fi
+EOF
+sudo chown root:root /usr/local/bin/upgrade-stack.sh
+sudo chmod 700 /usr/local/bin/upgrade-stack.sh
+#+end_src
+
+Run =sudo /usr/local/bin/upgrade-stack.sh= to upgrade Caddy alone, or pass a version number (such as =sudo /usr/local/bin/upgrade-stack.sh 15.0.12=) to upgrade both Caddy and Forgejo.
 
 --------------
 
