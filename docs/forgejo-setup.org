@@ -1,4 +1,5 @@
-* Forgejo self-hosted git server
+- Forgejo self-hosted git server
+
 *Hardware:* Raspberry Pi Zero 2W (512MB RAM)\\
 *OS:* Raspberry Pi OS Lite (64-bit)\\
 *Security:* AppArmor (Enforced) + fail2ban (Active) + Caddy (DNS-01 TLS)\\
@@ -9,7 +10,9 @@
 ** Phase 1: system foundation
 *** 1. OS and security preparation
 - *OS:* Raspberry Pi OS Lite (64-bit).
+
 - *Enable AppArmor:* append = lsm=apparmor= to the single line in =/boot/firmware/cmdline.txt=. Edit the file by hand. The =sed= command in the next block is not idempotent. A kernel package upgrade can also rewrite the file. Check the flag again after each upgrade.
+
   #+begin_src sh
   sudo sed -i '$ s/$/ lsm=apparmor/' /boot/firmware/cmdline.txt   # once only
   sudo reboot
@@ -22,6 +25,7 @@
   #+end_src
 
 - *Install the core utilities and the security tools:*
+
   #+begin_src sh
   sudo apt update && sudo apt upgrade -y
   sudo apt install apparmor apparmor-utils msmtp msmtp-mta fail2ban ca-certificates curl wget rclone -y
@@ -39,13 +43,23 @@ sudo reboot
 ** Phase 2: multi-identity mail relay (msmtp)
 This relay sends trusted mail from your domain aliases. It sends the mail through the Google SMTP server.
 
-*** 1. Configure the relay: =sudo nano /etc/msmtprc=
+*** 1. Create the service user first
+Create the =git= user and group now so =/etc/msmtprc= can grant read access to both =root= (cron backups) and =git= (Forgejo notifications):
+
+#+begin_src sh
+sudo adduser --system --shell /bin/bash --group --disabled-password --home /home/git git
+#+end_src
+
+*** 2. Configure the relay: =sudo nano /etc/msmtprc=
+Use =syslog LOG_MAIL= instead of a shared log file. A file in =/var/log/msmtp.log= triggers AppArmor =owner= lock errors when both =root= and =git= send mail.
+
 #+begin_src text
 defaults
 auth           on
 tls            on
 tls_trust_file /etc/ssl/certs/ca-certificates.crt
-logfile        /var/log/msmtp.log
+syslog         LOG_MAIL
+aliases        /etc/aliases
 
 # Personal Identity
 account        personal
@@ -66,14 +80,21 @@ password       <16-character-app-password>
 account default : personal
 #+end_src
 
-=sudo chmod 600 /etc/msmtprc=
+Lock down permissions to =root:git= (mode 640) and map local system accounts like =root= to a valid RFC 5321 address so Gmail does not reject system mail with =553-5.1.3=:
 
-Mode 600 makes the file *root-only*. For any other user, msmtp then reports =no configuration file available=. That message looks like a missing file, but the true cause is the permission. Keep mode 600, and run msmtp as root. The backup job in Phase 7 does this.
-
-*** 2. AppArmor logging fix
 #+begin_src sh
-echo "owner /var/log/msmtp.log rw," | sudo tee /etc/apparmor.d/local/usr.bin.msmtp
-sudo systemctl reload apparmor
+sudo chown root:git /etc/msmtprc
+sudo chmod 640 /etc/msmtprc
+
+sudo tee /etc/aliases >/dev/null <<'EOF'
+root: <user>@<your-domain>.dev
+default: <user>@<your-domain>.dev
+EOF
+#+end_src
+
+Edit =/etc/aliases= with your actual address, then test delivery before moving on:
+#+begin_src sh
+printf "Subject: msmtp test\n\nRelay is working.\n" | sudo sendmail root
 #+end_src
 
 --------------
@@ -81,7 +102,6 @@ sudo systemctl reload apparmor
 ** Phase 3: Forgejo git server
 *** 1. Installation and directory setup
 #+begin_src sh
-sudo adduser --system --shell /bin/bash --group --disabled-password --home /home/git git
 sudo mkdir -p /var/lib/forgejo/{custom,data,log} /etc/forgejo
 sudo chown -R git:git /var/lib/forgejo/
 sudo chown root:git /etc/forgejo && sudo chmod 770 /etc/forgejo
@@ -97,6 +117,8 @@ sudo chmod +x /usr/local/bin/forgejo
 #+end_src
 
 *** 2. Config: =sudo nano /etc/forgejo/app.ini=
+Replace =<dev-alias>@<your-domain>.dev= with your actual alias (keep single angle brackets around the email address, e.g. =<dev@example.dev>=):
+
 #+begin_src ini
 [server]
 DOMAIN = git.<your-domain>.dev
@@ -195,6 +217,7 @@ WantedBy=multi-user.target
 #+begin_src sh
 # Install from Cloudflare's signed apt repository. A bare .deb from the
 # releases page carries no signature, and apt also keeps this one updated.
+sudo mkdir -p --mode=0755 /usr/share/keyrings
 curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg \
     | sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
 echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main" \
@@ -217,7 +240,7 @@ ingress:
   - service: http_status:404
 #+end_src
 
-=sudo cloudflared service install && sudo systemctl start cloudflared=
+=sudo cloudflared service install && sudo systemctl enable --now cloudflared=
 
 --------------
 
@@ -244,7 +267,7 @@ bantime = 1h
 --------------
 
 ** Phase 7: backups and automation
-*Run the whole job as root.* =/var/lib/forgejo= is =git:git= and mode 750. A normal user cannot read it, and rclone then stops with =permission denied=. Root also reads =/etc/msmtprc=, which is mode 600. Root removes both problems, and it needs no sudo rules.
+*Run the whole job as root.* =/var/lib/forgejo= is =git:git= and mode 750. A normal user cannot read it, and rclone then stops with =permission denied=. Root also reads =/etc/msmtprc=. Root removes both problems, and it needs no sudo rules.
 
 *** 1. Give root its own rclone remote
 rclone reads the configuration of the user that runs it. Root has none by default, so copy yours:
@@ -259,16 +282,18 @@ sudo rclone lsd gdrive:        # must list your folders
 *** 2. Add a dead man's switch
 Mail tells you when a job *fails*. It cannot tell you when a job never runs at all. A dead-man's switch inverts the logic: silence becomes the alarm.
 
-Create a check at healthchecks.io. Set the period to 1 day and the grace time to 1 hour. Keep the URL out of the script, because the script goes in a public repository:
+Create a check at healthchecks.io. Set the period to 1 day and the grace time to 1 hour. Keep the URL out of the script, because the script goes in a public repository. Keep values quoted (or set =HC_URL=""= if unused) so angle brackets in placeholders never trigger a Bash redirection syntax error when the file is sourced:
 
 #+begin_src sh
 sudo tee /etc/backup-forgejo.env >/dev/null <<'EOF'
-HC_URL=https://hc-ping.com/<your-uuid>
+HC_URL=""
+# Example when configured: HC_URL="https://hc-ping.com/<your-uuid>"
+NOTIFY_EMAIL="<user>@<your-domain>.dev"
 EOF
 sudo chmod 600 /etc/backup-forgejo.env
 #+end_src
 
-A self-hosted healthchecks instance works the same way. But put the watchdog on a different host. A watchdog on the host that it watches is worth much less.
+Edit =/etc/backup-forgejo.env= to set your real =NOTIFY_EMAIL= address. A self-hosted healthchecks instance works the same way. But put the watchdog on a different host. A watchdog on the host that it watches is worth much less.
 
 *** 3. Backup script: =sudo nano /usr/local/bin/backup-forgejo.sh=
 #+begin_src sh
@@ -278,6 +303,7 @@ set -euo pipefail
 # shellcheck source=/dev/null
 [ -r /etc/backup-forgejo.env ] && . /etc/backup-forgejo.env
 HC_URL="${HC_URL:-}"
+NOTIFY_EMAIL="${NOTIFY_EMAIL:-root}"
 
 ARCHIVE="gdrive:Forgejo_Archive/$(date +%F)"
 
@@ -288,7 +314,7 @@ ping_hc() {   # $1 = "" | /start | /fail
 }
 
 notify() {
-    printf 'Subject: %s\n\n%s\n' "$1" "$2" | msmtp -a dev <user>@<your-domain>.dev
+    printf 'Subject: %s\n\n%s\n' "$1" "$2" | msmtp -a dev "$NOTIFY_EMAIL"
 }
 
 # Always bring Forgejo back, even if rclone hangs or the script is killed.
@@ -338,14 +364,24 @@ sudo /usr/local/bin/backup-forgejo.sh      # test it before you schedule it
 =Forgejo_Archive= must be a *sibling* of =Forgejo_Backup=. rclone refuses a backup directory inside the destination.
 
 *** 4. Automation (=sudo crontab -e=)
-Use *root's* crontab, not your own:
+Use *root's* crontab, not your own (a normal user crontab cannot run =/sbin/reboot= or read =/etc/msmtprc=). Set =SHELL=, =PATH=, and =MAILTO=""= so =cron= does not attempt to pipe noisy =apt-get= output into =sendmail=:
 
 #+begin_src sh
+sudo tee /var/spool/cron/crontabs/root >/dev/null <<'EOF'
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+MAILTO=""
+
 # Daily Backup at 3 AM
 0 3 * * * /usr/local/bin/backup-forgejo.sh
+
 # Weekly Update & Reboot. apt-get needs the noninteractive settings, or an
 # unattended upgrade blocks on a config-file prompt and never reboots.
 0 4 * * 0 DEBIAN_FRONTEND=noninteractive apt-get update -y && DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::=--force-confold upgrade && /sbin/reboot
+EOF
+sudo chown root:crontab /var/spool/cron/crontabs/root
+sudo chmod 600 /var/spool/cron/crontabs/root
+sudo systemctl restart cron
 #+end_src
 
 Raspberry Pi OS already grants the first user =NOPASSWD: ALL= in =/etc/sudoers.d/010_<your-username>-nopasswd=. Confirm with =sudo cat /etc/sudoers.d/010_*=. Do not add a second sudoers file; root cron needs none.
@@ -367,14 +403,16 @@ Use the same exclusions as the sync. The previous run restarts Forgejo at its en
 
 ** Phase 8: mobile and networking
 - *Split-Brain DNS:* In your router, map =git.<your-domain>.dev= to the internal IP of the Pi. This keeps local access fast.
+
 - *SPF Record:* TXT record =v=spf1 include:_spf.mx.cloudflare.net include:_spf.google.com ~all=.
+
 - *Mobile Mail:* Add the identities to the Gmail app with "Send Mail As" in the desktop settings. Use =smtp.gmail.com= and the App Password.
 
 --------------
 
 ** Phase 9: disaster recovery
 *** 1. Re-initialise
-Follow *Phases 1-4* on a new SD card. *Do not run the web installer.*
+Follow *Phases 1-5* on a new SD card. *Do not run the web installer.*
 
 *** 2. Restore the data
 #+begin_src sh
@@ -385,8 +423,8 @@ sudo rclone copy gdrive:Forgejo_Backup /var/lib/forgejo/ --progress
 =Forgejo_Backup= holds the current mirror. To recover a file that a later run overwrote or deleted, look in the dated folders under =Forgejo_Archive=:
 
 #+begin_src sh
-rclone lsd gdrive:Forgejo_Archive                       # list the dates
-rclone copy gdrive:Forgejo_Archive/<date>/<path> ./     # take one file back
+sudo rclone lsd gdrive:Forgejo_Archive                       # list the dates
+sudo rclone copy gdrive:Forgejo_Archive/<date>/<path> ./     # take one file back
 #+end_src
 
 *** 3. Permissions and restart
@@ -399,16 +437,16 @@ sudo systemctl start forgejo
 --------------
 
 ** Phase 10: troubleshooting
-*Tunnel Connectivity:* If the tunnel fails after a reboot, read the log with =journalctl -u cloudflared=. The usual cause is an incorrect system time. This is a known fault of the Pi Zero.
+*Tunnel Connectivity:* If the tunnel fails after a reboot, read the log with =sudo journalctl -u cloudflared=. The usual cause is an incorrect system time or an outdated =cloudflared= package. Confirm the APT repo is active with =apt-cache policy cloudflared=.
 
-*SMTP Failures:* Read =/var/log/msmtp.log=. The usual fix is a new Google App Password. The message =account dev not found: no configuration file available= does not mean a missing account. It means the caller cannot read =/etc/msmtprc=. Run msmtp as root. AppArmor can also block a =passwordeval= command when it enforces the =msmtp= profile. Check with =journalctl -k | grep -i apparmor=.
+*SMTP Failures:* Because =msmtp= logs to =syslog=, read mail logs with =sudo journalctl -t msmtp -n 50=. The usual fix is a new Google App Password. The message =account dev not found: no configuration file available= does not mean a missing account. It means the caller cannot read =/etc/msmtprc= (must be =root:git= mode =640=). AppArmor can also block a =passwordeval= command when it enforces the =msmtp= profile. Check with =sudo journalctl -k | grep -i apparmor=.
 
 *Backup Failures:* The job is silent by design, so prove it runs.
 
 #+begin_src sh
 sudo crontab -l                                  # the schedule lives in root's crontab
-journalctl -u cron --since "7 days ago" | grep backup-forgejo
-journalctl -u forgejo --since "7 days ago" | grep -i stopping
+sudo journalctl -u cron --since "7 days ago" | grep backup-forgejo
+sudo journalctl -u forgejo --since "7 days ago" | grep -i stopping
 sudo bash -x /usr/local/bin/backup-forgejo.sh    # watch a run end to end
 #+end_src
 
