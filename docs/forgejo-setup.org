@@ -1,4 +1,4 @@
-- Forgejo self-hosted git server
+* Forgejo self-hosted git server
 
 *Hardware:* Raspberry Pi Zero 2W (512MB RAM)\\
 *OS:* Raspberry Pi OS Lite (64-bit)\\
